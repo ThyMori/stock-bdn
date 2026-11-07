@@ -24,11 +24,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Chemin de base
+        # Domaine personnalisé (fichier public/CNAME) => appli servie à la racine ; sinon /<depot>/
+        run: |
+          if [ -f public/CNAME ]; then BASE="/"; else BASE="/${{ github.event.repository.name }}/"; fi
+          echo "BASE_PATH=$BASE" >> "$GITHUB_ENV"
+          echo "Chemin de base utilisé : $BASE"
       - run: npm run build
         env:
-          # Par défaut : /<nom-du-depot>/ (adresse github.io). Avec un domaine personnalisé,
-          # créer la variable de dépôt BASE_PATH = /
-          BASE_PATH: ${{ vars.BASE_PATH || format('/{0}/', github.event.repository.name) }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
