@@ -37,6 +37,8 @@ create table if not exists profiles (
   created_at timestamptz not null default now()
 );
 alter table profiles add column if not exists active boolean not null default true;
+alter table profiles add column if not exists first_name text not null default '';
+alter table profiles add column if not exists last_name  text not null default '';
 alter table profiles drop constraint if exists profiles_role_check;
 alter table profiles add constraint profiles_role_check check (role in ('technicien', 'regisseur', 'regisseur_general', 'admin'));
 
@@ -166,7 +168,7 @@ declare prev item_status; cur_at timestamptz; n int;
 begin
   if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   insert into item_events (id, item_id, kind, status, note, created_by, created_by_label, at)
-  values (p_event, p_item, 'status', p_status, p_note, auth.uid(), (select email from profiles where id = auth.uid()), p_at)
+  values (p_event, p_item, 'status', p_status, p_note, auth.uid(), (select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = auth.uid()), p_at)
   on conflict (id) do nothing;
   get diagnostics n = row_count;
   if n = 0 then return; end if;                       -- déjà appliqué
@@ -184,7 +186,7 @@ returns void language plpgsql security definer set search_path = public as $$
 declare lbl text; n int;
 begin
   if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
-  select email into lbl from profiles where id = auth.uid();
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
   insert into faults (id, item_id, description, reported_by, reported_by_label, reported_at)
   values (p_id, p_item, nullif(trim(p_description), ''), auth.uid(), lbl, p_at)
   on conflict (id) do nothing;
@@ -200,7 +202,7 @@ returns void language plpgsql security definer set search_path = public as $$
 declare lbl text; it int; n int;
 begin
   if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
-  select email into lbl from profiles where id = auth.uid();
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
   update faults set resolved_at = p_at, resolved_by = auth.uid(), resolution = nullif(trim(p_resolution), '')
    where id = p_fault and resolved_at is null
    returning item_id into it;

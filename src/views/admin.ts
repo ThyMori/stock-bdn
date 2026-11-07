@@ -2,7 +2,7 @@ import type { ViewFactory } from '../router';
 import { can, pull, state, view } from '../store';
 import { supabase } from '../supabase';
 import { esc, fmtDate } from '../logic';
-import { ROLE_LABEL, ROLE_RANK, ROLES } from '../types';
+import { ROLE_LABEL, ROLE_RANK, ROLES, fullName } from '../types';
 import type { AccountRow, Role } from '../types';
 
 const opts = (list: { id: string; name?: string; label?: string }[], sel?: string | null, empty = '—') =>
@@ -156,16 +156,19 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           : `Actif · dernière connexion ${fmtDate(u.last_sign_in_at)}`;
 
         body.innerHTML = `<form class="card stack" id="inv"><h2>Inviter quelqu'un</h2>
+            <label class="f">Prénom<input name="first_name" required autocomplete="off"></label>
+            <label class="f">Nom<input name="last_name" required autocomplete="off"></label>
             <label class="f">Adresse e-mail<input name="email" type="email" required autocomplete="off"></label>
             <label class="f">Rôle<select name="role">${roleOpts('technicien')}</select></label>
             <button class="btn primary">Envoyer l'invitation</button>
             <div class="sub">La personne reçoit un e-mail, clique sur le lien et choisit son mot de passe.</div></form>` +
           '<div id="ulist" class="stack">' + users.map((u) => `<div class="card stack" data-id="${u.id}">
-            <div class="row"><div class="grow"><div class="t">${esc(u.email)}${u.id === me ? ' <span class="muted">(toi)</span>' : ''}</div><div class="s">${statusOf(u)}</div></div>
+            <div class="row"><div class="grow"><div class="t">${esc(fullName(u))}${u.id === me ? ' <span class="muted">(toi)</span>' : ''}</div><div class="s">${u.first_name || u.last_name ? esc(u.email) + '<br>' : ''}${statusOf(u)}</div></div>
               <select data-role style="width:auto" ${u.id === me || !u.active || !canTouch(u.role) ? 'disabled' : ''}>${roleOpts(u.role)}</select></div>
-            ${u.id === me || !canTouch(u.role) ? '' : `<div class="row wrap">
-              ${u.active && !u.confirmed ? '<button class="btn small" data-act="resend">Renvoyer l\'invitation</button>' : ''}
-              ${u.active ? '<button class="btn small danger" data-act="revoke">Révoquer l\'accès</button>' : '<button class="btn small primary" data-act="restore">Rétablir l\'accès</button>'}</div>`}
+            ${u.id !== me && !canTouch(u.role) ? '' : `<div class="row wrap">
+              <button class="btn small" data-act="rename">Modifier le nom</button>
+              ${u.id === me ? '' : `${u.active && !u.confirmed ? '<button class="btn small" data-act="resend">Renvoyer l\'invitation</button>' : ''}
+              ${u.active ? '<button class="btn small danger" data-act="revoke">Révoquer l\'accès</button>' : '<button class="btn small primary" data-act="restore">Rétablir l\'accès</button>'}`}</div>`}
           </div>`).join('') + '</div>' +
           `<div class="sub">Révoquer un accès coupe immédiatement les droits et empêche toute nouvelle connexion, sans supprimer le compte ni l'historique. On peut le rétablir à tout moment.</div>`;
 
@@ -173,7 +176,7 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           e.preventDefault();
           const form = e.target as HTMLFormElement; const fd = new FormData(form);
           try {
-            await callAdmin({ action: 'invite', email: fd.get('email'), role: fd.get('role'), redirect_to: redirect });
+            await callAdmin({ action: 'invite', email: fd.get('email'), first_name: fd.get('first_name'), last_name: fd.get('last_name'), role: fd.get('role'), redirect_to: redirect });
             say(`Invitation envoyée à ${fd.get('email')}.`); void draw();
           } catch (err) { say((err as Error).message, true); }
         });
@@ -190,8 +193,13 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           if (!btn || !card) return;
           const id = card.dataset.id!; const act = btn.dataset.act;
           const email = card.querySelector('.t')?.textContent?.replace('(toi)', '').trim() ?? '';
+          const u0 = users.find((x) => x.id === id)!;
           try {
-            if (act === 'revoke') {
+            if (act === 'rename') {
+              const first = window.prompt('Prénom', u0.first_name); if (first === null) return;
+              const last = window.prompt('Nom', u0.last_name); if (last === null) return;
+              await callAdmin({ action: 'set_name', id, first_name: first, last_name: last }); say('Nom mis à jour.');
+            } else if (act === 'revoke') {
               if (!window.confirm(`Révoquer l'accès de ${email} ? Elle ne pourra plus se connecter ni voir les données. Son compte et l'historique sont conservés.`)) return;
               await callAdmin({ action: 'set_access', id, active: false }); say(`Accès de ${email} révoqué.`);
             } else if (act === 'restore') {

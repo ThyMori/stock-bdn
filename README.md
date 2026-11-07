@@ -13,7 +13,7 @@ PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, sca
 | Déclarer une panne résolue | | ✅ | ✅ | ✅ |
 | Changer l'état d'un projecteur (prêt / SAV / OK) | | | ✅ | ✅ |
 | Créer des projecteurs, imprimer les étiquettes QR | | | ✅ | ✅ |
-| Inviter des utilisateurs, changer leur rôle, révoquer / rétablir leur accès | | | ✅ (techniciens et régisseurs uniquement) | ✅ (tous) |
+| Inviter des utilisateurs (prénom, nom, e-mail, rôle), changer leur nom et leur rôle, révoquer / rétablir leur accès | | | ✅ (techniciens et régisseurs uniquement) | ✅ (tous) |
 | Modifier / supprimer un projecteur, éditer modèles, lampes, référentiels | | | | ✅ |
 
 Les droits sont appliqués **par la base** (RLS + fonctions SQL), pas seulement par l'interface. Un accès révoqué est coupé au niveau de la base.

@@ -57,7 +57,7 @@ export async function clearLocal() {
 
 // ---------- lecture serveur ----------
 export async function loadProfile(userId: string) {
-  const { data, error } = await supabase.from('profiles').select('id,email,role,active').eq('id', userId).maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('id,email,role,active,first_name,last_name').eq('id', userId).maybeSingle();
   if (error) throw error;
   if (data) { state.profile = data as Profile; await set('profile', state.profile); }
 }

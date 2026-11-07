@@ -49,10 +49,10 @@ await t('technicien, régisseur ou compte révoqué : 403, aucune action effectu
   }
 });
 await t('invitation : e-mail envoyé puis rôle appliqué', async () => {
-  const f = fake(); const r = await out(await call({ action: 'invite', email: ' Nouveau@BdN.fr ', role: 'technicien', redirect_to: 'https://app/' }, f));
+  const f = fake(); const r = await out(await call({ action: 'invite', email: ' Nouveau@BdN.fr ', first_name: ' Jeanne ', last_name: 'Dupont', role: 'technicien', redirect_to: 'https://app/' }, f));
   assert.equal(r.status, 200);
   assert.deepEqual(f.calls[0], ['invite', ['nouveau@bdn.fr', { redirectTo: 'https://app/' }]]);
-  assert.deepEqual(f.calls[1], ['update:profiles', ['NEW', { role: 'technicien' }]]);
+  assert.deepEqual(f.calls[1], ['update:profiles', ['NEW', { role: 'technicien', first_name: 'Jeanne', last_name: 'Dupont' }]]);
 });
 await t('invitation : e-mail invalide, rôle invalide, compte existant', async () => {
   assert.equal((await out(await call({ action: 'invite', email: 'pas-un-mail', role: 'lecteur' }, fake()))).status, 400);
@@ -121,6 +121,14 @@ await t('administrateur : change le rôle de n\'importe qui (pas le sien)', asyn
   assert.deepEqual(f.calls[0], ['update:profiles', ['X', { role: 'admin' }]]);
   assert.equal((await out(await call({ action: 'set_role', id: 'ME', role: 'technicien' }, fake()))).status, 400);
   assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'lecteur' }, fake()))).status, 400);
+});
+await t('prénom et nom : soi-même ou rang inférieur, jamais un rang égal ou supérieur, jamais vide', async () => {
+  const f = fake({ callerRole: 'regisseur_general' });
+  assert.equal((await out(await call({ action: 'set_name', id: 'ME', first_name: 'A', last_name: 'B' }, f))).status, 200);
+  assert.deepEqual(f.calls[0], ['update:profiles', ['ME', { first_name: 'A', last_name: 'B' }]]);
+  assert.equal((await out(await call({ action: 'set_name', id: 'X', first_name: 'A', last_name: 'B' }, fake({ callerRole: 'regisseur_general', targetRole: 'regisseur' })))).status, 200);
+  assert.equal((await out(await call({ action: 'set_name', id: 'X', first_name: 'A', last_name: 'B' }, fake({ callerRole: 'regisseur_general', targetRole: 'admin' })))).status, 403);
+  assert.equal((await out(await call({ action: 'set_name', id: 'X', first_name: '', last_name: 'B' }, fake()))).status, 400);
 });
 await t('liste : profils + statut d\'activation + dernière connexion', async () => {
   const r = await out(await call({ action: 'list' }, fake()));

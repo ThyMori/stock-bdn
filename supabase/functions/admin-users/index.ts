@@ -1,8 +1,9 @@
 // Edge Function « admin-users » : gestion des comptes, réservée aux régisseurs généraux et aux administrateurs.
 //
 //   { action: "list" }                                  -> liste des comptes (avec statut) + rôle de l'appelant
-//   { action: "invite",  email, role, redirect_to }     -> envoie un e-mail d'invitation
+//   { action: "invite",  email, first_name, last_name, role, redirect_to }     -> envoie un e-mail d'invitation
 //   { action: "resend",  id, redirect_to }              -> renvoie l'invitation (compte pas encore activé)
+//   { action: "set_name", id, first_name, last_name }  -> prénom et nom (soi-même ou un rang inférieur)
 //   { action: "set_role", id, role }                    -> change le rôle d'un compte
 //   { action: "set_access", id, active: true|false }    -> révoque / rétablit l'accès (le compte n'est jamais supprimé)
 //
@@ -27,6 +28,7 @@ const RANK: Record<string, number> = { technicien: 1, regisseur: 2, regisseur_ge
 const ROLES = Object.keys(RANK);
 /** Peut-on gérer un compte de ce rôle / attribuer ce rôle ? (l'admin : tout ; sinon uniquement en dessous de soi) */
 const canTouch = (callerRole: string, role: string) => callerRole === 'admin' || (RANK[role] ?? 99) < RANK[callerRole];
+const clean = (v: unknown) => String(v ?? '').trim().replace(/\s+/g, ' ').slice(0, 80);
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const BAN_FOREVER = '876000h'; // ~100 ans : le compte ne peut plus se connecter
 
@@ -63,7 +65,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
 
   switch (body.action) {
     case 'list': {
-      const { data: profiles, error } = await admin.from('profiles').select('id,email,role,active').order('email');
+      const { data: profiles, error } = await admin.from('profiles').select('id,email,role,active,first_name,last_name').order('last_name');
       if (error) return json(500, { error: error.message });
       const { data: au, error: e2 } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (e2) return json(500, { error: e2.message });
@@ -87,7 +89,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
         return json(taken ? 409 : 400, { error: taken ? 'Cette adresse a déjà un compte.' : error.message });
       }
       // le profil est créé par un déclencheur (rôle « technicien ») : on applique le rôle choisi
-      const { error: e2 } = await admin.from('profiles').update({ role }).eq('id', data.user.id);
+      const { error: e2 } = await admin.from('profiles').update({ role, first_name: clean(body.first_name), last_name: clean(body.last_name) }).eq('id', data.user.id);
       if (e2) return json(500, { error: 'Invitation envoyée mais rôle non appliqué : ' + e2.message });
       return json(200, { ok: true, id: data.user.id });
     }
@@ -102,6 +104,21 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       if (u.email_confirmed_at ?? u.confirmed_at) return json(400, { error: 'Ce compte est déjà activé : utilise « Mot de passe oublié » sur l\'écran de connexion.' });
       const { error: e2 } = await admin.auth.admin.inviteUserByEmail(u.email, { redirectTo });
       if (e2) return json(400, { error: e2.message });
+      return json(200, { ok: true });
+    }
+
+    case 'set_name': {
+      const id = String(body.id ?? '');
+      const first_name = clean(body.first_name), last_name = clean(body.last_name);
+      if (!first_name || !last_name) return json(400, { error: 'Prénom et nom obligatoires' });
+      if (id !== caller.id) {
+        const tr = await targetRole(id);
+        if (!tr) return json(404, { error: 'Compte introuvable' });
+        if (!canTouch(myRole, tr)) return json(403, { error: 'Tu ne peux pas modifier ce compte.' });
+      }
+      const { data: upd, error } = await admin.from('profiles').update({ first_name, last_name }).eq('id', id).select('id');
+      if (error) return json(400, { error: error.message });
+      if (!upd?.length) return json(404, { error: 'Compte introuvable' });
       return json(200, { ok: true });
     }
 

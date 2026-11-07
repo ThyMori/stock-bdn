@@ -1,7 +1,7 @@
 import type { ViewFactory } from '../router';
 import { can, clearLocal, dismissRejected, state, sync } from '../store';
 import { esc, fmtDateTime } from '../logic';
-import { ROLE_LABEL } from '../types';
+import { ROLE_LABEL, fullName } from '../types';
 import { supabase } from '../supabase';
 
 export const moreView: ViewFactory = () => ({
@@ -28,7 +28,7 @@ function paint(root: HTMLElement) {
   const p = state.profile;
   root.innerHTML = `<div class="page"><h1>Plus</h1>
     <div class="card stack">
-      <div><div class="t">${esc(p?.email ?? '—')}</div><div class="sub">${p ? ROLE_LABEL[p.role] : ''}</div></div>
+      <div><div class="t">${esc(p ? fullName(p) : '—')}</div><div class="sub">${p ? ROLE_LABEL[p.role] + (fullName(p) !== p.email ? ' · ' + esc(p.email) : '') : ''}</div></div>
       <div class="sub">${state.lastPull ? 'Dernière mise à jour : ' + fmtDateTime(state.lastPull) : 'Jamais synchronisé'} · ${state.pending.length} action(s) en attente</div>
       <div class="row"><button class="btn grow" data-act="sync" ${state.online ? '' : 'disabled'}>${state.syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}</button></div>
     </div>
