@@ -150,13 +150,17 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 @media print { .arc-fx { display: none !important; } }
 .quote { border-left: 3px solid var(--ink); padding-left: 8px; margin: 2px 0 4px; color: var(--ink); font-weight: 400; }
 
-/* camembert des compteurs */
-.pie { display: grid; grid-template-columns: minmax(96px, 36%) minmax(0, 1fr); gap: 12px; align-items: center; border: 2px solid var(--ink); padding: 12px; }
-.pie-svg { width: 100%; max-width: 200px; justify-self: center; overflow: visible; }
+/* camembert des compteurs (vue inclinée) */
+.pie { display: grid; gap: 10px; border: 2px solid var(--ink); padding: 10px 12px 12px; }
+.pie-svg { width: 100%; height: auto; overflow: visible; display: block; }
 .slice { stroke: var(--paper); stroke-width: 1.5; cursor: pointer; }
-.slice.dispo { fill: var(--green); } .slice.sav { fill: var(--red); } .slice.en_pret { fill: var(--yellow); } .slice.empty { fill: none; stroke: var(--ink); }
-.legend { display: grid; gap: 6px; }
-.lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 2.6em; gap: 6px; align-items: center; text-align: left; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 7px 8px; font-size: .88rem; cursor: pointer; font: inherit; font-weight: 700; }
+.slice.dispo, .wall.dispo { fill: var(--green); } .slice.sav, .wall.sav { fill: var(--red); } .slice.en_pret, .wall.en_pret { fill: var(--yellow); }
+.slice.empty { fill: none; stroke: var(--ink); }
+.wall { stroke: var(--paper); stroke-width: 1; pointer-events: none; }
+.shade { fill: #000; fill-opacity: .38; pointer-events: none; }
+.ground { fill: var(--ink); fill-opacity: .1; }
+.legend { display: grid; gap: 5px; }
+.lg { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto 2.6em; gap: 6px; align-items: center; text-align: left; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 6px 10px; font-size: .92rem; cursor: pointer; font: inherit; font-weight: 700; }
 .lg i { width: 12px; height: 12px; display: block; border: 1.5px solid var(--ink); }
 .lg i.dispo { background: var(--green); } .lg i.sav { background: var(--red); } .lg i.en_pret { background: var(--yellow); }
 .lg b { font-variant-numeric: tabular-nums; }
@@ -164,4 +168,3 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .lg[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .lg[aria-pressed="true"] em { color: inherit; }
 .lg[aria-pressed="true"] i { border-color: var(--paper); }
-@media (max-width: 380px) { .pie { grid-template-columns: 1fr; } }

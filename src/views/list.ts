@@ -42,21 +42,37 @@ export const listView: ViewFactory = (_p, query) => ({
   update: paint
 });
 
-/** Camembert SVG : une part par état ; toucher une part filtre la liste, comme les cases. */
+/** Camembert SVG en perspective (vue inclinée, avec épaisseur) : toucher une part filtre la liste, comme les cases. */
 function pieSvg(c: { total: number; dispo: number; sav: number; en_pret: number }, sel: '' | Status): string {
-  const R = 50, C = 60;
+  const CX = 150, CY = 78, RX = 128, RY = 58, DEPTH = 26;       // RY/RX = inclinaison ; DEPTH = épaisseur
+  const top = (a: number, dy = 0) => `${(CX + RX * Math.cos(a)).toFixed(1)} ${(CY + RY * Math.sin(a) + dy).toFixed(1)}`;
   const parts = STATUSES.filter((s) => c[s] > 0);
   let a0 = -Math.PI / 2;
-  const slices = parts.map((s) => {
-    const frac = c[s] / c.total, a1 = a0 + frac * Math.PI * 2;
-    const pt = (a: number) => `${(C + R * Math.cos(a)).toFixed(2)} ${(C + R * Math.sin(a)).toFixed(2)}`;
-    const mid = (a0 + a1) / 2, pull = sel === s ? 4 : 0;
-    const tr = pull ? ` transform="translate(${(Math.cos(mid) * pull).toFixed(2)} ${(Math.sin(mid) * pull).toFixed(2)})"` : '';
-    const d = frac >= 0.9999 ? `M ${C} ${C - R} A ${R} ${R} 0 1 1 ${C - 0.01} ${C - R} Z` : `M ${C} ${C} L ${pt(a0)} A ${R} ${R} 0 ${frac > 0.5 ? 1 : 0} 1 ${pt(a1)} Z`;
+  const walls: string[] = [], tops: string[] = [];
+  for (const s of parts) {
+    const frac = c[s] / c.total, a1 = a0 + frac * Math.PI * 2, mid = (a0 + a1) / 2;
+    const pull = sel === s ? 9 : 0;
+    const tr = pull ? ` transform="translate(${(Math.cos(mid) * pull).toFixed(1)} ${(Math.sin(mid) * pull * RY / RX).toFixed(1)})"` : '';
+    // épaisseur : seule la moitié avant (angles 0 → π) est visible
+    const s0 = Math.max(a0, 0), e0 = Math.min(a1, Math.PI);
+    let wall = '';
+    if (e0 > s0) {
+      const n = Math.max(2, Math.ceil(((e0 - s0) / Math.PI) * 40)); const up: string[] = [], down: string[] = [];
+      for (let i = 0; i <= n; i++) { const a = s0 + ((e0 - s0) * i) / n; up.push(top(a)); down.unshift(top(a, DEPTH)); }
+      wall = `<path class="wall ${s}" d="M ${up.join(' L ')} L ${down.join(' L ')} Z"${tr}/><path class="shade" d="M ${up.join(' L ')} L ${down.join(' L ')} Z"${tr}/>`;
+    }
+    walls.push(wall);
+    const d = frac >= 0.9999
+      ? `M ${top(-Math.PI / 2)} A ${RX} ${RY} 0 1 1 ${top(Math.PI / 2)} A ${RX} ${RY} 0 1 1 ${top(-Math.PI / 2)} Z`
+      : `M ${CX} ${CY} L ${top(a0)} A ${RX} ${RY} 0 ${frac > 0.5 ? 1 : 0} 1 ${top(a1)} Z`;
+    tops.push(`<path class="slice ${s}" data-act="status" data-v="${s}" d="${d}"${tr}><title>${STATUS_LABEL[s]} : ${c[s]}</title></path>`);
     a0 = a1;
-    return `<path class="slice ${s}" data-act="status" data-v="${s}" d="${d}"${tr}><title>${STATUS_LABEL[s]} : ${c[s]}</title></path>`;
-  }).join('');
-  return `<svg class="pie-svg" viewBox="0 0 120 120" role="img" aria-label="Répartition du parc par état">${c.total ? slices : `<circle cx="${C}" cy="${C}" r="${R}" class="slice empty"/>`}</svg>`;
+  }
+  // les parts dont le flanc est au premier plan sont dessinées en dernier
+  const body = c.total
+    ? `<ellipse cx="${CX}" cy="${CY + DEPTH + 6}" rx="${RX}" ry="${RY * 0.9}" class="ground"/>${walls.join('')}${tops.join('')}`
+    : `<ellipse cx="${CX}" cy="${CY}" rx="${RX}" ry="${RY}" class="slice empty"/>`;
+  return `<svg class="pie-svg" viewBox="0 0 300 ${CY + RY + DEPTH + 22}" role="img" aria-label="Répartition du parc par état">${body}</svg>`;
 }
 
 function paint(root: HTMLElement) {
@@ -83,7 +99,7 @@ function paint(root: HTMLElement) {
     tilesEl.className = 'pie';
     tilesEl.innerHTML = pieSvg(c, f.status) + `<div class="legend">` +
       `<button class="lg" data-act="status" data-v="" aria-pressed="${f.status === ''}"><i style="background:var(--ink)"></i><span>Total</span><b>${c.total}</b><em></em></button>` +
-      STATUSES.map((s) => `<button class="lg" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><i class="${s}"></i><span>${s === 'dispo' ? 'Dispo' : STATUS_LABEL[s]}</span><b>${c[s]}</b><em>${c.total ? Math.round((c[s] / c.total) * 100) : 0} %</em></button>`).join('') + `</div>`;
+      STATUSES.map((s) => `<button class="lg" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><i class="${s}"></i><span>${STATUS_LABEL[s]}</span><b>${c[s]}</b><em>${c.total ? Math.round((c[s] / c.total) * 100) : 0} %</em></button>`).join('') + `</div>`;
   }
 
   const usedTypes = data.types.filter((t) => data.models.some((m) => m.type_id === t.id && data.items.some((i) => i.model_id === m.id)));
