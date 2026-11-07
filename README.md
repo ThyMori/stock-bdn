@@ -1,20 +1,20 @@
 # Stock BdN
 
-PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, scan de QR code, trois niveaux de droits.
+PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, scan de QR code, quatre niveaux de droits.
 
 **Stack** : TypeScript + Vite · Supabase (Postgres + Auth + règles RLS) · service worker (vite-plugin-pwa) · IndexedDB pour le cache hors ligne · GitHub Pages.
 
 ## Ce que fait l'appli
 
-| | Lecteur | Technicien | Admin |
-|---|:-:|:-:|:-:|
-| Consulter le parc, les fiches, les pannes | ✅ | ✅ | ✅ |
-| Scanner un QR / chercher un n° | ✅ | ✅ | ✅ |
-| Signaler une panne | ✅ | ✅ | ✅ |
-| Changer l'état (dispo / SAV / en prêt), résoudre une panne | | ✅ | ✅ |
-| Imprimer les étiquettes QR | | ✅ | ✅ |
-| Ajouter/modifier/supprimer projecteurs, modèles, lampes, référentiels | | | ✅ |
-| Inviter des utilisateurs, changer leur rôle, révoquer / rétablir leur accès | | | ✅ |
+| | Technicien | Régisseur | Régisseur général | Admin |
+|---|:-:|:-:|:-:|:-:|
+| Consulter le parc, les fiches, les pannes, scanner un QR | ✅ | ✅ | ✅ | ✅ |
+| Déclarer une panne | ✅ | ✅ | ✅ | ✅ |
+| Déclarer une panne résolue | | ✅ | ✅ | ✅ |
+| Changer l'état d'un projecteur (prêt / SAV / OK) | | | ✅ | ✅ |
+| Créer des projecteurs, imprimer les étiquettes QR | | | ✅ | ✅ |
+| Inviter des utilisateurs, changer leur rôle, révoquer / rétablir leur accès | | | ✅ (techniciens et régisseurs uniquement) | ✅ (tous) |
+| Modifier / supprimer un projecteur, éditer modèles, lampes, référentiels | | | | ✅ |
 
 Les droits sont appliqués **par la base** (RLS + fonctions SQL), pas seulement par l'interface. Un accès révoqué est coupé au niveau de la base.
 
@@ -55,6 +55,7 @@ Inviter et révoquer demandent la clé secrète de Supabase, qui ne doit jamais 
 Ensuite, dans l'appli : **Plus → Administration → Utilisateurs**.
 - **Inviter** : e-mail + rôle → la personne reçoit un e-mail, choisit son mot de passe et arrive dans l'appli. *Renvoyer l'invitation* tant qu'elle n'a pas activé son compte.
 - **Révoquer l'accès** : coupe immédiatement les droits dans la base (même si la personne a une session ouverte) et interdit toute nouvelle connexion. Le compte et l'historique sont conservés. Son appli se vide et se déconnecte à la prochaine synchronisation. **Rétablir l'accès** annule tout.
+- Hiérarchie : un régisseur général ne gère que les comptes de rang inférieur (technicien, régisseur) et ne peut attribuer que ces rôles ; seul un administrateur crée ou modifie un régisseur général ou un admin.
 - Garde-fous : on ne peut pas modifier son propre accès ni son propre rôle, et il reste toujours au moins un administrateur actif.
 
 *Sans la fonction, tout le reste de l'appli fonctionne ; seule la liste des utilisateurs affichera « fonction non déployée ». On peut aussi inviter depuis Supabase (Authentication → Users → Invite user).*

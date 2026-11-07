@@ -14,15 +14,16 @@ import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
 import { showConfigMissing, showLogin, showSetPassword } from './views/login';
 import { can } from './store';
+import type { Role } from './types';
 import { fmtDateTime } from './logic';
 
 registerSW({ immediate: true });
 const app = document.getElementById('app')!;
 
-const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: 'technicien' | 'admin' }> = {
+const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   '': { f: listView, tab: 'list' }, item: { f: itemView, tab: 'list' }, scan: { f: scanView, tab: 'scan' },
   faults: { f: faultsView, tab: 'faults' }, more: { f: moreView, tab: 'more' },
-  labels: { f: labelsView, tab: 'more', min: 'technicien' }, admin: { f: adminView, tab: 'more', min: 'admin' }
+  labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
 
 const ICON = {

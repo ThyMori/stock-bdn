@@ -1,9 +1,16 @@
-// Edge Function « admin-users » : gestion des comptes, réservée aux administrateurs.
+// Edge Function « admin-users » : gestion des comptes, réservée aux régisseurs généraux et aux administrateurs.
 //
-//   { action: "list" }                                  -> liste des comptes (avec statut)
+//   { action: "list" }                                  -> liste des comptes (avec statut) + rôle de l'appelant
 //   { action: "invite",  email, role, redirect_to }     -> envoie un e-mail d'invitation
 //   { action: "resend",  id, redirect_to }              -> renvoie l'invitation (compte pas encore activé)
+//   { action: "set_role", id, role }                    -> change le rôle d'un compte
 //   { action: "set_access", id, active: true|false }    -> révoque / rétablit l'accès (le compte n'est jamais supprimé)
+//
+// Hiérarchie : technicien < régisseur < régisseur général < administrateur.
+//   - l'administrateur gère tout le monde ;
+//   - le régisseur général ne peut gérer que des comptes de rang inférieur au sien (technicien, régisseur)
+//     et ne peut leur attribuer que ces rôles : il ne peut donc ni créer ni modifier un autre régisseur général ou un admin ;
+//   - personne ne modifie son propre compte.
 //
 // La clé « service_role » n'existe que dans cette fonction (variable d'environnement fournie par Supabase) :
 // elle n'est jamais envoyée au navigateur. L'identité de l'appelant est vérifiée ici, à chaque appel.
@@ -16,7 +23,10 @@ const CORS = {
 const json = (status: number, body: Record<string, unknown>) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'content-type': 'application/json' } });
 
-const ROLES = ['lecteur', 'technicien', 'admin'];
+const RANK: Record<string, number> = { technicien: 1, regisseur: 2, regisseur_general: 3, admin: 4 };
+const ROLES = Object.keys(RANK);
+/** Peut-on gérer un compte de ce rôle / attribuer ce rôle ? (l'admin : tout ; sinon uniquement en dessous de soi) */
+const canTouch = (callerRole: string, role: string) => callerRole === 'admin' || (RANK[role] ?? 99) < RANK[callerRole];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const BAN_FOREVER = '876000h'; // ~100 ans : le compte ne peut plus se connecter
 
@@ -38,9 +48,14 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
   const caller = who?.user;
   if (whoErr || !caller) return json(401, { error: 'Session invalide, reconnecte-toi' });
 
-  // 2) est-il administrateur actif ?
+  // 2) est-il régisseur général ou administrateur, et actif ?
   const { data: me } = await admin.from('profiles').select('role,active').eq('id', caller.id).maybeSingle();
-  if (!me || me.role !== 'admin' || !me.active) return json(403, { error: 'Réservé aux administrateurs' });
+  if (!me || !me.active || (RANK[me.role] ?? 0) < RANK.regisseur_general) return json(403, { error: 'Réservé aux régisseurs généraux et aux administrateurs' });
+  const myRole: string = me.role;
+  const targetRole = async (id: string): Promise<string | null> => {
+    const { data } = await admin.from('profiles').select('role').eq('id', id).maybeSingle();
+    return data?.role ?? null;
+  };
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json(400, { error: 'Requête invalide' }); }
@@ -57,20 +72,21 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
         const u = byId.get(p.id) as Client;
         return { ...p, confirmed: !!(u?.email_confirmed_at ?? u?.confirmed_at), last_sign_in_at: u?.last_sign_in_at ?? null };
       });
-      return json(200, { users });
+      return json(200, { users, caller_role: myRole });
     }
 
     case 'invite': {
       const email = String(body.email ?? '').trim().toLowerCase();
-      const role = String(body.role ?? 'lecteur');
+      const role = String(body.role ?? 'technicien');
       if (!EMAIL.test(email)) return json(400, { error: 'Adresse e-mail invalide' });
       if (!ROLES.includes(role)) return json(400, { error: 'Rôle invalide' });
+      if (!canTouch(myRole, role)) return json(403, { error: 'Tu ne peux pas attribuer ce rôle.' });
       const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
       if (error) {
         const taken = /already|registered|exists/i.test(error.message);
         return json(taken ? 409 : 400, { error: taken ? 'Cette adresse a déjà un compte.' : error.message });
       }
-      // le profil est créé par un déclencheur (rôle « lecteur ») : on applique le rôle choisi
+      // le profil est créé par un déclencheur (rôle « technicien ») : on applique le rôle choisi
       const { error: e2 } = await admin.from('profiles').update({ role }).eq('id', data.user.id);
       if (e2) return json(500, { error: 'Invitation envoyée mais rôle non appliqué : ' + e2.message });
       return json(200, { ok: true, id: data.user.id });
@@ -78,6 +94,8 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
 
     case 'resend': {
       const id = String(body.id ?? '');
+      const tr = await targetRole(id);
+      if (tr && !canTouch(myRole, tr)) return json(403, { error: 'Tu ne peux pas gérer ce compte.' });
       const { data, error } = await admin.auth.admin.getUserById(id);
       const u = data?.user;
       if (error || !u?.email) return json(404, { error: 'Compte introuvable' });
@@ -87,10 +105,25 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       return json(200, { ok: true });
     }
 
+    case 'set_role': {
+      const id = String(body.id ?? ''); const role = String(body.role ?? '');
+      if (!ROLES.includes(role)) return json(400, { error: 'Rôle invalide' });
+      if (id === caller.id) return json(400, { error: 'Tu ne peux pas modifier ton propre rôle.' });
+      const tr = await targetRole(id);
+      if (!tr) return json(404, { error: 'Compte introuvable' });
+      if (!canTouch(myRole, tr) || !canTouch(myRole, role)) return json(403, { error: 'Tu ne peux pas attribuer ce rôle à ce compte.' });
+      const { data: upd, error } = await admin.from('profiles').update({ role }).eq('id', id).select('id');
+      if (error) return json(400, { error: error.message });
+      if (!upd?.length) return json(404, { error: 'Compte introuvable' });
+      return json(200, { ok: true });
+    }
+
     case 'set_access': {
       const id = String(body.id ?? '');
       if (typeof body.active !== 'boolean') return json(400, { error: 'Paramètre « active » manquant' });
       if (id === caller.id) return json(400, { error: 'Tu ne peux pas modifier ton propre accès.' });
+      const tr = await targetRole(id);
+      if (tr && !canTouch(myRole, tr)) return json(403, { error: 'Tu ne peux pas gérer ce compte.' });
       // 1) coupure immédiate des droits dans la base (même si la personne a une session ouverte)
       const { data: upd, error } = await admin.from('profiles').update({ active: body.active }).eq('id', id).select('id');
       if (error) return json(400, { error: error.message });

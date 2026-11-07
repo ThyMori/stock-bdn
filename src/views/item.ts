@@ -55,14 +55,14 @@ export const itemView: ViewFactory = ([idStr]) => {
     const d = describe(data, item);
     const faults = data.faults.filter((f) => f.item_id === id);
     const open = faults.filter((f) => !f.resolved_at), closed = faults.filter((f) => f.resolved_at);
-    const tech = can('technicien');
+    const canStatus = can('regisseur_general'), canResolve = can('regisseur');
     dyn.innerHTML = `
       <div class="card stack">
         <div class="row"><div class="big">${id}</div>
           <div class="grow"><h1>${esc(d.model?.name)}</h1><div class="sub">${esc([d.type?.name, d.family?.name].filter(Boolean).join(' · '))}</div></div></div>
-        <div class="seg">${STATUSES.map((s) => `<button class="${s}" data-act="status" data-v="${s}" aria-pressed="${item.status === s}" ${tech ? '' : 'disabled'}>${STATUS_LABEL[s]}</button>`).join('')}</div>
+        <div class="seg">${STATUSES.map((s) => `<button class="${s}" data-act="status" data-v="${s}" aria-pressed="${item.status === s}" ${canStatus ? '' : 'disabled'}>${STATUS_LABEL[s]}</button>`).join('')}</div>
         ${item.pending ? '<div><span class="pending">En attente de synchronisation</span></div>' : ''}
-        ${tech ? '' : '<div class="sub">Seuls les techniciens peuvent changer l\'état.</div>'}
+        ${canStatus ? '' : '<div class="sub">Seuls les régisseurs généraux et les administrateurs peuvent changer l\'état.</div>'}
         <dl class="kv">
           <dt>Lampe</dt><dd>${d.lamp ? esc(d.lamp.name) + (d.lamp.power_w ? ` · ${d.lamp.power_w} W` : '') : '—'}</dd>
           <dt>Douille</dt><dd>${esc(d.socket?.name ?? '—')}</dd>
@@ -74,7 +74,7 @@ export const itemView: ViewFactory = ([idStr]) => {
       <div class="card stack"><h2>Pannes ${open.length ? `<span class="warn">(${open.length} en cours)</span>` : ''}</h2>
         ${open.map((x) => `<div class="row"><div class="grow"><div>${esc(x.description || 'Sans description')}${x.pending ? ' <span class="pending">en attente</span>' : ''}</div>
             <div class="sub">${esc(x.reported_by_label ?? 'moi')} · ${fmtDateTime(x.reported_at)}</div></div>
-            ${tech ? `<button class="btn small" data-act="resolve" data-v="${x.id}">Résolue</button>` : ''}</div>`).join('') || '<div class="sub">Aucune panne en cours.</div>'}
+            ${canResolve ? `<button class="btn small" data-act="resolve" data-v="${x.id}">Résolue</button>` : ''}</div>`).join('') || '<div class="sub">Aucune panne en cours.</div>'}
         ${closed.length ? `<h3 class="muted">Résolues</h3>` + closed.map((x) => `<div class="sub">✓ ${esc(x.description || 'Sans description')}${x.resolution ? ' → ' + esc(x.resolution) : ''} (${fmtDate(x.resolved_at)})</div>`).join('') : ''}
       </div>`;
   }

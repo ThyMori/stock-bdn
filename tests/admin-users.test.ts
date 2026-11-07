@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { handle } from '../supabase/functions/admin-users/index';
 
 // Faux client Supabase : enregistre les appels et rejoue des réponses prévues.
-function fake(opts: { callerRole?: string; callerActive?: boolean; inviteError?: string; updateError?: string; confirmed?: boolean; rows?: number } = {}) {
+function fake(opts: { targetRole?: string; callerRole?: string; callerActive?: boolean; inviteError?: string; updateError?: string; confirmed?: boolean; rows?: number } = {}) {
   const calls: [string, unknown][] = [];
   const db = {
     auth: {
@@ -21,7 +21,7 @@ function fake(opts: { callerRole?: string; callerActive?: boolean; inviteError?:
         select: () => chain, order: () => Promise.resolve({ data: [{ id: 'A', email: 'a@x', role: 'admin', active: true }, { id: 'B', email: 'b@x', role: 'lecteur', active: true }], error: null }),
         update: (p: unknown) => { mode = 'update'; patch = p; return chain; },
         eq: (_c: string, v: string) => { q.id = v; return chain; },
-        maybeSingle: async () => ({ data: { role: opts.callerRole ?? 'admin', active: opts.callerActive ?? true } }),
+        maybeSingle: async () => (q.id === 'ME' ? { data: { role: opts.callerRole ?? 'admin', active: opts.callerActive ?? true } } : { data: opts.targetRole === 'none' ? null : { role: opts.targetRole ?? 'technicien' } }),
         then: (res: (v: unknown) => void) => {
           if (mode === 'update') { calls.push(['update:' + table, [q.id, patch]]); res(opts.updateError ? { data: null, error: { message: opts.updateError } } : { data: Array.from({ length: opts.rows ?? 1 }, () => ({ id: q.id })), error: null }); }
           else res({ data: null, error: null });
@@ -42,8 +42,8 @@ await t('sans jeton ou jeton invalide : 401', async () => {
   assert.equal((await out(await call({ action: 'list' }, fake(), ''))).status, 401);
   assert.equal((await out(await call({ action: 'list' }, fake(), 'bad'))).status, 401);
 });
-await t('non-admin ou admin révoqué : 403, aucune action effectuée', async () => {
-  for (const o of [{ callerRole: 'technicien' }, { callerRole: 'lecteur' }, { callerRole: 'admin', callerActive: false }]) {
+await t('technicien, régisseur ou compte révoqué : 403, aucune action effectuée', async () => {
+  for (const o of [{ callerRole: 'technicien' }, { callerRole: 'regisseur' }, { callerRole: 'regisseur_general', callerActive: false }, { callerRole: 'admin', callerActive: false }]) {
     const f = fake(o); const r = await out(await call({ action: 'invite', email: 'a@b.fr', role: 'admin' }, f));
     assert.equal(r.status, 403); assert.equal(f.calls.length, 0);
   }
@@ -57,7 +57,7 @@ await t('invitation : e-mail envoyé puis rôle appliqué', async () => {
 await t('invitation : e-mail invalide, rôle invalide, compte existant', async () => {
   assert.equal((await out(await call({ action: 'invite', email: 'pas-un-mail', role: 'lecteur' }, fake()))).status, 400);
   assert.equal((await out(await call({ action: 'invite', email: 'a@b.fr', role: 'root' }, fake()))).status, 400);
-  const r = await out(await call({ action: 'invite', email: 'a@b.fr', role: 'lecteur' }, fake({ inviteError: 'User already registered' })));
+  const r = await out(await call({ action: 'invite', email: 'a@b.fr', role: 'technicien' }, fake({ inviteError: 'User already registered' })));
   assert.equal(r.status, 409);
 });
 await t('révocation : droits coupés dans la base PUIS connexion bloquée', async () => {
@@ -86,6 +86,41 @@ await t('renvoyer : seulement si le compte n\'est pas encore activé', async () 
   const ok = fake(); assert.equal((await out(await call({ action: 'resend', id: 'P' }, ok))).status, 200);
   assert.equal(ok.calls[0][0], 'invite');
   assert.equal((await out(await call({ action: 'resend', id: 'P' }, fake({ confirmed: true })))).status, 400);
+});
+await t('régisseur général : invite un technicien ou un régisseur, pas un régisseur général ni un admin', async () => {
+  for (const [role, status] of [['technicien', 200], ['regisseur', 200], ['regisseur_general', 403], ['admin', 403]] as const) {
+    const f = fake({ callerRole: 'regisseur_general' }); const r = await out(await call({ action: 'invite', email: 'a@b.fr', role }, f));
+    assert.equal(r.status, status, role); if (status === 403) assert.equal(f.calls.length, 0);
+  }
+});
+await t('administrateur : peut inviter un régisseur général et un autre admin', async () => {
+  for (const role of ['regisseur_general', 'admin']) assert.equal((await out(await call({ action: 'invite', email: 'a@b.fr', role }, fake()))).status, 200);
+});
+await t('régisseur général : ne peut pas révoquer ni modifier un admin ou un autre régisseur général', async () => {
+  for (const targetRole of ['admin', 'regisseur_general']) {
+    const f = fake({ callerRole: 'regisseur_general', targetRole });
+    assert.equal((await out(await call({ action: 'set_access', id: 'X', active: false }, f))).status, 403);
+    assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'technicien' }, f))).status, 403);
+    assert.equal((await out(await call({ action: 'resend', id: 'X' }, f))).status, 403);
+    assert.equal(f.calls.length, 0);
+  }
+});
+await t('régisseur général : peut révoquer et changer le rôle d\'un technicien ou d\'un régisseur (jusqu\'à régisseur)', async () => {
+  for (const targetRole of ['technicien', 'regisseur']) {
+    const f = fake({ callerRole: 'regisseur_general', targetRole });
+    assert.equal((await out(await call({ action: 'set_access', id: 'X', active: false }, f))).status, 200);
+    assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'regisseur' }, f))).status, 200);
+  }
+  const f = fake({ callerRole: 'regisseur_general', targetRole: 'technicien' });
+  assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'regisseur_general' }, f))).status, 403, 'pas de promotion à son propre niveau');
+  assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'admin' }, f))).status, 403, 'pas de promotion admin');
+});
+await t('administrateur : change le rôle de n\'importe qui (pas le sien)', async () => {
+  const f = fake({ targetRole: 'regisseur_general' });
+  assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'admin' }, f))).status, 200);
+  assert.deepEqual(f.calls[0], ['update:profiles', ['X', { role: 'admin' }]]);
+  assert.equal((await out(await call({ action: 'set_role', id: 'ME', role: 'technicien' }, fake()))).status, 400);
+  assert.equal((await out(await call({ action: 'set_role', id: 'X', role: 'lecteur' }, fake()))).status, 400);
 });
 await t('liste : profils + statut d\'activation + dernière connexion', async () => {
   const r = await out(await call({ action: 'list' }, fake()));

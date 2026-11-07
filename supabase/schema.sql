@@ -6,9 +6,23 @@
 
 create extension if not exists pgcrypto;
 
+-- ---------- Migration des rôles (v2 -> v3) ---------------------------
+-- Les rôles passent d'un type « enum » à du texte, avec 4 niveaux :
+--   technicien < regisseur < regisseur_general < admin
+-- Correspondance pour une base existante : lecteur -> technicien ; ancien technicien -> regisseur ; admin inchangé.
 do $$ begin
-  create type app_role as enum ('lecteur', 'technicien', 'admin');
-exception when duplicate_object then null; end $$;
+  if exists (select 1 from pg_type where typname = 'app_role') then
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'profiles' and column_name = 'role' and udt_name = 'app_role') then
+      alter table profiles alter column role drop default;
+      alter table profiles alter column role type text
+        using (case role::text when 'lecteur' then 'technicien' when 'technicien' then 'regisseur' else role::text end);
+    end if;
+    drop function if exists has_role(app_role) cascade;   -- les règles RLS qui en dépendent sont recréées plus bas
+    drop function if exists role_rank(app_role) cascade;
+    drop type app_role;
+  end if;
+end $$;
 
 do $$ begin
   create type item_status as enum ('dispo', 'sav', 'en_pret');
@@ -18,19 +32,21 @@ exception when duplicate_object then null; end $$;
 create table if not exists profiles (
   id         uuid primary key references auth.users on delete cascade,
   email      text not null,
-  role       app_role not null default 'lecteur',
+  role       text not null default 'technicien',
   active     boolean not null default true,      -- false = accès révoqué (le compte existe toujours)
   created_at timestamptz not null default now()
 );
 alter table profiles add column if not exists active boolean not null default true;
+alter table profiles drop constraint if exists profiles_role_check;
+alter table profiles add constraint profiles_role_check check (role in ('technicien', 'regisseur', 'regisseur_general', 'admin'));
 
--- Le tout premier compte créé devient admin, les suivants sont 'lecteur'.
+-- Le tout premier compte créé devient admin, les suivants sont 'technicien' (niveau le plus bas).
 create or replace function handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
   insert into profiles (id, email, role)
   values (new.id, new.email,
-          case when exists (select 1 from profiles) then 'lecteur'::app_role else 'admin'::app_role end)
+          case when exists (select 1 from profiles) then 'technicien' else 'admin' end)
   on conflict (id) do nothing;
   return new;
 end $$;
@@ -39,13 +55,13 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function handle_new_user();
 
-create or replace function role_rank(r app_role) returns int
+create or replace function role_rank(r text) returns int
 language sql immutable as $$
-  select case r when 'admin' then 3 when 'technicien' then 2 when 'lecteur' then 1 else 0 end
+  select case r when 'admin' then 4 when 'regisseur_general' then 3 when 'regisseur' then 2 when 'technicien' then 1 else 0 end
 $$;
 
 -- vrai si l'utilisateur connecté a au moins le rôle demandé
-create or replace function has_role(min_role app_role) returns boolean
+create or replace function has_role(min_role text) returns boolean
 language sql stable security definer set search_path = public as $$
   select coalesce((select active and role_rank(role) >= role_rank(min_role) from profiles where id = auth.uid()), false)
 $$;
@@ -148,7 +164,7 @@ create or replace function apply_status(p_event uuid, p_item int, p_status item_
 returns void language plpgsql security definer set search_path = public as $$
 declare prev item_status; cur_at timestamptz; n int;
 begin
-  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   insert into item_events (id, item_id, kind, status, note, created_by, created_by_label, at)
   values (p_event, p_item, 'status', p_status, p_note, auth.uid(), (select email from profiles where id = auth.uid()), p_at)
   on conflict (id) do nothing;
@@ -167,7 +183,7 @@ create or replace function report_fault(p_id uuid, p_item int, p_description tex
 returns void language plpgsql security definer set search_path = public as $$
 declare lbl text; n int;
 begin
-  if not has_role('lecteur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   select email into lbl from profiles where id = auth.uid();
   insert into faults (id, item_id, description, reported_by, reported_by_label, reported_at)
   values (p_id, p_item, nullif(trim(p_description), ''), auth.uid(), lbl, p_at)
@@ -183,7 +199,7 @@ create or replace function resolve_fault(p_event uuid, p_fault uuid, p_resolutio
 returns void language plpgsql security definer set search_path = public as $$
 declare lbl text; it int; n int;
 begin
-  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   select email into lbl from profiles where id = auth.uid();
   update faults set resolved_at = p_at, resolved_by = auth.uid(), resolution = nullif(trim(p_resolution), '')
    where id = p_fault and resolved_at is null
@@ -208,32 +224,45 @@ alter table items        enable row level security;
 alter table faults       enable row level security;
 alter table item_events  enable row level security;
 
--- profils : chacun voit le sien, l'admin voit et modifie tout
+-- profils : chacun voit le sien ; régisseurs généraux et admins voient tous les comptes ; seul l'admin modifie directement
 drop policy if exists profiles_select on profiles;
-create policy profiles_select on profiles for select using (id = auth.uid() or has_role('admin'));
+create policy profiles_select on profiles for select using (id = auth.uid() or has_role('regisseur_general'));
 drop policy if exists profiles_update on profiles;
 create policy profiles_update on profiles for update using (has_role('admin')) with check (has_role('admin'));
 
--- référentiels, modèles, parc : lecture = tout rôle, écriture = admin
+-- lecture : tous les rôles
 do $$
 declare t text;
 begin
   foreach t in array array['families','item_types','sockets','filter_sizes','lamps','models','items'] loop
     execute format('drop policy if exists %I on %I', t || '_select', t);
-    execute format('create policy %I on %I for select using (has_role(''lecteur''))', t || '_select', t);
+    execute format('create policy %I on %I for select using (has_role(''technicien''))', t || '_select', t);
+  end loop;
+  -- catalogue (familles, types, douilles, porte-filtres, lampes, modèles) : écriture = admin
+  foreach t in array array['families','item_types','sockets','filter_sizes','lamps','models'] loop
     execute format('drop policy if exists %I on %I', t || '_write', t);
     execute format('create policy %I on %I for all using (has_role(''admin'')) with check (has_role(''admin''))', t || '_write', t);
   end loop;
 end $$;
 
--- pannes & journal : lecture = tout rôle ; écritures uniquement via les fonctions ci-dessus (+ admin)
+-- parc : création = régisseur général ; modification et suppression = admin
+-- (le changement d'état passe par la fonction apply_status, réservée au régisseur général)
+drop policy if exists items_write on items;
+drop policy if exists items_insert on items;
+create policy items_insert on items for insert with check (has_role('regisseur_general'));
+drop policy if exists items_update on items;
+create policy items_update on items for update using (has_role('admin')) with check (has_role('admin'));
+drop policy if exists items_delete on items;
+create policy items_delete on items for delete using (has_role('admin'));
+
+-- pannes & journal : lecture = tous les rôles ; écritures uniquement via les fonctions ci-dessus (+ admin)
 drop policy if exists faults_select on faults;
-create policy faults_select on faults for select using (has_role('lecteur'));
+create policy faults_select on faults for select using (has_role('technicien'));
 drop policy if exists faults_admin on faults;
 create policy faults_admin on faults for all using (has_role('admin')) with check (has_role('admin'));
 
 drop policy if exists item_events_select on item_events;
-create policy item_events_select on item_events for select using (has_role('lecteur'));
+create policy item_events_select on item_events for select using (has_role('technicien'));
 
 -- droits d'exécution des fonctions
 revoke all on function apply_status(uuid,int,item_status,text,timestamptz) from public;

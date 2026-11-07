@@ -34,7 +34,7 @@ function paint(root: HTMLElement) {
   chips[1].setAttribute('aria-pressed', String(showClosed));
   const list = data.faults.filter((f) => !!f.resolved_at === showClosed)
     .sort((a, b) => (showClosed ? (b.resolved_at ?? '') > (a.resolved_at ?? '') : b.reported_at > a.reported_at) ? 1 : -1);
-  const tech = can('technicien');
+  const tech = can('regisseur');
   root.querySelector('#list')!.innerHTML = list.length ? list.map((f) => {
     const it = data.items.find((i) => i.id === f.item_id);
     const d = it ? describe(data, it) : null;

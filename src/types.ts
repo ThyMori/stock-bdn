@@ -1,10 +1,11 @@
 export type Status = 'dispo' | 'sav' | 'en_pret';
-export type Role = 'lecteur' | 'technicien' | 'admin';
+export type Role = 'technicien' | 'regisseur' | 'regisseur_general' | 'admin';
 
 export const STATUSES: Status[] = ['dispo', 'sav', 'en_pret'];
 export const STATUS_LABEL: Record<Status, string> = { dispo: 'Disponible', sav: 'SAV', en_pret: 'En prêt' };
-export const ROLE_LABEL: Record<Role, string> = { lecteur: 'Lecteur', technicien: 'Technicien', admin: 'Administrateur' };
-export const ROLE_RANK: Record<Role, number> = { lecteur: 1, technicien: 2, admin: 3 };
+export const ROLE_LABEL: Record<Role, string> = { technicien: 'Technicien', regisseur: 'Régisseur', regisseur_general: 'Régisseur général', admin: 'Administrateur' };
+export const ROLE_RANK: Record<Role, number> = { technicien: 1, regisseur: 2, regisseur_general: 3, admin: 4 };
+export const ROLES: Role[] = ['technicien', 'regisseur', 'regisseur_general', 'admin'];
 
 export interface Family { id: string; name: string }
 export interface ItemType { id: string; name: string }

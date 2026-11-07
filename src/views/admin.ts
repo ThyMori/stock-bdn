@@ -1,8 +1,8 @@
 import type { ViewFactory } from '../router';
-import { pull, state, view } from '../store';
+import { can, pull, state, view } from '../store';
 import { supabase } from '../supabase';
 import { esc, fmtDate } from '../logic';
-import { ROLE_LABEL } from '../types';
+import { ROLE_LABEL, ROLE_RANK, ROLES } from '../types';
 import type { AccountRow, Role } from '../types';
 
 const opts = (list: { id: string; name?: string; label?: string }[], sel?: string | null, empty = '—') =>
@@ -24,10 +24,14 @@ async function callAdmin(body: Record<string, unknown>): Promise<unknown> {
   return data;
 }
 
-const TABS: [string, string][] = [['items', 'Projecteurs'], ['models', 'Modèles'], ['lamps', 'Lampes'], ['refs', 'Référentiels'], ['users', 'Utilisateurs']];
+const ALL_TABS: [string, string][] = [['items', 'Projecteurs'], ['models', 'Modèles'], ['lamps', 'Lampes'], ['refs', 'Référentiels'], ['users', 'Utilisateurs']];
 
-export const adminView: ViewFactory = ([section = 'items']) => ({
+export const adminView: ViewFactory = ([want = 'items']) => ({
   mount(root) {
+    // Le régisseur général n'a accès qu'aux projecteurs (ajout) et aux utilisateurs ; le reste est réservé aux admins.
+    const isAdmin = can('admin');
+    const TABS = ALL_TABS.filter(([k]) => isAdmin || k === 'items' || k === 'users');
+    const section = TABS.some(([k]) => k === want) ? want : 'items';
     root.innerHTML = `<div class="page"><a href="#/more" class="sub">‹ Plus</a><h1>Administration</h1>
       <div class="chips">${TABS.map(([k, l]) => `<a class="chip" href="#/admin/${k}" aria-pressed="${k === section}">${l}</a>`).join('')}</div>
       <div id="msg" class="banner" hidden></div><div id="body" class="stack"></div></div>`;
@@ -143,20 +147,23 @@ export const adminView: ViewFactory = ([section = 'items']) => ({
         catch (e) { body.innerHTML = ''; return say((e as Error).message, true); }
         const me = state.profile?.id;
         const redirect = new URL(import.meta.env.BASE_URL, location.origin).href;
-        const roleOpts = (sel?: Role) => (['lecteur', 'technicien', 'admin'] as Role[]).map((r) => `<option value="${r}" ${r === sel ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('');
+        // Admin : tous les rôles, sur tous les comptes. Autres : uniquement en dessous de leur propre rang.
+        const myRank = state.profile ? ROLE_RANK[state.profile.role] : 0;
+        const canTouch = (r: Role) => isAdmin || ROLE_RANK[r] < myRank;
+        const roleOpts = (sel?: Role) => ROLES.filter((r) => canTouch(r) || r === sel).map((r) => `<option value="${r}" ${r === sel ? 'selected' : ''} ${canTouch(r) ? '' : 'disabled'}>${ROLE_LABEL[r]}</option>`).join('');
         const statusOf = (u: AccountRow) => !u.active ? '<span class="warn">Accès révoqué</span>'
           : !u.confirmed ? '<span class="warn">Invitation envoyée, pas encore activée</span>'
           : `Actif · dernière connexion ${fmtDate(u.last_sign_in_at)}`;
 
         body.innerHTML = `<form class="card stack" id="inv"><h2>Inviter quelqu'un</h2>
             <label class="f">Adresse e-mail<input name="email" type="email" required autocomplete="off"></label>
-            <label class="f">Rôle<select name="role">${roleOpts('lecteur')}</select></label>
+            <label class="f">Rôle<select name="role">${roleOpts('technicien')}</select></label>
             <button class="btn primary">Envoyer l'invitation</button>
             <div class="sub">La personne reçoit un e-mail, clique sur le lien et choisit son mot de passe.</div></form>` +
           '<div id="ulist" class="stack">' + users.map((u) => `<div class="card stack" data-id="${u.id}">
             <div class="row"><div class="grow"><div class="t">${esc(u.email)}${u.id === me ? ' <span class="muted">(toi)</span>' : ''}</div><div class="s">${statusOf(u)}</div></div>
-              <select data-role style="width:auto" ${u.id === me || !u.active ? 'disabled' : ''}>${roleOpts(u.role)}</select></div>
-            ${u.id === me ? '' : `<div class="row wrap">
+              <select data-role style="width:auto" ${u.id === me || !u.active || !canTouch(u.role) ? 'disabled' : ''}>${roleOpts(u.role)}</select></div>
+            ${u.id === me || !canTouch(u.role) ? '' : `<div class="row wrap">
               ${u.active && !u.confirmed ? '<button class="btn small" data-act="resend">Renvoyer l\'invitation</button>' : ''}
               ${u.active ? '<button class="btn small danger" data-act="revoke">Révoquer l\'accès</button>' : '<button class="btn small primary" data-act="restore">Rétablir l\'accès</button>'}</div>`}
           </div>`).join('') + '</div>' +
@@ -172,9 +179,10 @@ export const adminView: ViewFactory = ([section = 'items']) => ({
         });
         body.querySelectorAll<HTMLSelectElement>('select[data-role]').forEach((sel) => sel.addEventListener('change', async () => {
           const id = sel.closest<HTMLElement>('[data-id]')!.dataset.id!;
-          const { error } = await supabase.from('profiles').update({ role: sel.value }).eq('id', id);
-          say(error ? 'Erreur : ' + error.message : 'Rôle mis à jour (effectif à la prochaine ouverture de l\'appli pour cette personne).', !!error);
-          if (error) void draw();
+          try {
+            await callAdmin({ action: 'set_role', id, role: sel.value });
+            say('Rôle mis à jour (effectif à la prochaine ouverture de l\'appli pour cette personne).');
+          } catch (err) { say((err as Error).message, true); void draw(); }
         }));
         body.querySelector('#ulist')!.addEventListener('click', async (e) => {
           const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
