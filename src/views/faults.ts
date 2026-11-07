@@ -40,7 +40,7 @@ function paint(root: HTMLElement) {
     const d = it ? describe(data, it) : null;
     return `<div class="item">
       <a class="num" href="#/item/${f.item_id}">${f.item_id}</a>
-      <div class="grow"><div class="t">${esc(f.description || 'Sans description')}${f.pending ? ' ⏳' : ''}</div>
+      <div class="grow"><div class="t">${esc(f.description || 'Sans description')}${f.pending ? ' <span class="pending">en attente</span>' : ''}</div>
         <div class="s">${esc(d?.model?.name ?? '')} · ${esc(f.reported_by_label ?? 'moi')} · ${fmtDateTime(f.reported_at)}${f.resolved_at ? ` · résolue le ${fmtDate(f.resolved_at)}` : ''}</div></div>
       ${!showClosed && tech ? `<button class="btn small" data-act="resolve" data-v="${f.id}">Résolue</button>` : ''}</div>`;
   }).join('') : `<div class="empty">${showClosed ? 'Aucune panne résolue.' : 'Aucune panne en cours 🎉'}</div>`;

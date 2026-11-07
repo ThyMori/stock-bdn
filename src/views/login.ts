@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 
 const shell = (inner: string) => `<div class="login"><div class="card stack">
-  <div class="row"><img class="logo" src="${import.meta.env.BASE_URL}icon-192.png" alt=""><div><h1>Stock BdN</h1><div class="sub">Parc de projecteurs</div></div></div>${inner}</div></div>`;
+  <div class="stack" style="gap:6px"><h1 class="hero">Stock BdN</h1><div class="sub">Parc de projecteurs · Bouffes du Nord</div></div>${inner}</div></div>`;
 
 export function showLogin(root: HTMLElement, onDone: () => void) {
   let revoked = false;

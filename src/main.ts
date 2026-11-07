@@ -1,3 +1,4 @@
+import '@fontsource-variable/archivo/wdth.css';
 import './styles.css';
 import { registerSW } from 'virtual:pwa-register';
 import { authFlow, configured, supabase } from './supabase';
@@ -44,10 +45,10 @@ function paintStatus() {
   if (!el) return;
   const wait = state.pending.length;
   const label = state.syncing ? 'Synchronisation…' : !navigator.onLine ? `Hors ligne${wait ? ` · ${wait} en attente` : ''}` : wait ? `${wait} en attente` : 'À jour';
-  el.innerHTML = `<div class="row" style="justify-content:flex-end;margin-bottom:8px">
+  el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span>
       <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></div>
-    ${state.rejected.length ? `<div class="banner err" style="margin-bottom:10px">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
-    ${state.error && navigator.onLine ? `<div class="banner" style="margin-bottom:10px">Synchro en échec : ${state.error}</div>` : ''}`;
+    ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
+    ${state.error && navigator.onLine ? `<div class="banner">Synchro en échec : ${state.error}</div>` : ''}`;
   el.querySelector('#syncBtn')?.addEventListener('click', () => void sync());
 }
 

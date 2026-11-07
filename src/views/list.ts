@@ -74,10 +74,10 @@ function paint(root: HTMLElement) {
     out.innerHTML = list.length ? list.map(({ id, rs, m }) => {
       const k = counts(rs.map((r) => r.i));
       const type = data.types.find((t) => t.id === m?.type_id)?.name ?? '';
-      return `<button class="item" data-act="model" data-v="${id}" style="text-align:left;font:inherit">
+      return `<button class="item" data-act="model" data-v="${id}">
         <div class="grow"><div class="t">${esc(m?.name)}</div><div class="s">${esc(type)}</div></div>
-        <div class="s" style="text-align:right"><b style="font-size:1.1rem;color:var(--text)">${k.total}</b><br>
-          <span style="color:var(--dispo)">${k.dispo}</span> · <span style="color:var(--sav)">${k.sav}</span> · <span style="color:var(--pret)">${k.en_pret}</span></div></button>`;
+        <div class="s" style="text-align:right"><b style="font-size:1.1rem;color:var(--ink)">${k.total}</b><br>
+          <span class="cnt" title="Disponibles">${k.dispo}</span> · <span class="cnt ${k.sav ? 'sav' : ''}" title="SAV">${k.sav}</span> · <span class="cnt ${k.en_pret ? 'en_pret' : ''}" title="En prêt">${k.en_pret}</span></div></button>`;
     }).join('') : `<div class="empty">Aucun résultat</div>`;
     return;
   }
@@ -87,7 +87,7 @@ function paint(root: HTMLElement) {
     <a class="item" href="#/item/${r.i.id}">
       <div class="num">${r.i.id}</div>
       <div class="grow"><div class="t">${esc(r.d.model?.name)}${r.open ? '<span class="dot" title="Panne en cours"></span>' : ''}</div>
-        <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}</div></div>
-      <span class="badge ${r.i.status}">${STATUS_LABEL[r.i.status]}${r.i.pending ? ' ⏳' : ''}</span>
+        <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}${r.i.pending ? ' <span class="pending">en attente</span>' : ''}</div></div>
+      <span class="badge ${r.i.status}">${STATUS_LABEL[r.i.status]}</span>
     </a>`).join('') : `<div class="empty">Aucun projecteur ne correspond</div>`;
 }

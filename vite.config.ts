@@ -16,8 +16,8 @@ export default defineConfig({
         short_name: 'Stock BdN',
         description: 'Parc de projecteurs – Bouffes du Nord',
         lang: 'fr',
-        theme_color: '#121110',
-        background_color: '#121110',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         start_url: base,
@@ -30,6 +30,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globIgnores: ['**/*latin-ext*', '**/*vietnamese*'], // le sous-ensemble « latin » couvre le français
         navigateFallback: 'index.html',
         // les appels Supabase ne sont jamais mis en cache par le service worker :
         // la donnée hors ligne est gérée par l'appli (IndexedDB).
