@@ -50,7 +50,7 @@ function paint(root: HTMLElement) {
   const c = counts(base.map((r) => r.i));
   root.querySelector('#tiles')!.innerHTML =
     `<button class="tile" data-act="status" data-v="" aria-pressed="${f.status === ''}"><b>${c.total}</b><span>Total</span></button>` +
-    STATUSES.map((s) => `<button class="tile ${s}" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><b>${c[s]}</b><span>${STATUS_LABEL[s]}</span></button>`).join('');
+    STATUSES.map((s) => `<button class="tile ${s === 'en_pret' && !c[s] ? '' : s}" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><b>${c[s]}</b><span>${STATUS_LABEL[s]}</span></button>`).join('');
 
   const usedTypes = data.types.filter((t) => data.models.some((m) => m.type_id === t.id && data.items.some((i) => i.model_id === m.id)));
   root.querySelector('#types')!.innerHTML =
@@ -77,7 +77,7 @@ function paint(root: HTMLElement) {
       return `<button class="item" data-act="model" data-v="${id}">
         <div class="grow"><div class="t">${esc(m?.name)}</div><div class="s">${esc(type)}</div></div>
         <div class="s" style="text-align:right"><b style="font-size:1.1rem;color:var(--ink)">${k.total}</b><br>
-          <span class="cnt" title="Disponibles">${k.dispo}</span> · <span class="cnt ${k.sav ? 'sav' : ''}" title="SAV">${k.sav}</span> · <span class="cnt ${k.en_pret ? 'en_pret' : ''}" title="En prêt">${k.en_pret}</span></div></button>`;
+          <span class="cnt ${k.dispo ? 'dispo' : ''}" title="Disponibles">${k.dispo}</span> · <span class="cnt ${k.sav ? 'sav' : ''}" title="SAV">${k.sav}</span> · <span class="cnt ${k.en_pret ? 'en_pret' : ''}" title="En prêt">${k.en_pret}</span></div></button>`;
     }).join('') : `<div class="empty">Aucun résultat</div>`;
     return;
   }

@@ -3,14 +3,14 @@
    angles droits, boutons rectangulaires, blocs noirs. Le rouge et le jaune ne servent qu'aux états. */
 :root {
   --paper: #fff; --ink: #000; --muted: #595959;
-  --red: #e30613; --yellow: #ffd500;
+  --red: #e30613; --yellow: #ffd500; --green: #00873e;
   --font-body: "Swiss 721 BT", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-display: "Archivo Variable", "Swiss 721 BT", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --nav-h: 60px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --paper: #000; --ink: #fff; --muted: #a6a6a6; --red: #ff3b30; color-scheme: dark; }
+  :root { --paper: #000; --ink: #fff; --muted: #a6a6a6; --red: #ff3b30; --green: #2fd36b; color-scheme: dark; }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.4 var(--font-body); }
@@ -70,9 +70,12 @@ label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; fo
 .tile:last-child { border-right: 0; }
 .tile b { display: block; font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 1.7rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .tile span { font-size: .74rem; font-weight: 700; }
+.tile.dispo b { color: var(--green); }
 .tile.sav b { color: var(--red); }
 .tile.en_pret b { box-shadow: inset 0 -.32em var(--yellow); }
 .tile[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.tile.dispo[aria-pressed="true"] { background: var(--green); color: #000; }
+.tile.dispo[aria-pressed="true"] b { color: #000; }
 
 /* liste : lignes séparées par des filets noirs, comme la grille du site */
 .list { display: flex; flex-direction: column; border-top: 2px solid var(--ink); }
@@ -82,9 +85,9 @@ label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; fo
 .item .num { flex: none; min-width: 56px; font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 1.5rem; line-height: 1; font-variant-numeric: tabular-nums; }
 .item .t { font-weight: 700; } .item .s { font-size: .85rem; color: var(--muted); }
 .cnt { font-weight: 700; font-variant-numeric: tabular-nums; }
-.cnt.sav { color: var(--red); } .cnt.en_pret { box-shadow: inset 0 -.4em var(--yellow); }
+.cnt.dispo { color: var(--green); } .cnt.sav { color: var(--red); } .cnt.en_pret { box-shadow: inset 0 -.4em var(--yellow); }
 .badge { flex: none; font-size: .72rem; font-weight: 700; padding: 3px 8px 1px; border: 2px solid var(--ink); text-transform: uppercase; letter-spacing: .04em; }
-.badge.dispo { background: var(--ink); color: var(--paper); }
+.badge.dispo { background: var(--green); border-color: var(--green); color: #000; }
 .badge.sav { background: var(--red); border-color: var(--red); color: #fff; }
 .badge.en_pret { background: var(--yellow); color: #000; }
 .warn { color: var(--red); font-weight: 700; }
@@ -104,7 +107,7 @@ label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; fo
 .seg button { min-height: 56px; border: 0; border-right: 2px solid var(--ink); background: var(--paper); font-weight: 700; cursor: pointer; padding: 6px 4px 4px; }
 .seg button:last-child { border-right: 0; }
 .seg button:disabled { cursor: default; }
-.seg button[aria-pressed="true"].dispo { background: var(--ink); color: var(--paper); }
+.seg button[aria-pressed="true"].dispo { background: var(--green); color: #000; }
 .seg button[aria-pressed="true"].sav { background: var(--red); color: #fff; }
 .seg button[aria-pressed="true"].en_pret { background: var(--yellow); color: #000; }
 details.card > summary { cursor: pointer; font-weight: 700; }
