@@ -143,3 +143,8 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
   nav.tabs, .noprint, .topbar { display: none !important; }
   .label { border: 1px dotted #999; }
 }
+
+/* animation arc électrique (onglet Pannes) */
+.arc-fx { position: fixed; inset: 0; z-index: 100; background: #05000d; display: grid; place-items: center; cursor: pointer; }
+.arc-fx canvas { width: min(100vw, 177.78vh); aspect-ratio: 16 / 9; image-rendering: pixelated; }
+@media print { .arc-fx { display: none !important; } }

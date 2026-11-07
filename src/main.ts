@@ -14,6 +14,7 @@ import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
 import { showConfigMissing, showLogin, showSetPassword } from './views/login';
 import { can } from './store';
+import { playArc, reducedMotion } from './arc';
 import type { Role } from './types';
 import { fmtDateTime } from './logic';
 
@@ -83,6 +84,13 @@ function startApp() {
     current?.view.update?.(current.root);
   });
   window.addEventListener('hashchange', route);
+  // Onglet Pannes : petite animation d'arc électrique avant d'afficher la liste.
+  document.addEventListener('click', (e) => {
+    const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('nav.tabs a[href="#/faults"]');
+    if (!a || a.getAttribute('aria-current') === 'page' || reducedMotion()) return;
+    e.preventDefault();
+    playArc(() => { location.hash = '#/faults'; });
+  });
   paintStatus();
   route();
   void sync();
