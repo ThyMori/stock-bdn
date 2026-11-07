@@ -1,1 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="96" fill="#121110"/><path d="M256 190 L120 470 H392 Z" fill="#f2a93b" opacity=".22"/><circle cx="256" cy="150" r="62" fill="#f2a93b"/><rect x="226" y="78" width="60" height="22" rx="8" fill="#f2a93b"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512"><rect width="512" height="512" fill="#000"/><g>
+  <rect x="40" y="84" width="432" height="22" fill="#fff"/>
+  <rect x="222" y="106" width="16" height="144" fill="#fff"/>
+  <g transform="rotate(28 230 250)">
+    <g fill="#ffd500" opacity=".45">
+      <polygon points="388,196 388,228 640,150 640,30"/>
+      <polygon points="388,236 388,264 640,192 640,308"/>
+      <polygon points="388,272 388,304 640,350 640,470"/>
+    </g>
+    <rect x="100" y="218" width="12" height="64" fill="#ffd500"/>
+    <rect x="120" y="212" width="12" height="76" fill="#ffd500"/>
+    <rect x="140" y="206" width="12" height="88" fill="#ffd500"/>
+    <rect x="160" y="198" width="170" height="104" fill="#ffd500"/>
+    <rect x="186" y="208" width="6" height="40" fill="#000"/>
+    <rect x="206" y="208" width="6" height="40" fill="#000"/>
+    <rect x="226" y="208" width="6" height="40" fill="#000"/>
+    <rect x="336" y="184" width="50" height="132" fill="#fff"/>
+    <rect x="368" y="192" width="6" height="116" fill="#000"/>
+  </g>
+  <circle cx="230" cy="250" r="22" fill="#fff"/><circle cx="230" cy="250" r="8" fill="#000"/>
+</g></svg>
