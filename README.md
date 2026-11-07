@@ -13,9 +13,10 @@ PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, sca
 | Signaler une panne | ✅ | ✅ | ✅ |
 | Changer l'état (dispo / SAV / en prêt), résoudre une panne | | ✅ | ✅ |
 | Imprimer les étiquettes QR | | ✅ | ✅ |
-| Ajouter/modifier/supprimer projecteurs, modèles, lampes, référentiels ; gérer les rôles | | | ✅ |
+| Ajouter/modifier/supprimer projecteurs, modèles, lampes, référentiels | | | ✅ |
+| Inviter des utilisateurs, changer leur rôle, révoquer / rétablir leur accès | | | ✅ |
 
-Les droits sont appliqués **par la base** (RLS + fonctions SQL), pas seulement par l'interface.
+Les droits sont appliqués **par la base** (RLS + fonctions SQL), pas seulement par l'interface. Un accès révoqué est coupé au niveau de la base.
 
 **Hors ligne** : la liste complète est copiée sur l'appareil. Changements d'état et signalements de pannes sont enregistrés localement (⏳) et envoyés au retour du réseau. Chaque action a un identifiant unique : la rejouer ne la double jamais. En cas de conflit sur l'état d'un projecteur, l'action la plus récente gagne. Un historique de toutes les actions est conservé côté serveur.
 L'ajout de projecteurs et l'édition du catalogue demandent une connexion.
@@ -42,8 +43,21 @@ L'ajout de projecteurs et l'édition du catalogue demandent une connexion.
 ### 3. Sur les téléphones
 Ouvrir l'adresse → se connecter → *Partager / Menu ⋮ → Ajouter à l'écran d'accueil*. Ouvrir l'appli une fois en ligne pour charger les données avant de partir en tournée.
 
-### 4. Inviter des collègues
-Supabase → **Authentication → Users → Invite user**. La personne reçoit un lien, choisit son mot de passe, et arrive avec le rôle *Lecteur*. Dans l'appli : **Plus → Administration → Utilisateurs** pour la passer *Technicien* ou *Admin*.
+### 4. Gérer les utilisateurs depuis l'appli (une seule fois : déployer la fonction)
+Inviter et révoquer demandent la clé secrète de Supabase, qui ne doit jamais être dans l'appli. Elle reste dans une **fonction serveur** (`supabase/functions/admin-users`) :
+
+1. **Rejouer `supabase/schema.sql`** dans le SQL Editor (le script est rejouable, il ajoute le champ « accès actif » et la protection du dernier administrateur sans toucher aux données).
+2. Supabase → **Edge Functions → Deploy a new function → Via Editor** : nom **`admin-users`**, colle le contenu de `supabase/functions/admin-users/index.ts`, **Deploy**.
+3. Ouvre cette fonction → **Details** (ou *Settings*) et **désactive « Verify JWT »** s'il est activé : la fonction vérifie elle-même l'identité et le rôle de l'appelant à chaque appel.
+   *(Avec la CLI : `supabase functions deploy admin-users --no-verify-jwt`.)*
+4. Dans **Authentication → URL Configuration**, vérifie que *Site URL* et *Redirect URLs* contiennent l'adresse de l'appli (sinon le lien de l'e-mail d'invitation ne fonctionnera pas).
+
+Ensuite, dans l'appli : **Plus → Administration → Utilisateurs**.
+- **Inviter** : e-mail + rôle → la personne reçoit un e-mail, choisit son mot de passe et arrive dans l'appli. *Renvoyer l'invitation* tant qu'elle n'a pas activé son compte.
+- **Révoquer l'accès** : coupe immédiatement les droits dans la base (même si la personne a une session ouverte) et interdit toute nouvelle connexion. Le compte et l'historique sont conservés. Son appli se vide et se déconnecte à la prochaine synchronisation. **Rétablir l'accès** annule tout.
+- Garde-fous : on ne peut pas modifier son propre accès ni son propre rôle, et il reste toujours au moins un administrateur actif.
+
+*Sans la fonction, tout le reste de l'appli fonctionne ; seule la liste des utilisateurs affichera « fonction non déployée ». On peut aussi inviter depuis Supabase (Authentication → Users → Invite user).*
 
 ### 5. Étiquettes
 **Plus → Étiquettes QR** : choisis la plage de numéros, imprime. Le QR contient l'adresse de l'appli + le numéro, donc l'appareil photo du téléphone ouvre directement la fiche. Le scanner intégré lit aussi un QR qui contiendrait seulement le numéro (anciens stickers).

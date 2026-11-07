@@ -4,7 +4,9 @@ const shell = (inner: string) => `<div class="login"><div class="card stack">
   <div class="row"><img class="logo" src="${import.meta.env.BASE_URL}icon-192.png" alt=""><div><h1>Stock BdN</h1><div class="sub">Parc de projecteurs</div></div></div>${inner}</div></div>`;
 
 export function showLogin(root: HTMLElement, onDone: () => void) {
-  root.innerHTML = shell(`<form class="stack" id="f">
+  let revoked = false;
+  try { revoked = sessionStorage.getItem('revoked') === '1'; sessionStorage.removeItem('revoked'); } catch { /* ignore */ }
+  root.innerHTML = shell(`${revoked ? '<div class="banner err">Ton accès à l\'application a été révoqué. Contacte un administrateur si c\'est une erreur.</div>' : ''}<form class="stack" id="f">
     <label class="f">E-mail<input name="email" type="email" autocomplete="username" required></label>
     <label class="f">Mot de passe<input name="pw" type="password" autocomplete="current-password" required></label>
     <button class="btn primary">Se connecter</button><div id="err" class="sub warn" role="alert"></div>
@@ -15,7 +17,7 @@ export function showLogin(root: HTMLElement, onDone: () => void) {
     e.preventDefault(); err.textContent = '';
     const fd = new FormData(form);
     const { error } = await supabase.auth.signInWithPassword({ email: String(fd.get('email')).trim(), password: String(fd.get('pw')) });
-    if (error) err.textContent = /invalid/i.test(error.message) ? 'E-mail ou mot de passe incorrect.' : error.message;
+    if (error) err.textContent = /banned/i.test(error.message) ? 'Ton accès à l\'application a été révoqué. Contacte un administrateur.' : /invalid/i.test(error.message) ? 'E-mail ou mot de passe incorrect.' : error.message;
     else onDone();
   });
   root.querySelector('#forgot')!.addEventListener('click', async () => {

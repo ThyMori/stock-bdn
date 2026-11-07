@@ -57,12 +57,25 @@ export async function clearLocal() {
 
 // ---------- lecture serveur ----------
 export async function loadProfile(userId: string) {
-  const { data, error } = await supabase.from('profiles').select('id,email,role').eq('id', userId).maybeSingle();
+  const { data, error } = await supabase.from('profiles').select('id,email,role,active').eq('id', userId).maybeSingle();
   if (error) throw error;
   if (data) { state.profile = data as Profile; await set('profile', state.profile); }
 }
 
+/** Accès révoqué par un administrateur : on efface les données de l'appareil et on déconnecte. */
+export async function handleRevoked() {
+  try { sessionStorage.setItem('revoked', '1'); } catch { /* ignore */ }
+  await supabase.auth.signOut().catch(() => {});
+  await clearLocal();
+  location.hash = '#/';
+  location.reload();
+}
+
 export async function pull() {
+  if (state.session) {
+    await loadProfile(state.session.user.id);
+    if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
+  }
   const q = (t: string) => supabase.from(t).select('*');
   const [fam, typ, soc, fs, lamps, models, items, faults] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),

@@ -27,7 +27,8 @@ export interface ItemEvent {
   id: string; item_id: number; kind: 'status' | 'fault' | 'fault_resolved';
   status: Status | null; note: string | null; created_by_label: string | null; at: string;
 }
-export interface Profile { id: string; email: string; role: Role }
+export interface Profile { id: string; email: string; role: Role; active: boolean }
+export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_at: string | null }
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];

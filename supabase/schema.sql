@@ -19,8 +19,10 @@ create table if not exists profiles (
   id         uuid primary key references auth.users on delete cascade,
   email      text not null,
   role       app_role not null default 'lecteur',
+  active     boolean not null default true,      -- false = accès révoqué (le compte existe toujours)
   created_at timestamptz not null default now()
 );
+alter table profiles add column if not exists active boolean not null default true;
 
 -- Le tout premier compte créé devient admin, les suivants sont 'lecteur'.
 create or replace function handle_new_user() returns trigger
@@ -45,8 +47,24 @@ $$;
 -- vrai si l'utilisateur connecté a au moins le rôle demandé
 create or replace function has_role(min_role app_role) returns boolean
 language sql stable security definer set search_path = public as $$
-  select coalesce((select role_rank(role) >= role_rank(min_role) from profiles where id = auth.uid()), false)
+  select coalesce((select active and role_rank(role) >= role_rank(min_role) from profiles where id = auth.uid()), false)
 $$;
+
+-- Il doit toujours rester au moins un administrateur actif.
+create or replace function protect_last_admin() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if old.role = 'admin' and old.active
+     and (tg_op = 'DELETE' or new.role <> 'admin' or not new.active)
+     and not exists (select 1 from profiles where role = 'admin' and active and id <> old.id) then
+    raise exception 'Impossible : il doit rester au moins un administrateur actif' using errcode = 'P0001';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
+drop trigger if exists profiles_protect_last_admin on profiles;
+create trigger profiles_protect_last_admin before update or delete on profiles
+  for each row execute function protect_last_admin();
 
 -- ---------- Référentiels --------------------------------------------
 create table if not exists families (

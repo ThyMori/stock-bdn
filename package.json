@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsx tests/logic.test.ts"
+    "test": "tsx tests/logic.test.ts && tsx tests/admin-users.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
