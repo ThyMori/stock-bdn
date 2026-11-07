@@ -6,14 +6,19 @@ import { STATUS_LABEL, STATUSES } from '../types';
 import type { Status } from '../types';
 
 // Les filtres survivent à la navigation (on revient de la fiche sur la même liste).
-const f = { q: '', status: '' as '' | Status, type: '', model: '', mode: 'units' as 'units' | 'models' };
+const store = { get: (): string | null => { try { return localStorage.getItem('stockbdn.chart'); } catch { return null; } },
+  set: (v: string) => { try { localStorage.setItem('stockbdn.chart', v); } catch { /* stockage indisponible : sans conséquence */ } } };
+const f = { chart: store.get() === 'pie', q: '', status: '' as '' | Status, type: '', model: '', mode: 'units' as 'units' | 'models' };
 
 export const listView: ViewFactory = (_p, query) => ({
   mount(root) {
     if (query.get('status')) f.status = query.get('status') as Status;
     root.innerHTML = `<div class="page">
-      <h1>Parc</h1>
-      <div id="tiles" class="tiles"></div>
+      <div class="row"><h1 class="grow">Parc</h1>
+        <div class="chips" role="group" aria-label="Affichage des compteurs">
+          <button class="chip" data-act="chart" data-v="tiles" title="Afficher en cases">Cases</button>
+          <button class="chip" data-act="chart" data-v="pie" title="Afficher en camembert">Camembert</button></div></div>
+      <div id="tiles"></div>
       <input id="q" type="search" placeholder="N°, modèle, lampe, type…" autocomplete="off" value="${esc(f.q)}">
       <div id="types" class="chips"></div>
       <div id="modes" class="chips"></div>
@@ -25,6 +30,7 @@ export const listView: ViewFactory = (_p, query) => ({
       if (!el) return;
       const { act, v } = el.dataset;
       if (act === 'status') f.status = (f.status === v ? '' : v) as Status | '';
+      if (act === 'chart') { f.chart = v === 'pie'; store.set(v ?? 'tiles'); }
       if (act === 'type') { f.type = v ?? ''; f.model = ''; }
       if (act === 'mode') f.mode = v as 'units' | 'models';
       if (act === 'model') { f.model = v ?? ''; f.mode = 'units'; }
@@ -35,6 +41,23 @@ export const listView: ViewFactory = (_p, query) => ({
   },
   update: paint
 });
+
+/** Camembert SVG : une part par état ; toucher une part filtre la liste, comme les cases. */
+function pieSvg(c: { total: number; dispo: number; sav: number; en_pret: number }, sel: '' | Status): string {
+  const R = 50, C = 60;
+  const parts = STATUSES.filter((s) => c[s] > 0);
+  let a0 = -Math.PI / 2;
+  const slices = parts.map((s) => {
+    const frac = c[s] / c.total, a1 = a0 + frac * Math.PI * 2;
+    const pt = (a: number) => `${(C + R * Math.cos(a)).toFixed(2)} ${(C + R * Math.sin(a)).toFixed(2)}`;
+    const mid = (a0 + a1) / 2, pull = sel === s ? 4 : 0;
+    const tr = pull ? ` transform="translate(${(Math.cos(mid) * pull).toFixed(2)} ${(Math.sin(mid) * pull).toFixed(2)})"` : '';
+    const d = frac >= 0.9999 ? `M ${C} ${C - R} A ${R} ${R} 0 1 1 ${C - 0.01} ${C - R} Z` : `M ${C} ${C} L ${pt(a0)} A ${R} ${R} 0 ${frac > 0.5 ? 1 : 0} 1 ${pt(a1)} Z`;
+    a0 = a1;
+    return `<path class="slice ${s}" data-act="status" data-v="${s}" d="${d}"${tr}><title>${STATUS_LABEL[s]} : ${c[s]}</title></path>`;
+  }).join('');
+  return `<svg class="pie-svg" viewBox="0 0 120 120" role="img" aria-label="Répartition du parc par état">${c.total ? slices : `<circle cx="${C}" cy="${C}" r="${R}" class="slice empty"/>`}</svg>`;
+}
 
 function paint(root: HTMLElement) {
   const data = view();
@@ -48,9 +71,20 @@ function paint(root: HTMLElement) {
 
   // compteurs (sur la recherche + type, avant filtre d'état)
   const c = counts(base.map((r) => r.i));
-  root.querySelector('#tiles')!.innerHTML =
-    `<button class="tile" data-act="status" data-v="" aria-pressed="${f.status === ''}"><b>${c.total}</b><span>Total</span></button>` +
-    STATUSES.map((s) => `<button class="tile ${s === 'en_pret' && !c[s] ? '' : s}" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><b>${c[s]}</b><span>${STATUS_LABEL[s]}</span></button>`).join('');
+  const tilesEl = root.querySelector('#tiles')!;
+  const toggles = root.querySelectorAll<HTMLElement>('[data-act="chart"]');
+  toggles[0].setAttribute('aria-pressed', String(!f.chart)); toggles[1].setAttribute('aria-pressed', String(f.chart));
+  if (!f.chart) {
+    tilesEl.className = 'tiles';
+    tilesEl.innerHTML =
+      `<button class="tile" data-act="status" data-v="" aria-pressed="${f.status === ''}"><b>${c.total}</b><span>Total</span></button>` +
+      STATUSES.map((s) => `<button class="tile ${s === 'en_pret' && !c[s] ? '' : s}" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><b>${c[s]}</b><span>${STATUS_LABEL[s]}</span></button>`).join('');
+  } else {
+    tilesEl.className = 'pie';
+    tilesEl.innerHTML = pieSvg(c, f.status) + `<div class="legend">` +
+      `<button class="lg" data-act="status" data-v="" aria-pressed="${f.status === ''}"><i style="background:var(--ink)"></i><span>Total</span><b>${c.total}</b><em></em></button>` +
+      STATUSES.map((s) => `<button class="lg" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><i class="${s}"></i><span>${s === 'dispo' ? 'Dispo' : STATUS_LABEL[s]}</span><b>${c[s]}</b><em>${c.total ? Math.round((c[s] / c.total) * 100) : 0} %</em></button>`).join('') + `</div>`;
+  }
 
   const usedTypes = data.types.filter((t) => data.models.some((m) => m.type_id === t.id && data.items.some((i) => i.model_id === m.id)));
   root.querySelector('#types')!.innerHTML =
