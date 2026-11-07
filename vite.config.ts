@@ -1,0 +1,40 @@
+import { defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+
+// BASE_PATH vaut "/<nom-du-depot>/" sur GitHub Pages (défini dans le workflow), "/" en local.
+const base = process.env.BASE_PATH || '/';
+
+export default defineConfig({
+  base,
+  build: { target: 'es2020' },
+  plugins: [
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['icon.svg'],
+      manifest: {
+        name: 'Stock BdN',
+        short_name: 'Stock BdN',
+        description: 'Parc de projecteurs – Bouffes du Nord',
+        lang: 'fr',
+        theme_color: '#121110',
+        background_color: '#121110',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: base,
+        scope: base,
+        icons: [
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        navigateFallback: 'index.html',
+        // les appels Supabase ne sont jamais mis en cache par le service worker :
+        // la donnée hors ligne est gérée par l'appli (IndexedDB).
+        runtimeCaching: []
+      }
+    })
+  ]
+});

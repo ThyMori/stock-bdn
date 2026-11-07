@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.env.local
+# données réelles issues d'AppSheet (contiennent des adresses e-mail) : ne pas publier
+supabase/seed.sql
+*.ods
+*.xlsx
