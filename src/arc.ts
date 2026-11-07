@@ -1,7 +1,7 @@
 // Petite animation « arcade années 80 » : un câble sectionné et son arc électrique.
 // Jouée quand on ouvre l'onglet Pannes. Désactivée si l'appareil demande moins d'animations.
 
-const W = 192, H = 108, MS = 1500;
+const W = 192, H = 108, MS = 1000;
 const GLYPH: Record<string, string[]> = {
   P: ['1110', '1001', '1001', '1110', '1000', '1000', '1000'],
   A: ['0110', '1001', '1001', '1111', '1001', '1001', '1001'],
@@ -90,7 +90,7 @@ export function playArc(done: () => void): void {
     // balayage CRT
     for (let y = 0; y < H; y += 2) rect(0, y, W, 1, 'rgba(0,0,0,0.28)');
     // fondu de sortie
-    if (t > MS - 250) rect(0, 0, W, H, `rgba(0,0,0,${(t - (MS - 250)) / 250})`);
+    if (t > MS - 200) rect(0, 0, W, H, `rgba(0,0,0,${(t - (MS - 200)) / 200})`);
     raf = requestAnimationFrame(frame);
   }
   function finish() {
