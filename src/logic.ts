@@ -30,6 +30,8 @@ export function applyPending(data: Data, pending: Op[]): Data {
   const byId = new Map(items.map((i) => [i.id, i]));
   const faults = data.faults.map((f) => ({ ...f }));
   const fById = new Map(faults.map((f) => [f.id, f]));
+  const faultLog = data.faultLog.map((l) => ({ ...l }));
+  const logIds = new Set(faultLog.map((l) => l.id));
   for (const op of pending) {
     if (op.kind === 'status') {
       const it = byId.get(op.item);
@@ -40,12 +42,21 @@ export function applyPending(data: Data, pending: Op[]): Data {
           reported_at: op.at, resolved_at: null, resolution: null, pending: true };
         faults.unshift(f); fById.set(f.id, f);
       }
+    } else if (op.kind === 'fault_note' || op.kind === 'fault_edit') {
+      const f = fById.get(op.fault);
+      if (f && !logIds.has(op.id)) {
+        faultLog.push({ id: op.id, fault_id: op.fault, kind: op.kind === 'fault_note' ? 'note' : 'edit',
+          text: op.kind === 'fault_note' ? op.text : op.description, old_text: op.kind === 'fault_edit' ? f.description : null,
+          by_label: null, at: op.at, pending: true });
+        logIds.add(op.id);
+        if (op.kind === 'fault_edit') { f.description = op.description; f.pending = true; }
+      }
     } else {
       const f = fById.get(op.fault);
       if (f && !f.resolved_at) { f.resolved_at = op.at; f.resolution = op.resolution ?? null; f.pending = true; }
     }
   }
-  return { ...data, items, faults };
+  return { ...data, items, faults, faultLog };
 }
 
 /** Erreur réseau / session expirée = on réessaiera plus tard. Erreur métier (droits, id inconnu) = rejet définitif. */

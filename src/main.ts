@@ -9,6 +9,7 @@ import { listView } from './views/list';
 import { itemView } from './views/item';
 import { scanView } from './views/scan';
 import { faultsView } from './views/faults';
+import { faultView } from './views/fault';
 import { moreView } from './views/more';
 import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
@@ -24,7 +25,7 @@ const app = document.getElementById('app')!;
 
 const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   '': { f: listView, tab: 'list' }, item: { f: itemView, tab: 'list' }, scan: { f: scanView, tab: 'scan' },
-  faults: { f: faultsView, tab: 'faults' }, more: { f: moreView, tab: 'more' },
+  faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, more: { f: moreView, tab: 'more' },
   labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
 

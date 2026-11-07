@@ -72,10 +72,10 @@ export const itemView: ViewFactory = ([idStr]) => {
         </dl>
       </div>
       <div class="card stack"><h2>Pannes ${open.length ? `<span class="warn">(${open.length} en cours)</span>` : ''}</h2>
-        ${open.map((x) => `<div class="row"><div class="grow"><div>${esc(x.description || 'Sans description')}${x.pending ? ' <span class="pending">en attente</span>' : ''}</div>
+        ${open.map((x) => `<div class="row"><div class="grow"><div><a href="#/fault/${x.id}">${esc(x.description || 'Sans description')}</a>${x.pending ? ' <span class="pending">en attente</span>' : ''}</div>
             <div class="sub">${esc(x.reported_by_label ?? 'moi')} · ${fmtDateTime(x.reported_at)}</div></div>
             ${canResolve ? `<button class="btn small" data-act="resolve" data-v="${x.id}">Résolue</button>` : ''}</div>`).join('') || '<div class="sub">Aucune panne en cours.</div>'}
-        ${closed.length ? `<h3 class="muted">Résolues</h3>` + closed.map((x) => `<div class="sub">✓ ${esc(x.description || 'Sans description')}${x.resolution ? ' → ' + esc(x.resolution) : ''} (${fmtDate(x.resolved_at)})</div>`).join('') : ''}
+        ${closed.length ? `<h3 class="muted">Résolues</h3>` + closed.map((x) => `<div class="sub">✓ <a href="#/fault/${x.id}">${esc(x.description || 'Sans description')}</a>${x.resolution ? ' → ' + esc(x.resolution) : ''} (${fmtDate(x.resolved_at)}${x.resolved_by_label ? ' par ' + esc(x.resolved_by_label) : ''})</div>`).join('') : ''}
       </div>`;
   }
 

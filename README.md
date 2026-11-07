@@ -10,6 +10,8 @@ PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, sca
 |---|:-:|:-:|:-:|:-:|
 | Consulter le parc, les fiches, les pannes, scanner un QR | ✅ | ✅ | ✅ | ✅ |
 | Déclarer une panne | ✅ | ✅ | ✅ | ✅ |
+| Ajouter une info à une panne | ✅ | ✅ | ✅ | ✅ |
+| Modifier la description d'une panne | ses propres pannes | ✅ | ✅ | ✅ |
 | Déclarer une panne résolue | | ✅ | ✅ | ✅ |
 | Changer l'état d'un projecteur (prêt / SAV / OK) | | | ✅ | ✅ |
 | Créer des projecteurs, imprimer les étiquettes QR | | | ✅ | ✅ |
@@ -18,7 +20,7 @@ PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, sca
 
 Les droits sont appliqués **par la base** (RLS + fonctions SQL), pas seulement par l'interface. Un accès révoqué est coupé au niveau de la base.
 
-**Hors ligne** : la liste complète est copiée sur l'appareil. Changements d'état et signalements de pannes sont enregistrés localement (⏳) et envoyés au retour du réseau. Chaque action a un identifiant unique : la rejouer ne la double jamais. En cas de conflit sur l'état d'un projecteur, l'action la plus récente gagne. Un historique de toutes les actions est conservé côté serveur.
+**Hors ligne** : la liste complète est copiée sur l'appareil. Changements d'état et signalements de pannes sont enregistrés localement (⏳) et envoyés au retour du réseau. Chaque action a un identifiant unique : la rejouer ne la double jamais. En cas de conflit sur l'état d'un projecteur, l'action la plus récente gagne. Un historique de toutes les actions est conservé côté serveur. Chaque panne a sa fiche : déclarée par qui et quand, infos ajoutées, modifications de description (avec l'ancien texte), résolue par qui et quand.
 L'ajout de projecteurs et l'édition du catalogue demandent une connexion.
 
 ## Mise en ligne, pas à pas

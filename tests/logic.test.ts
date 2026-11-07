@@ -57,6 +57,19 @@ t('applyPending : panne signalée puis résolue hors ligne, sans doublon une foi
   const synced = applyPending({ ...base, faults: [...base.faults, { ...v.faults[0], pending: false }] }, [ops[0]]);
   assert.equal(synced.faults.filter((f) => f.id === 'p1').length, 1);
 });
+t('applyPending : info ajoutée et description modifiée hors ligne, avec l\'ancien texte conservé', () => {
+  const ops: Op[] = [
+    { id: 'n1', kind: 'fault_note', fault: 'f1', text: 'vu en répétition', at: '2026-02-01T00:00:00Z' },
+    { id: 'e1', kind: 'fault_edit', fault: 'f1', description: 'x (corrigé)', at: '2026-02-01T00:05:00Z' }
+  ];
+  const v = applyPending(base, ops);
+  assert.equal(v.faults[0].description, 'x (corrigé)');
+  assert.deepEqual(v.faultLog.map((l) => [l.kind, l.text, l.old_text]), [['note', 'vu en répétition', null], ['edit', 'x (corrigé)', 'x']]);
+  assert.equal(base.faults[0].description, 'x', 'les données serveur ne sont pas modifiées');
+  const synced = applyPending({ ...base, faultLog: [{ id: 'n1', fault_id: 'f1', kind: 'note', text: 'vu en répétition', old_text: null, by_label: 'a', at: '2026-02-01T00:00:00Z' }] }, [ops[0]]);
+  assert.equal(synced.faultLog.length, 1, 'pas de doublon une fois synchronisée');
+});
+
 t('isTransient : réseau => réessayer ; erreur métier => rejeter', () => {
   assert.equal(isTransient({ message: 'TypeError: Failed to fetch', code: '' }), true);
   assert.equal(isTransient({ message: 'JWT expired', code: 'PGRST301' }), true);

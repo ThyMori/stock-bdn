@@ -77,16 +77,16 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false })
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at')
   ]);
-  for (const r of [fam, typ, soc, fs, lamps, models, items, faults]) if (r.error) throw r.error;
+  for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
   state.data = {
     families: fam.data as Data['families'], types: typ.data as Data['types'], sockets: soc.data as Data['sockets'],
     filterSizes: fs.data as Data['filterSizes'], lamps: lamps.data as Data['lamps'], models: models.data as Data['models'],
-    items: items.data as Data['items'], faults: faults.data as Data['faults']
+    items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog']
   };
   state.lastPull = new Date().toISOString();
   await persist();
@@ -101,6 +101,10 @@ async function runOp(op: Op) {
       return supabase.rpc('report_fault', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at });
     case 'resolve':
       return supabase.rpc('resolve_fault', { p_event: op.id, p_fault: op.fault, p_resolution: op.resolution ?? null, p_at: op.at });
+    case 'fault_note':
+      return supabase.rpc('add_fault_note', { p_id: op.id, p_fault: op.fault, p_note: op.text, p_at: op.at });
+    case 'fault_edit':
+      return supabase.rpc('edit_fault', { p_id: op.id, p_fault: op.fault, p_description: op.description, p_at: op.at });
   }
 }
 
@@ -147,6 +151,11 @@ export const reportFault = (item: number, description: string) =>
   enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now() });
 export const resolveFault = (fault: string, resolution?: string) =>
   enqueue({ id: uuid(), kind: 'resolve', fault, resolution: resolution?.trim() || undefined, at: now() });
+
+export const addFaultNote = (fault: string, text: string) =>
+  enqueue({ id: uuid(), kind: 'fault_note', fault, text: text.trim(), at: now() });
+export const editFault = (fault: string, description: string) =>
+  enqueue({ id: uuid(), kind: 'fault_edit', fault, description: description.trim(), at: now() });
 
 export async function dismissRejected(i: number) { state.rejected.splice(i, 1); await persist(); emit(); }
 

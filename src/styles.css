@@ -148,3 +148,4 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .arc-fx { position: fixed; inset: 0; z-index: 100; background: #05000d; display: grid; place-items: center; cursor: pointer; }
 .arc-fx canvas { width: min(100vw, 177.78vh); aspect-ratio: 16 / 9; image-rendering: pixelated; }
 @media print { .arc-fx { display: none !important; } }
+.quote { border-left: 3px solid var(--ink); padding-left: 8px; margin: 2px 0 4px; color: var(--ink); font-weight: 400; }

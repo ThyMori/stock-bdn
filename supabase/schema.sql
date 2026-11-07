@@ -146,7 +146,22 @@ create table if not exists faults (
   resolved_by       uuid references auth.users on delete set null,
   resolution        text
 );
+alter table faults add column if not exists resolved_by_label text;
 create index if not exists faults_item_idx on faults(item_id);
+
+-- Journal des pannes : chaque info ajoutée et chaque modification de description est conservée (qui, quand, ancienne valeur).
+-- La déclaration et la résolution sont déjà tracées dans faults (reported_by_label / reported_at, resolved_by_label / resolved_at).
+create table if not exists fault_log (
+  id        uuid primary key default gen_random_uuid(),   -- généré côté appareil : rejeu sans doublon
+  fault_id  uuid not null references faults(id) on delete cascade,
+  kind      text not null check (kind in ('note', 'edit')),
+  text      text not null,
+  old_text  text,
+  by        uuid references auth.users on delete set null,
+  by_label  text,
+  at        timestamptz not null default now()
+);
+create index if not exists fault_log_fault_idx on fault_log(fault_id);
 
 -- Journal : chaque action est rejouable une seule fois (id = clé d'idempotence)
 create table if not exists item_events (
@@ -203,7 +218,7 @@ declare lbl text; it int; n int;
 begin
   if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
-  update faults set resolved_at = p_at, resolved_by = auth.uid(), resolution = nullif(trim(p_resolution), '')
+  update faults set resolved_at = p_at, resolved_by = auth.uid(), resolved_by_label = lbl, resolution = nullif(trim(p_resolution), '')
    where id = p_fault and resolved_at is null
    returning item_id into it;
   get diagnostics n = row_count;
@@ -212,6 +227,37 @@ begin
     values (p_event, it, 'fault_resolved', p_resolution, auth.uid(), lbl, p_at)
     on conflict (id) do nothing;
   end if;
+end $$;
+
+create or replace function add_fault_note(p_id uuid, p_fault uuid, p_note text, p_at timestamptz)
+returns void language plpgsql security definer set search_path = public as $$
+declare lbl text;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if nullif(trim(p_note), '') is null then raise exception 'Texte vide' using errcode = '22023'; end if;
+  if not exists (select 1 from faults where id = p_fault) then raise exception 'Panne introuvable' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into fault_log (id, fault_id, kind, text, by, by_label, at)
+  values (p_id, p_fault, 'note', trim(p_note), auth.uid(), lbl, p_at)
+  on conflict (id) do nothing;
+end $$;
+
+-- Modifier la description : le régisseur et au-dessus pour toutes les pannes, un technicien pour celles qu'il a déclarées.
+create or replace function edit_fault(p_id uuid, p_fault uuid, p_description text, p_at timestamptz)
+returns void language plpgsql security definer set search_path = public as $$
+declare lbl text; f faults; n int;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into f from faults where id = p_fault;
+  if not found then raise exception 'Panne introuvable' using errcode = '22023'; end if;
+  if not (has_role('regisseur') or f.reported_by = auth.uid()) then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if nullif(trim(p_description), '') is null then raise exception 'Texte vide' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into fault_log (id, fault_id, kind, text, old_text, by, by_label, at)
+  values (p_id, p_fault, 'edit', trim(p_description), f.description, auth.uid(), lbl, p_at)
+  on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then update faults set description = trim(p_description) where id = p_fault; end if;
 end $$;
 
 -- ---------- Sécurité (RLS) --------------------------------------------
@@ -225,6 +271,7 @@ alter table models       enable row level security;
 alter table items        enable row level security;
 alter table faults       enable row level security;
 alter table item_events  enable row level security;
+alter table fault_log    enable row level security;
 
 -- profils : chacun voit le sien ; régisseurs généraux et admins voient tous les comptes ; seul l'admin modifie directement
 drop policy if exists profiles_select on profiles;
@@ -260,6 +307,8 @@ create policy items_delete on items for delete using (has_role('admin'));
 -- pannes & journal : lecture = tous les rôles ; écritures uniquement via les fonctions ci-dessus (+ admin)
 drop policy if exists faults_select on faults;
 create policy faults_select on faults for select using (has_role('technicien'));
+drop policy if exists fault_log_select on fault_log;
+create policy fault_log_select on fault_log for select using (has_role('technicien'));
 drop policy if exists faults_admin on faults;
 create policy faults_admin on faults for all using (has_role('admin')) with check (has_role('admin'));
 
@@ -273,3 +322,7 @@ revoke all on function resolve_fault(uuid,uuid,text,timestamptz) from public;
 grant execute on function apply_status(uuid,int,item_status,text,timestamptz) to authenticated;
 grant execute on function report_fault(uuid,int,text,timestamptz) to authenticated;
 grant execute on function resolve_fault(uuid,uuid,text,timestamptz) to authenticated;
+revoke all on function add_fault_note(uuid,uuid,text,timestamptz) from public;
+revoke all on function edit_fault(uuid,uuid,text,timestamptz) from public;
+grant execute on function add_fault_note(uuid,uuid,text,timestamptz) to authenticated;
+grant execute on function edit_fault(uuid,uuid,text,timestamptz) to authenticated;
