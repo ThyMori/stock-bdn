@@ -60,5 +60,5 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.7.0</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.7.1</div></div>`;
 }

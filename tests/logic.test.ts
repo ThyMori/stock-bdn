@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
 import { prepRows, gelGroups } from '../src/prepPdf';
+import { gelColorOf } from '../src/gels';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -183,5 +184,14 @@ t('gélatines : groupées par couleur puis format puis référence', () => {
   const g = gelGroups(d, 's');
   assert.deepEqual(g.map((x) => [x.color, x.ref, x.qty, x.items]), [['Rouge', 'R26', 1, [1]], ['Bleu', 'LEE 201', 2, [1, 2]]]);
   assert.equal(g[0].format, 'Format inconnu');
+});
+t('gélatines : couleur déduite de la référence (Lee / Rosco)', () => {
+  assert.equal(gelColorOf('L201'), 'Correction (CTO/CTB)');
+  assert.equal(gelColorOf('LEE 106'), 'Rouge');
+  assert.equal(gelColorOf('R80'), 'Bleu');
+  assert.equal(gelColorOf('#26'), 'Rouge');
+  assert.equal(gelColorOf('Rosco 3202'), 'Correction (CTO/CTB)');
+  assert.equal(gelColorOf('119'), 'Bleu');
+  assert.equal(gelColorOf('machin'), 'Autre');
 });
 console.log(`\n${n} tests OK`);

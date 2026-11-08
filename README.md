@@ -110,7 +110,7 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
 ### Gélatines (v1.7)
-Chaque projecteur d'un spectacle peut recevoir **plusieurs gels** (référence libre + couleur dans une liste fixe). On les pose à l'assignation (champs facultatifs appliqués à tout le lot) ou avec le bouton **Gel** de la ligne ; la croix du badge le retire. Le format est déduit de la taille du porte-filtre du modèle. Droits : les mêmes que pour assigner (régisseur assigné, RG+). Les gels disparaissent quand le projecteur quitte le spectacle. Le PDF de prépa les liste à la fin, par couleur puis format (RPC `add_gels` / `delete_gel`, table `show_gels`).
+Chaque projecteur d'un spectacle peut recevoir **plusieurs gels** (référence libre ; la couleur du badge est déduite de la référence : L201 / LEE 201 = Lee, R80 / #80 = Rosco, sinon « Autre »). On les pose à l'assignation (champ facultatif appliqué à tout le lot) ou avec le bouton **Gel** de la ligne ; la croix du badge le retire. Le format est déduit de la taille du porte-filtre du modèle. Droits : les mêmes que pour assigner (régisseur assigné, RG+). Les gels disparaissent quand le projecteur quitte le spectacle. Le PDF de prépa les liste à la fin, par couleur puis format (RPC `add_gels` / `delete_gel`, table `show_gels`).
 
 ### Liste de prépa en PDF (v1.6)
 
