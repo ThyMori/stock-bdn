@@ -51,7 +51,7 @@ export const showView: ViewFactory = ([id]) => {
     const regs = d.showRegisseurs.filter((r) => r.show_id === id).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
     const myId = state.profile?.id, admin = can('admin');
     const posts = d.showPosts.filter((p) => p.show_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const wall = `<div class="card stack wall"><div class="row"><h2 class="grow">Mur (${posts.length})</h2></div><div id="wallhost"></div>
+    const wall = `<div class="card stack mur"><div class="row"><h2 class="grow">Mur (${posts.length})</h2></div><div id="wallhost"></div>
       <div class="posts">${posts.map((p) => {
         const own = !!myId && p.author_id === myId, me = !!myId && mentionedIds(p.body).includes(myId);
         return `<article class="post${me ? ' tome' : ''}" style="--pc:${personColor(p.author_id)}"><header><b class="who">${esc(p.author_label ?? 'Compte supprimé')}</b>

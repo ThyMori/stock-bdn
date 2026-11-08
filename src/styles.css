@@ -268,7 +268,7 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .lampquick .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
 /* mur du spectacle */
-.wall textarea { width: 100%; min-height: 76px; resize: vertical; }
+.mur textarea { width: 100%; min-height: 76px; resize: vertical; }
 .posts { display: flex; flex-direction: column; gap: 10px; }
 .post { display: block; border-left: 6px solid var(--pc, #475569); padding: 4px 0 4px 10px; color: inherit; text-decoration: none; }
 .post.tome { background: color-mix(in srgb, var(--pc) 12%, transparent); outline: 2px solid var(--pc); outline-offset: 2px; }
