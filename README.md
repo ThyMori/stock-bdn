@@ -109,6 +109,15 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Mur du spectacle (v1.3)
+
+Chaque spectacle a un **mur** (juste sous son en-tête) où tout le monde, dès le rôle technicien, peut écrire : to-do, passation de régie, planning, changements d'horaires, problèmes techniques, dézonage fumée…
+
+- Chaque message est **signé** et porte la **couleur de son auteur** (une couleur par personne, stable). Les plus récents sont en haut.
+- On peut **modifier ou effacer ses propres messages** ; un administrateur peut aussi effacer n'importe quel message (modération).
+- **Citer une personne** (`@ Citer une personne`) : son nom s'affiche en pastille de couleur et le message porte « te cite » pour elle. **Citer un projecteur** (`# Citer un projecteur`, ou taper `#219`) : lien vers sa fiche, et le message apparaît aussi sur la fiche du projecteur (« Cité sur les murs »).
+- Lecture et écriture demandent une connexion ; le brouillon n'est jamais perdu quand l'écran se rafraîchit.
+
 ### Changement rapide de lampe (v1.2)
 
 Sur la fiche d'un **PAR**, quatre boutons **CP62 · CP61 · CP60 · CP95** changent la lampe d'un seul geste, dès le rôle technicien. Le changement passe par la file hors ligne (comme les états) et est journalisé (« #12 : lampe CP60 → CP62 »). Sur la fiche d'un spectacle, quand la lampe montée diffère de la lampe requise, le bouton « passer en CPxx » la corrige directement.

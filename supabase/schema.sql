@@ -547,6 +547,63 @@ begin
   if found then perform log_event('SPECTACLE', format('« %s » supprimé', nm)); end if;
 end $$;
 
+-- Mur du spectacle : messages signés, modifiables / effaçables par leur auteur.
+create table if not exists show_posts (
+  id           uuid primary key,
+  show_id      uuid not null references shows(id) on delete cascade,
+  author_id    uuid references auth.users on delete set null,
+  author_label text,
+  body         text not null check (length(trim(body)) > 0 and length(body) <= 2000),
+  created_at   timestamptz not null default now(),
+  edited_at    timestamptz
+);
+create index if not exists show_posts_show_idx on show_posts(show_id, created_at desc);
+alter table show_posts enable row level security;
+drop policy if exists show_posts_select on show_posts;
+create policy show_posts_select on show_posts for select using (has_role('technicien'));
+
+create or replace function post_show_message(p_id uuid, p_show uuid, p_body text) returns void
+language plpgsql security definer set search_path = public as $$
+declare lbl text;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not exists (select 1 from shows where id = p_show) then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  if nullif(trim(p_body), '') is null then raise exception 'Message vide' using errcode = '22023'; end if;
+  if length(p_body) > 2000 then raise exception 'Message trop long (2000 caractères maximum)' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_posts (id, show_id, author_id, author_label, body) values (p_id, p_show, auth.uid(), lbl, trim(p_body)) on conflict (id) do nothing;
+end $$;
+
+create or replace function edit_show_message(p_id uuid, p_body text) returns void
+language plpgsql security definer set search_path = public as $$
+declare a uuid;
+begin
+  select author_id into a from show_posts where id = p_id;
+  if not found then raise exception 'Message introuvable' using errcode = '22023'; end if;
+  if a is distinct from auth.uid() then raise exception 'Tu ne peux modifier que tes propres messages' using errcode = '42501'; end if;
+  if nullif(trim(p_body), '') is null then raise exception 'Message vide' using errcode = '22023'; end if;
+  if length(p_body) > 2000 then raise exception 'Message trop long (2000 caractères maximum)' using errcode = '22023'; end if;
+  update show_posts set body = trim(p_body), edited_at = now() where id = p_id;
+end $$;
+
+-- Effacer : l'auteur, ou un administrateur (modération).
+create or replace function delete_show_message(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare a uuid;
+begin
+  select author_id into a from show_posts where id = p_id;
+  if not found then return; end if;
+  if a is distinct from auth.uid() and not has_role('admin') then raise exception 'Tu ne peux effacer que tes propres messages' using errcode = '42501'; end if;
+  delete from show_posts where id = p_id;
+end $$;
+
+-- Annuaire minimal pour citer une personne (nom seulement, comptes actifs).
+create or replace function list_people() returns table(id uuid, label text)
+language sql stable security definer set search_path = public as $$
+  select p.id, coalesce(nullif(trim(p.first_name || ' ' || p.last_name), ''), p.email)
+    from profiles p where has_role('technicien') and p.active order by 2;
+$$;
+
 -- Peut agir sur un spectacle : régisseur général / admin, ou régisseur assigné à ce spectacle.
 create or replace function can_act_show(p_show uuid) returns boolean
 language sql stable security definer set search_path = public as $$
@@ -784,6 +841,10 @@ revoke all on function delete_show(uuid) from public;
 revoke all on function assign_items(uuid,int[],text) from public;
 revoke all on function unassign_items(uuid,int[]) from public;
 revoke all on function can_act_show(uuid) from public;
+revoke all on function post_show_message(uuid,uuid,text) from public;
+revoke all on function edit_show_message(uuid,text) from public;
+revoke all on function delete_show_message(uuid) from public;
+revoke all on function list_people() from public;
 revoke all on function set_lamp(int,text) from public;
 revoke all on function assign_regisseur(uuid,uuid) from public;
 revoke all on function unassign_regisseur(uuid,uuid) from public;
@@ -799,6 +860,10 @@ grant execute on function delete_show(uuid) to authenticated;
 grant execute on function assign_items(uuid,int[],text) to authenticated;
 grant execute on function unassign_items(uuid,int[]) to authenticated;
 grant execute on function can_act_show(uuid) to authenticated;
+grant execute on function post_show_message(uuid,uuid,text) to authenticated;
+grant execute on function edit_show_message(uuid,text) to authenticated;
+grant execute on function delete_show_message(uuid) to authenticated;
+grant execute on function list_people() to authenticated;
 grant execute on function set_lamp(int,text) to authenticated;
 grant execute on function assign_regisseur(uuid,uuid) to authenticated;
 grant execute on function unassign_regisseur(uuid,uuid) to authenticated;

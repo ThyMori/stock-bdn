@@ -1,10 +1,12 @@
 import QrScanner from 'qr-scanner';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, canActShow, rpcCall, setLamp, view } from '../store';
+import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, showColor, SHOW_COLORS } from '../types';
-import { esc, parseScan, todayStr } from '../logic';
+import { esc, fmtDateTime, parseScan, todayStr, uuid } from '../logic';
+import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
+import { knownPeople, loadPeople } from '../people';
 import { describe, norm } from '../ref';
 import { openForm } from '../ui/dialog';
 import { fmtDay } from './agenda';
@@ -18,6 +20,16 @@ export const showView: ViewFactory = ([id]) => {
   const sel = new Set<number>();
   let type = '', q = '', lamp = '', msg = '';
   let stopScan: (() => void) | null = null;
+  let composer: HTMLElement | null = null;
+
+  /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
+  const makeComposer = (): HTMLElement => {
+    const c = document.createElement('div'); c.className = 'composer stack';
+    c.innerHTML = `<textarea id="wallText" rows="3" maxlength="2000" placeholder="Écrire sur le mur : to-do, passation, horaires, dézonage fumée…" aria-label="Nouveau message"></textarea>
+      <div class="row wrap"><button class="btn" data-act="wall-person" type="button">@ Citer une personne</button><button class="btn" data-act="wall-item" type="button"># Citer un projecteur</button>
+        <button class="btn primary grow" data-act="wall-post" type="button">Publier</button></div><div id="wallErr" class="sub warn" role="alert"></div>`;
+    return c;
+  };
 
   const isPar = (itemId: number): boolean => {
     const d = view(); const it = d.items.find((i) => i.id === itemId); if (!it) return false;
@@ -37,6 +49,16 @@ export const showView: ViewFactory = ([id]) => {
     if (!show) { el.innerHTML = `<div class="card empty">Spectacle introuvable.<br><a href="#/shows">Retour aux spectacles</a></div>`; return; }
     const today = todayStr();
     const regs = d.showRegisseurs.filter((r) => r.show_id === id).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
+    const myId = state.profile?.id, admin = can('admin');
+    const posts = d.showPosts.filter((p) => p.show_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const wall = `<div class="card stack wall"><div class="row"><h2 class="grow">Mur (${posts.length})</h2></div><div id="wallhost"></div>
+      <div class="posts">${posts.map((p) => {
+        const own = !!myId && p.author_id === myId, me = !!myId && mentionedIds(p.body).includes(myId);
+        return `<article class="post${me ? ' tome' : ''}" style="--pc:${personColor(p.author_id)}"><header><b class="who">${esc(p.author_label ?? 'Compte supprimé')}</b>
+          <time datetime="${esc(p.created_at)}">${esc(fmtDateTime(p.created_at))}</time>${p.edited_at ? ' <span class="muted">(modifié)</span>' : ''}${me ? ' <span class="tag late">te cite</span>' : ''}</header>
+          <div class="body">${renderBody(p.body)}</div>
+          ${own || admin ? `<div class="row wrap">${own ? `<button class="linkbtn" data-act="post-edit" data-v="${p.id}">Modifier</button>` : ''}<button class="linkbtn" data-act="post-del" data-v="${p.id}">Effacer</button></div>` : ''}</article>`;
+      }).join('') || '<div class="sub">Aucun message pour l\'instant.</div>'}</div></div>`;
     const mine = d.showItems.filter((s) => s.show_id === id).sort((a, b) => a.item_id - b.item_id);
     const canAssign = canActShow(id), canEdit = can('regisseur_general');
     const lampName = (lid: string | null) => d.lamps.find((l) => l.id === lid)?.name;
@@ -83,11 +105,13 @@ export const showView: ViewFactory = ([id]) => {
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
         <div id="serr" class="sub warn" role="alert"></div></div>
+      ${wall}
       <div class="card stack"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
         ${regs.map((r) => `<div class="stack reg"><div class="t">${esc(r.label)}</div>${canEdit ? `<div class="row wrap"><button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button></div>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       <div class="card"><div class="row"><h2 class="grow">Projecteurs (${mine.length})</h2>${canAssign && mode === 'view' ? '<button class="btn primary" data-act="mode" data-v="pick">+ Assigner</button>' : ''}</div>
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}`;
+    if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
     const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
     window.scrollTo(0, pageTop);
     if (focusId) root.querySelector<HTMLElement>(`input[data-v="${focusId}"]`)?.focus({ preventScroll: true });
@@ -142,6 +166,8 @@ export const showView: ViewFactory = ([id]) => {
   return {
     mount(root) {
       root.innerHTML = `<div class="page"><a href="#/shows">← Spectacles</a><div id="dyn" class="stack"></div></div>`;
+      composer = makeComposer();
+      void loadPeople();
       paint(root);
       root.addEventListener('input', (e) => {
         const t = e.target as HTMLInputElement;
@@ -157,6 +183,12 @@ export const showView: ViewFactory = ([id]) => {
       root.addEventListener('click', async (e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]'); if (!el) return;
         const { act, v } = el.dataset;
+        const wallErr = (m: string) => { const x = root.querySelector('#wallErr'); if (x) x.textContent = m; };
+        const insertAtCursor = (t: string) => {
+          const ta = root.querySelector<HTMLTextAreaElement>('#wallText'); if (!ta) return;
+          const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+          ta.value = ta.value.slice(0, a) + t + ta.value.slice(b); ta.focus(); ta.setSelectionRange(a + t.length, a + t.length);
+        };
         const err = (m: string) => { const x = root.querySelector('#serr'); if (x) x.textContent = m; };
         if (act === 'mode') { mode = v as Mode; msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); }
         else if (act === 'type') { type = v ?? ''; paint(root); }
@@ -197,6 +229,37 @@ export const showView: ViewFactory = ([id]) => {
           if (!window.confirm('Retirer ce régisseur du spectacle ?')) return;
           const r = await rpcCall('unassign_regisseur', { p_show: id, p_user: v });
           if (r.error) err(r.error);
+        }
+        else if (act === 'wall-person') {
+          const ppl = (await loadPeople()).filter((p) => p.id !== state.profile?.id);
+          if (!ppl.length) { wallErr('Annuaire indisponible (connexion requise).'); return; }
+          const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', options: ppl.map((p): [string, string] => [p.id, p.label]), required: true }], { submit: 'Citer' });
+          if (f) insertAtCursor('@' + (ppl.find((p) => p.id === f.p)?.label ?? '') + ' ');
+        }
+        else if (act === 'wall-item') {
+          const assigned = view().showItems.filter((s) => s.show_id === id).map((s) => s.item_id).sort((a, b) => a - b);
+          const f = await openForm('Citer un projecteur', [{ name: 'n', label: 'N° du projecteur', required: true, hint: assigned.length ? `Assignés à ce spectacle : ${assigned.join(', ')}` : undefined }],
+            { submit: 'Citer', validate: (x) => (view().items.some((i) => String(i.id) === x.n.trim()) ? null : 'Projecteur inconnu.') });
+          if (f) insertAtCursor('#' + f.n.trim() + ' ');
+        }
+        else if (act === 'wall-post') {
+          const ta = root.querySelector<HTMLTextAreaElement>('#wallText'); if (!ta) return;
+          const text = ta.value.trim(); if (!text) { wallErr('Écris un message avant de publier.'); return; }
+          const ppl = knownPeople().length ? knownPeople() : await loadPeople();
+          const r = await rpcCall('post_show_message', { p_id: uuid(), p_show: id, p_body: fromEditable(text, ppl) });
+          if (r.error) wallErr(r.error); else { ta.value = ''; wallErr(''); }
+        }
+        else if (act === 'post-edit') {
+          const p = view().showPosts.find((x) => x.id === v); if (!p) return;
+          const f = await openForm('Modifier le message', [{ name: 'b', label: 'Message', type: 'textarea', required: true, value: toEditable(p.body) }]);
+          if (!f) return;
+          const r = await rpcCall('edit_show_message', { p_id: p.id, p_body: fromEditable(f.b, knownPeople().length ? knownPeople() : await loadPeople()) });
+          if (r.error) wallErr(r.error);
+        }
+        else if (act === 'post-del') {
+          if (!window.confirm('Effacer ce message ?')) return;
+          const r = await rpcCall('delete_show_message', { p_id: v });
+          if (r.error) wallErr(r.error);
         }
         else if (act === 'fix-lamp') setLamp(Number(v), el.dataset.l!);
         else if (act === 'edit') {

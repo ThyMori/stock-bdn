@@ -80,10 +80,10 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr, shp] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs')
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs'), q('show_posts').order('created_at', { ascending: false })
   ]);
   for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
   // agenda : si la table n'existe pas encore (base pas à jour), l'appli reste utilisable sans lui
@@ -93,7 +93,8 @@ export async function pull() {
     filterSizes: fs.data as Data['filterSizes'], lamps: lamps.data as Data['lamps'], models: models.data as Data['models'],
     items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog'], immos: (imm.error ? [] : imm.data) as Data['immos'],
     shows: (shw.error ? [] : shw.data) as Data['shows'], showItems: (shi.error ? [] : shi.data) as Data['showItems'],
-    showRegisseurs: (shr.error ? [] : shr.data) as Data['showRegisseurs']
+    showRegisseurs: (shr.error ? [] : shr.data) as Data['showRegisseurs'],
+    showPosts: (shp.error ? [] : shp.data) as Data['showPosts']
   };
   state.lastPull = new Date().toISOString();
   await persist();

@@ -5,6 +5,7 @@ import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uu
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
 import { describe, isPar, parLamps } from '../ref';
+import { mentionedItems, personColor, renderBody } from '../wall';
 import { STATUS_LABEL, STATUSES, showColor } from '../types';
 import type { ItemEvent } from '../types';
 import { supabase } from '../supabase';
@@ -122,7 +123,10 @@ export const itemView: ViewFactory = ([idStr]) => {
       const lamp = data.lamps.find((l) => l.id === x.lamp_id)?.name;
       return `<div class="row"><i class="dotc" style="background:${showColor(s!)}"></i><div class="grow"><a href="#/show/${s!.id}"><b>${esc(s!.name)}</b></a><div class="sub">du ${fmtDay(s!.start_date)} au ${fmtDay(s!.end_date)}${lamp ? ' · lampe requise : ' + esc(lamp) : ''}</div></div>
         ${canActShow(s!.id) ? `<button class="btn" data-act="show-remove" data-v="${s!.id}">Retirer</button>` : ''}</div>`;
-    }).join('') : `<div class="sub">Aucun spectacle</div>`) + (can('regisseur') ? `<button class="btn" data-act="show-assign">Assigner à un spectacle</button>` : '');
+    }).join('') : `<div class="sub">Aucun spectacle</div>`) + (() => {
+      const cited = data.showPosts.filter((p) => mentionedItems(p.body).includes(id)).slice(0, 5);
+      return cited.length ? `<h3>Cité sur les murs</h3>` + cited.map((p) => `<a class="post" style="--pc:${personColor(p.author_id)}" href="#/show/${p.show_id}"><header><b class="who">${esc(p.author_label ?? '')}</b> <span class="muted">${esc(data.shows.find((s) => s.id === p.show_id)?.name ?? '')} · ${esc(fmtDateTime(p.created_at))}</span></header><div class="body">${renderBody(p.body)}</div></a>`).join('') : '';
+    })() + (can('regisseur') ? `<button class="btn" data-act="show-assign">Assigner à un spectacle</button>` : '');
   }
 
   async function assignToShow(root: HTMLElement) {

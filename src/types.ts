@@ -32,6 +32,7 @@ export const SHOW_COLORS: [string, string][] = [['#1d4ed8', 'Bleu'], ['#0f766e',
 export const showColor = (s: { color?: string | null }): string => s.color ?? '#475569';
 export interface Show { id: string; name: string; color?: string | null; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
 export interface ShowRegisseur { show_id: string; user_id: string; label: string | null }
+export interface ShowPost { id: string; show_id: string; author_id: string | null; author_label: string | null; body: string; created_at: string; edited_at: string | null }
 export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
@@ -59,10 +60,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */

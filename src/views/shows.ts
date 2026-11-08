@@ -41,7 +41,7 @@ export const showsView: ViewFactory = () => ({
 });
 
 function paint(root: HTMLElement) {
-  const { shows, showItems } = view();
+  const { shows, showItems, showPosts } = view();
   root.querySelectorAll<HTMLElement>('[data-act="vmode"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cal.mode)));
   if (cal.mode !== 'list') { root.querySelector('#list')!.innerHTML = calendarHtml(shows, cal.ref, cal.mode, canActShow); return; }
   const today = todayStr();
@@ -49,7 +49,7 @@ function paint(root: HTMLElement) {
   const live = shows.filter((s) => s.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const past = shows.filter((s) => s.end_date < today).sort((a, b) => b.end_date.localeCompare(a.end_date));
   const row = (s: (typeof shows)[number]) => `<a class="item" href="#/show/${s.id}"><i class="dotc" style="background:${showColor(s)}"></i><div class="grow"><div class="t">${esc(s.name)}</div>
-    <div class="s">du ${fmtDay(s.start_date)} au ${fmtDay(s.end_date)} · ${n(s.id)} projecteur${n(s.id) > 1 ? 's' : ''}</div></div>
+    <div class="s">du ${fmtDay(s.start_date)} au ${fmtDay(s.end_date)} · ${n(s.id)} projecteur${n(s.id) > 1 ? 's' : ''}${showPosts.filter((p) => p.show_id === s.id).length ? ` · ${showPosts.filter((p) => p.show_id === s.id).length} message${showPosts.filter((p) => p.show_id === s.id).length > 1 ? 's' : ''}` : ''}</div></div>
     ${s.start_date <= today && s.end_date >= today ? '<span class="tag run">en cours</span>' : ''}</a>`;
   root.querySelector('#list')!.innerHTML = shows.length
     ? live.map(row).join('') + (past.length ? `<h2 style="margin-top:18px">Terminés</h2>` + past.map(row).join('') : '')

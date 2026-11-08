@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -142,5 +143,24 @@ t('changement de lampe en attente visible immédiatement', () => {
   assert.equal(v.items[0].lamp_id, 'l62');
   assert.equal(v.items[0].pending, true);
   assert.equal(base.items[0].lamp_id === 'l62', false, 'données d\'origine intactes');
+});
+const people = [{ id: '11111111-1111-1111-1111-111111111111', label: 'Marie Durand' }, { id: '22222222-2222-2222-2222-222222222222', label: 'Marie' }];
+t('mur : citations personne / projecteur', () => {
+  const stored = fromEditable('Salut @Marie Durand, refocus #12 demain', people);
+  assert.equal(stored, 'Salut @[Marie Durand](u:11111111-1111-1111-1111-111111111111), refocus #12 demain');
+  assert.equal(toEditable(stored), 'Salut @Marie Durand, refocus #12 demain');
+  assert.deepEqual(mentionedIds(stored), ['11111111-1111-1111-1111-111111111111']);
+  assert.deepEqual(mentionedItems(stored), [12]);
+  assert.equal(fromEditable('@Marie ok', people), '@[Marie](u:22222222-2222-2222-2222-222222222222) ok', 'le nom le plus long gagne, sans confusion');
+});
+t('mur : rendu HTML sûr', () => {
+  const h = renderBody('<img src=x onerror=alert(1)> #219 &amp; @[Marie](u:11111111-1111-1111-1111-111111111111)');
+  assert.ok(!h.includes('<img'), 'html échappé');
+  assert.ok(h.includes('href="#/item/219"'));
+  assert.ok(h.includes('class="mention"'));
+});
+t('mur : couleur stable par personne', () => {
+  assert.equal(personColor('abc'), personColor('abc'));
+  assert.match(personColor('abc'), /^#[0-9a-f]{6}$/);
 });
 console.log(`\n${n} tests OK`);
