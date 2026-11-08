@@ -77,6 +77,7 @@ export const showView: ViewFactory = ([id]) => {
           <button class="btn" data-act="mode" data-v="view">Fermer</button></div></div>`;
     }
 
+    const listTop = root.querySelector('.pick-list')?.scrollTop ?? 0, pageTop = window.scrollY, focusId = (document.activeElement as HTMLElement | null)?.dataset?.v;
     el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
@@ -87,6 +88,9 @@ export const showView: ViewFactory = ([id]) => {
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       <div class="card"><div class="row"><h2 class="grow">Projecteurs (${mine.length})</h2>${canAssign && mode === 'view' ? '<button class="btn primary" data-act="mode" data-v="pick">+ Assigner</button>' : ''}</div>
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}`;
+    const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
+    window.scrollTo(0, pageTop);
+    if (focusId) root.querySelector<HTMLElement>(`input[data-v="${focusId}"]`)?.focus({ preventScroll: true });
     wire(root);
   }
 
