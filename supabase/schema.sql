@@ -205,6 +205,7 @@ create table if not exists shows (
   created_at       timestamptz not null default now(),
   constraint shows_dates check (end_date >= start_date)
 );
+alter table shows add column if not exists color text check (color ~ '^#[0-9a-f]{6}$');
 create table if not exists show_items (
   show_id        uuid not null references shows(id) on delete cascade,
   item_id        integer not null references items(id) on delete cascade,
@@ -454,32 +455,86 @@ begin
   return r;
 end $$;
 
-create or replace function create_show(p_id uuid, p_name text, p_start date, p_end date, p_note text) returns void
+-- Couleurs des spectacles : palette fixe ; deux spectacles qui se suivent (ou se chevauchent) n'ont jamais la même couleur.
+create or replace function show_palette() returns text[] language sql immutable as $$
+  select array['#1d4ed8','#0f766e','#7e22ce','#c2410c','#be185d','#4d7c0f','#78350f','#4338ca','#475569','#0e7490'];
+$$;
+
+-- Nom du spectacle voisin (précédent, suivant ou en chevauchement) qui porte déjà cette couleur, sinon null.
+create or replace function show_color_clash(p_id uuid, p_start date, p_end date, p_color text) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare r text; prev uuid; nxt uuid;
+begin
+  select id into prev from shows where id is distinct from p_id and start_date <= p_start order by start_date desc, end_date desc limit 1;
+  select id into nxt  from shows where id is distinct from p_id and start_date >  p_start order by start_date asc  limit 1;
+  select name into r from shows
+   where id is distinct from p_id and color = p_color
+     and (id = prev or id = nxt or (start_date <= p_end and end_date >= p_start)) limit 1;
+  return r;
+end $$;
+
+create or replace function pick_show_color(p_id uuid, p_start date, p_end date) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare pal text[] := show_palette(); n int := array_length(show_palette(), 1); k int; c text; off int;
+begin
+  select count(*) % n into off from shows where id is distinct from p_id;
+  for k in 0 .. n - 1 loop
+    c := pal[((off + k) % n) + 1];
+    if show_color_clash(p_id, p_start, p_end, c) is null then return c; end if;
+  end loop;
+  return pal[off + 1];
+end $$;
+
+-- spectacles existants sans couleur : attribution dans l'ordre chronologique
+do $$ declare r record; begin
+  for r in select id, start_date, end_date from shows where color is null order by start_date, created_at loop
+    update shows set color = pick_show_color(r.id, r.start_date, r.end_date) where id = r.id;
+  end loop;
+end $$;
+
+drop function if exists create_show(uuid,text,date,date,text);
+drop function if exists edit_show(uuid,text,date,date,text);
+
+create or replace function create_show(p_id uuid, p_name text, p_start date, p_end date, p_note text, p_color text default null) returns void
 language plpgsql security definer set search_path = public as $$
-declare lbl text; n int;
+declare lbl text; n int; col text; c text;
 begin
   if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   if nullif(trim(p_name), '') is null then raise exception 'Nom obligatoire' using errcode = '22023'; end if;
+  if p_color is not null and not (p_color = any (show_palette())) then raise exception 'Couleur inconnue' using errcode = '22023'; end if;
+  col := coalesce(p_color, pick_show_color(p_id, p_start, p_end));
+  c := show_color_clash(p_id, p_start, p_end, col);
+  if c is not null then raise exception 'Cette couleur est déjà celle de « % », qui précède, suit ou chevauche ce spectacle', c using errcode = '22023'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
-  insert into shows (id, name, start_date, end_date, note, created_by, created_by_label)
-  values (p_id, trim(p_name), p_start, p_end, nullif(trim(p_note), ''), auth.uid(), lbl) on conflict (id) do nothing;
+  insert into shows (id, name, start_date, end_date, note, color, created_by, created_by_label)
+  values (p_id, trim(p_name), p_start, p_end, nullif(trim(p_note), ''), col, auth.uid(), lbl) on conflict (id) do nothing;
   get diagnostics n = row_count;
   if n > 0 then perform log_event('SPECTACLE', format('« %s » créé (%s → %s)', trim(p_name), to_char(p_start, 'DD/MM/YYYY'), to_char(p_end, 'DD/MM/YYYY'))); end if;
 end $$;
 
-create or replace function edit_show(p_id uuid, p_name text, p_start date, p_end date, p_note text) returns void
+-- p_color null = on garde la couleur actuelle (recalculée automatiquement si les nouvelles dates créent un conflit).
+create or replace function edit_show(p_id uuid, p_name text, p_start date, p_end date, p_note text, p_color text default null) returns void
 language plpgsql security definer set search_path = public as $$
-declare c text;
+declare c text; col text;
 begin
   if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   if nullif(trim(p_name), '') is null then raise exception 'Nom obligatoire' using errcode = '22023'; end if;
+  if p_color is not null and not (p_color = any (show_palette())) then raise exception 'Couleur inconnue' using errcode = '22023'; end if;
   -- les nouvelles dates ne doivent pas recouvrir un autre spectacle pour les projecteurs déjà assignés
   select 'Nouvelles dates impossibles : #' || si.item_id || ' est déjà dans « ' || o.name || ' » (' || to_char(o.start_date, 'DD/MM') || ' → ' || to_char(o.end_date, 'DD/MM') || ')' into c
     from show_items si join show_items sj on sj.item_id = si.item_id and sj.show_id <> p_id join shows o on o.id = sj.show_id
    where si.show_id = p_id and o.start_date <= p_end and o.end_date >= p_start limit 1;
   if c is not null then raise exception '%', c using errcode = '22023'; end if;
-  update shows set name = trim(p_name), start_date = p_start, end_date = p_end, note = nullif(trim(p_note), '') where id = p_id;
+  select color into col from shows where id = p_id;
   if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  if p_color is not null then
+    c := show_color_clash(p_id, p_start, p_end, p_color);
+    if c is not null then raise exception 'Cette couleur est déjà celle de « % », qui précède, suit ou chevauche ce spectacle', c using errcode = '22023'; end if;
+    col := p_color;
+  elsif col is null or show_color_clash(p_id, p_start, p_end, col) is not null then
+    col := pick_show_color(p_id, p_start, p_end);
+  end if;
+  update shows set name = trim(p_name), start_date = p_start, end_date = p_end, note = nullif(trim(p_note), ''), color = col where id = p_id;
   perform log_event('SPECTACLE', format('« %s » modifié (%s → %s)', trim(p_name), to_char(p_start, 'DD/MM/YYYY'), to_char(p_end, 'DD/MM/YYYY')));
 end $$;
 
@@ -700,8 +755,10 @@ revoke all on function add_immo(uuid,int,text,text,text,date,date,date) from pub
 revoke all on function edit_immo(uuid,text,text,date,date,date) from public;
 revoke all on function delete_immo(uuid) from public;
 revoke all on function item_conflict(int,uuid,date,date) from public;
-revoke all on function create_show(uuid,text,date,date,text) from public;
-revoke all on function edit_show(uuid,text,date,date,text) from public;
+revoke all on function create_show(uuid,text,date,date,text,text) from public;
+revoke all on function edit_show(uuid,text,date,date,text,text) from public;
+revoke all on function show_color_clash(uuid,date,date,text) from public;
+revoke all on function pick_show_color(uuid,date,date) from public;
 revoke all on function delete_show(uuid) from public;
 revoke all on function assign_items(uuid,int[],text) from public;
 revoke all on function unassign_items(uuid,int[]) from public;
@@ -714,8 +771,8 @@ grant execute on function apply_status(uuid,int,item_status,text,timestamptz,tex
 grant execute on function add_immo(uuid,int,text,text,text,date,date,date) to authenticated;
 grant execute on function edit_immo(uuid,text,text,date,date,date) to authenticated;
 grant execute on function delete_immo(uuid) to authenticated;
-grant execute on function create_show(uuid,text,date,date,text) to authenticated;
-grant execute on function edit_show(uuid,text,date,date,text) to authenticated;
+grant execute on function create_show(uuid,text,date,date,text,text) to authenticated;
+grant execute on function edit_show(uuid,text,date,date,text,text) to authenticated;
 grant execute on function delete_show(uuid) to authenticated;
 grant execute on function assign_items(uuid,int[],text) to authenticated;
 grant execute on function unassign_items(uuid,int[]) to authenticated;

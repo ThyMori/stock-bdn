@@ -5,7 +5,7 @@ import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uu
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
 import { describe } from '../ref';
-import { STATUS_LABEL, STATUSES } from '../types';
+import { STATUS_LABEL, STATUSES, showColor } from '../types';
 import type { ItemEvent } from '../types';
 import { supabase } from '../supabase';
 
@@ -119,7 +119,7 @@ export const itemView: ViewFactory = ([idStr]) => {
       .sort((a, b) => a.s!.start_date.localeCompare(b.s!.start_date));
     el.innerHTML = `<h2>Spectacles</h2>` + (mine.length ? mine.map(({ x, s }) => {
       const lamp = data.lamps.find((l) => l.id === x.lamp_id)?.name;
-      return `<div class="row"><div class="grow"><a href="#/show/${s!.id}"><b>${esc(s!.name)}</b></a><div class="sub">du ${fmtDay(s!.start_date)} au ${fmtDay(s!.end_date)}${lamp ? ' · lampe requise : ' + esc(lamp) : ''}</div></div>
+      return `<div class="row"><i class="dotc" style="background:${showColor(s!)}"></i><div class="grow"><a href="#/show/${s!.id}"><b>${esc(s!.name)}</b></a><div class="sub">du ${fmtDay(s!.start_date)} au ${fmtDay(s!.end_date)}${lamp ? ' · lampe requise : ' + esc(lamp) : ''}</div></div>
         ${canActShow(s!.id) ? `<button class="btn" data-act="show-remove" data-v="${s!.id}">Retirer</button>` : ''}</div>`;
     }).join('') : `<div class="sub">Aucun spectacle</div>`) + (can('regisseur') ? `<button class="btn" data-act="show-assign">Assigner à un spectacle</button>` : '');
   }

@@ -234,3 +234,16 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .clegend i { display: inline-block; width: 22px; height: 10px; vertical-align: middle; margin: 0 4px 0 10px; padding: 0; }
 .cal .row .btn { padding: 6px 10px 4px; min-width: 0; }
 .ctitle { white-space: nowrap; font-size: .95rem; }
+
+/* couleur des spectacles */
+.dotc { flex: none; width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+.cbar.mine { background: var(--c, var(--ink)); color: #fff; }
+.cbar.grey { background: color-mix(in srgb, var(--c, #888) 16%, var(--paper)); color: color-mix(in srgb, var(--c, #888) 55%, var(--paper)); }
+.clegend i.mine { background: var(--ink); }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { position: relative; cursor: pointer; }
+.swatch input { position: absolute; opacity: 0; inset: 0; }
+.swatch i { display: block; width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; box-shadow: 0 0 0 1px var(--ink); }
+.swatch input:checked + i { border-color: var(--paper); box-shadow: 0 0 0 3px var(--ink); }
+.swatch input:focus-visible + i { outline: 3px solid var(--red); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

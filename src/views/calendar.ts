@@ -1,4 +1,5 @@
 import { addDays, dayNum, esc, todayStr } from '../logic';
+import { showColor } from '../types';
 import type { Show } from '../types';
 
 export type CalMode = 'month' | 'week';
@@ -27,7 +28,7 @@ function weekHtml(first: string, shows: Show[], mine: (id: string) => boolean, t
     const c0 = Math.max(dayNum(s.start_date), dayNum(first)) - dayNum(first), c1 = Math.min(dayNum(s.end_date), dayNum(last)) - dayNum(first);
     let l = lanes.findIndex((end) => end < c0); if (l < 0) { l = lanes.length; lanes.push(-1); } lanes[l] = c1;
     const cut = (s.start_date < first ? ' cut-l' : '') + (s.end_date > last ? ' cut-r' : '');
-    return `<a class="cbar ${mine(s.id) ? 'mine' : 'grey'}${cut}" style="grid-column:${c0 + 1} / ${c1 + 2};grid-row:${l + 2}" href="#/show/${s.id}" title="${esc(s.name)}${mine(s.id) ? '' : ' (non assigné)'}">${esc(s.name)}</a>`;
+    return `<a class="cbar ${mine(s.id) ? 'mine' : 'grey'}${cut}" style="--c:${showColor(s)};grid-column:${c0 + 1} / ${c1 + 2};grid-row:${l + 2}" href="#/show/${s.id}" title="${esc(s.name)}${mine(s.id) ? '' : ' (non assigné)'}">${esc(s.name)}</a>`;
   }).join('');
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(first, i), n = Number(d.slice(8));
@@ -49,5 +50,5 @@ export function calendarHtml(shows: Show[], ref: string, mode: CalMode, mine: (i
     const weeks = Math.ceil((dayNum(addDays(monthStart(addMonths(ref, 1)), -1)) - dayNum(first) + 1) / 7);
     for (let w = 0; w < weeks; w++) body += weekHtml(addDays(first, w * 7), shows, mine, today, cur, false);
   } else body = weekHtml(mondayOf(ref), shows, mine, today, null, true);
-  return `<div class="cal">${nav}${head}${body}<div class="sub clegend"><i class="cbar mine"></i> mes spectacles <i class="cbar grey"></i> non assigné</div></div>`;
+  return `<div class="cal">${nav}${head}${body}<div class="sub clegend"><i class="cbar mine"></i> assigné <i class="cbar grey"></i> non assigné</div></div>`;
 }

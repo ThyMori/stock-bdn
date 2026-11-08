@@ -3,7 +3,7 @@ import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, rpcCall, view } from '../store';
 import { supabase } from '../supabase';
-import { fullName } from '../types';
+import { fullName, showColor, SHOW_COLORS } from '../types';
 import { esc, parseScan, todayStr } from '../logic';
 import { describe, norm } from '../ref';
 import { openForm } from '../ui/dialog';
@@ -77,7 +77,7 @@ export const showView: ViewFactory = ([id]) => {
           <button class="btn" data-act="mode" data-v="view">Fermer</button></div></div>`;
     }
 
-    el.innerHTML = `<div class="card stack"><h1>${esc(show.name)}</h1>
+    el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
@@ -200,10 +200,11 @@ export const showView: ViewFactory = ([id]) => {
             { name: 'name', label: 'Nom', required: true, value: s.name },
             { name: 'start', label: 'Début', type: 'date', required: true, value: s.start_date },
             { name: 'end', label: 'Fin', type: 'date', required: true, value: s.end_date },
+            { name: 'color', label: 'Couleur', type: 'swatch', options: SHOW_COLORS, value: showColor(s), required: true },
             { name: 'note', label: 'Note', type: 'textarea', value: s.note ?? '' }
           ], { validate: (x) => (x.end < x.start ? 'La fin doit être après le début.' : null) });
           if (!f) return;
-          const r = await rpcCall('edit_show', { p_id: id, p_name: f.name, p_start: f.start, p_end: f.end, p_note: f.note || null });
+          const r = await rpcCall('edit_show', { p_id: id, p_name: f.name, p_start: f.start, p_end: f.end, p_note: f.note || null, p_color: f.color || null });
           if (r.error) err(r.error);
         }
         else if (act === 'delete') {

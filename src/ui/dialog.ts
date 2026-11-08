@@ -1,7 +1,7 @@
 import { esc } from '../logic';
 
 export interface Field {
-  name: string; label: string; type?: 'text' | 'date' | 'textarea' | 'select';
+  name: string; label: string; type?: 'text' | 'date' | 'textarea' | 'select' | 'swatch';
   required?: boolean; value?: string; min?: string; max?: string; hint?: string; options?: [string, string][];
 }
 
@@ -9,7 +9,9 @@ export interface Field {
 export function openForm(title: string, fields: Field[], opts: { submit?: string; validate?: (v: Record<string, string>) => string | null } = {}): Promise<Record<string, string> | null> {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog'); dlg.className = 'dlg';
-    const input = (f: Field) => f.type === 'textarea' ? `<textarea name="${f.name}" ${f.required ? 'required' : ''}>${esc(f.value ?? '')}</textarea>`
+    const input = (f: Field) => f.type === 'swatch'
+      ? `<span class="swatches" role="radiogroup">${(f.options ?? []).map(([v, l]) => `<label class="swatch" title="${esc(l)}"><input type="radio" name="${f.name}" value="${esc(v)}" ${v === f.value ? 'checked' : ''}><i style="background:${esc(v)}"></i><span class="sr">${esc(l)}</span></label>`).join('')}</span>`
+      : f.type === 'textarea' ? `<textarea name="${f.name}" ${f.required ? 'required' : ''}>${esc(f.value ?? '')}</textarea>`
       : f.type === 'select' ? `<select name="${f.name}">${(f.options ?? []).map(([v, l]) => `<option value="${esc(v)}" ${v === f.value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
       : `<input name="${f.name}" type="${f.type ?? 'text'}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.min ? `min="${f.min}"` : ''} ${f.max ? `max="${f.max}"` : ''} autocomplete="off">`;
     dlg.innerHTML = `<form method="dialog" class="stack"><h2>${esc(title)}</h2>

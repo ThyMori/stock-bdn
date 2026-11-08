@@ -26,7 +26,11 @@ export interface Item {
   /** État affiché (calculé) : « utilisé » si assigné à un spectacle en cours et disponible. */
   eff?: DisplayStatus;
 }
-export interface Show { id: string; name: string; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
+/** Palette des spectacles (identique à show_palette() en base). */
+export const SHOW_COLORS: [string, string][] = [['#1d4ed8', 'Bleu'], ['#0f766e', 'Sarcelle'], ['#7e22ce', 'Violet'], ['#c2410c', 'Orange'], ['#be185d', 'Rose'],
+  ['#4d7c0f', 'Olive'], ['#78350f', 'Brun'], ['#4338ca', 'Indigo'], ['#475569', 'Ardoise'], ['#0e7490', 'Cyan']];
+export const showColor = (s: { color?: string | null }): string => s.color ?? '#475569';
+export interface Show { id: string; name: string; color?: string | null; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
 export interface ShowRegisseur { show_id: string; user_id: string; label: string | null }
 export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null }
 export interface Fault {

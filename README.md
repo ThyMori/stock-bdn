@@ -109,6 +109,10 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Couleurs des spectacles (v1.1.1)
+
+Chaque spectacle a une couleur (palette de 10). Elle est attribuée **automatiquement** à la création, de façon que deux spectacles qui se suivent ou se chevauchent n'aient jamais la même. Un régisseur général peut la changer dans « Modifier » ; une couleur déjà prise par le spectacle précédent, suivant ou concomitant est refusée. Si un changement de dates crée un conflit, la couleur est recalculée.
+
 ## Journal d'activité et pastille « update en cours »
 
 - **Journal** (admin) : Plus → Journal. Fenêtre type terminal, en direct (Supabase Realtime, repli toutes les 10 s) : changements d'état, pannes (déclarée, info, modification, résolue), projecteurs créés/modifiés/supprimés, catalogue, comptes (invitation, rôle, accès, nom), connexions. Les lignes se sélectionnent et se suppriment ; la suppression laisse une ligne « JOURNAL ». Les imports faits depuis l'éditeur SQL ne génèrent pas de lignes.

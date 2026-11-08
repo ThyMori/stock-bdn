@@ -6,6 +6,7 @@ import type { CalMode } from './calendar';
 import { esc, todayStr, uuid } from '../logic';
 import { openForm } from '../ui/dialog';
 import { fmtDay } from './agenda';
+import { showColor } from '../types';
 
 const cal = { mode: 'list' as 'list' | CalMode, ref: todayStr() };
 
@@ -47,7 +48,7 @@ function paint(root: HTMLElement) {
   const n = (id: string) => showItems.filter((s) => s.show_id === id).length;
   const live = shows.filter((s) => s.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const past = shows.filter((s) => s.end_date < today).sort((a, b) => b.end_date.localeCompare(a.end_date));
-  const row = (s: (typeof shows)[number]) => `<a class="item" href="#/show/${s.id}"><div class="grow"><div class="t">${esc(s.name)}</div>
+  const row = (s: (typeof shows)[number]) => `<a class="item" href="#/show/${s.id}"><i class="dotc" style="background:${showColor(s)}"></i><div class="grow"><div class="t">${esc(s.name)}</div>
     <div class="s">du ${fmtDay(s.start_date)} au ${fmtDay(s.end_date)} · ${n(s.id)} projecteur${n(s.id) > 1 ? 's' : ''}</div></div>
     ${s.start_date <= today && s.end_date >= today ? '<span class="tag run">en cours</span>' : ''}</a>`;
   root.querySelector('#list')!.innerHTML = shows.length
