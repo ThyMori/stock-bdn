@@ -4,12 +4,12 @@ import type { Immo } from '../types';
 export const fmtDay = (d: string | null): string => (d ? d.split('-').reverse().join('/') : '—');
 const KIND = { pret: 'Prêt', sav: 'SAV' } as const;
 
-/** Fenêtre de 6 mois : le mois précédent, le mois courant et les quatre suivants, décalée de `offset` mois. */
+/** Fenêtre de 3 mois : le mois précédent, le mois courant et le suivant, décalée de `offset` mois. */
 export function monthWindow(today: string, offset: number): { from: string; to: string; months: { label: string; at: string }[] } {
   const [y, m] = today.split('-').map(Number);
   const first = (k: number) => { const d = new Date(Date.UTC(y, m - 1 + k, 1)); return d.toISOString().slice(0, 10); };
-  const from = first(-1 + offset), to = addDays(first(5 + offset), -1);
-  const months = Array.from({ length: 6 }, (_, k) => { const at = first(-1 + offset + k);
+  const from = first(-1 + offset), to = addDays(first(2 + offset), -1);
+  const months = Array.from({ length: 3 }, (_, k) => { const at = first(-1 + offset + k);
     return { at, label: new Date(at + 'T00:00:00Z').toLocaleDateString('fr-FR', { month: 'short', year: at.slice(5, 7) === '01' ? '2-digit' : undefined, timeZone: 'UTC' }) }; });
   return { from, to, months };
 }

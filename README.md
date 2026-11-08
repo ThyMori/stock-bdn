@@ -87,7 +87,7 @@ Plan gratuit Supabase : pas de sauvegarde automatique et mise en pause après ~1
 
 ## Agenda des projecteurs (immobilisations)
 
-Chaque projecteur a un agenda : frise sur 6 mois (vert = libre, jaune = prêt, rouge = SAV, hachuré = à venir, flèche = sans date de fin) et liste détaillée.
+Chaque projecteur a un agenda : frise sur 3 mois (mois précédent, courant et suivant) (vert = libre, jaune = prêt, rouge = SAV, hachuré = à venir, flèche = sans date de fin) et liste détaillée.
 - Passer un projecteur **En prêt** demande : à qui, date du prêt, retour prévu (facultatif), remarque. Passer en **SAV** : motif, début, fin prévue (facultative). Repasser **Disponible** clôt la période en cours. Fonctionne hors ligne.
 - Un régisseur général peut **planifier** un prêt futur, ajouter une période passée ou corriger une date (en ligne uniquement ; ne change pas l'état courant).
 - Un prêt dont le retour prévu est dépassé est signalé « en retard » (fiche et liste).
