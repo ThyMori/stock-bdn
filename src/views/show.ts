@@ -103,6 +103,7 @@ export const showView: ViewFactory = ([id]) => {
     el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
+        <div class="row wrap"><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}>Générer la liste de prépa</button></div>
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${wall}
@@ -229,6 +230,14 @@ export const showView: ViewFactory = ([id]) => {
           if (!window.confirm('Retirer ce régisseur du spectacle ?')) return;
           const r = await rpcCall('unassign_regisseur', { p_show: id, p_user: v });
           if (r.error) err(r.error);
+        }
+        else if (act === 'prep') {
+          try {
+            const { buildPrepPdf } = await import('../prepPdf');
+            const { blob, filename } = await buildPrepPdf(view(), id);
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+          } catch (e) { err('Impossible de générer le PDF : ' + String(e)); }
         }
         else if (act === 'wall-person') {
           const ppl = (await loadPeople()).filter((p) => p.id !== state.profile?.id);

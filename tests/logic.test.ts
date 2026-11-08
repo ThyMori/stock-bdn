@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
+import { prepRows } from '../src/prepPdf';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -162,5 +163,14 @@ t('mur : rendu HTML sûr', () => {
 t('mur : couleur stable par personne', () => {
   assert.equal(personColor('abc'), personColor('abc'));
   assert.match(personColor('abc'), /^#[0-9a-f]{6}$/);
+});
+t('liste de prépa : tri par type, lampe requise pour les PAR', () => {
+  const d = { ...EMPTY_DATA,
+    types: [{ id: 'tp', name: 'PAR' }, { id: 'td', name: 'découpe' }], lamps: [{ id: 'l62', name: 'CP62' }, { id: 'l60', name: 'CP60' }],
+    models: [{ id: 'mp', name: 'PAR64', type_id: 'tp' }, { id: 'md', name: '614 SX', type_id: 'td' }],
+    items: [{ id: 5, model_id: 'mp', lamp_id: 'l60', status: 'dispo' }, { id: 2, model_id: 'md', lamp_id: null, status: 'sav' }],
+    showItems: [{ show_id: 's', item_id: 5, lamp_id: 'l62' }, { show_id: 's', item_id: 2, lamp_id: null }, { show_id: 'autre', item_id: 5, lamp_id: null }] } as unknown as Data;
+  const r = prepRows(d, 's');
+  assert.deepEqual(r.map((x) => [x.type, x.id, x.lamp, x.current, x.sav]), [['découpe', 2, '', '', true], ['PAR', 5, 'CP62', 'CP60', false]]);
 });
 console.log(`\n${n} tests OK`);

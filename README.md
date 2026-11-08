@@ -109,6 +109,10 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Liste de prépa en PDF (v1.6)
+
+Sur la fiche d'un spectacle, **« Générer la liste de prépa »** télécharge un PDF A4 : titre, dates, régie, récapitulatif par type, puis les projecteurs **classés par type** (n°, modèle, case à cocher « préparé »). Pour les **PAR**, la lampe requise figure en gras, avec « montée : CPxx » si la lampe actuellement montée est différente, et « EN SAV » le cas échéant. Le PDF est fabriqué dans l'appli (aucun envoi de données) ; la bibliothèque n'est chargée qu'au premier clic.
+
 ### Mur global (v1.5)
 
 L'onglet **Mur** réunit les messages de tous les spectacles, du plus récent au plus ancien. Dans la marge de chaque message, une bande de la **couleur du spectacle** avec son **nom** (un appui ouvre le spectacle). Un menu permet de ne voir qu'un seul spectacle. Les messages qui te citent sont encadrés. La lecture seule : pour écrire, on passe par le mur du spectacle.
