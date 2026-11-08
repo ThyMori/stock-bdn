@@ -210,7 +210,10 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .badge.utilise { color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; border-color: #2f6bff; }
 .tile.utilise b { color: var(--green); } .tile.utilise[aria-pressed="true"] b, .tile.utilise[aria-pressed="true"] span { color: #fff; text-shadow: 0 0 4px #000, 0 0 4px #000; }
 .slice.utilise { fill: url(#hatch); }
-.tiles { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
+.tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tile { padding: 10px 1px 8px; min-width: 0; }
+.tile b { font-size: clamp(1.05rem, 5.6vw, 1.7rem); }
+.tile span { font-size: clamp(.58rem, 2.7vw, .74rem); display: block; overflow-wrap: anywhere; }
 .cnt.utilise { color: #2f6bff; }
 
 .item input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--ink); }
