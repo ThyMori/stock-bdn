@@ -77,16 +77,18 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults, flog] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at')
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date')
   ]);
   for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
+  // agenda : si la table n'existe pas encore (base pas à jour), l'appli reste utilisable sans lui
+  if (imm.error && imm.error.code !== '42P01' && imm.error.code !== 'PGRST205') throw imm.error;
   state.data = {
     families: fam.data as Data['families'], types: typ.data as Data['types'], sockets: soc.data as Data['sockets'],
     filterSizes: fs.data as Data['filterSizes'], lamps: lamps.data as Data['lamps'], models: models.data as Data['models'],
-    items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog']
+    items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog'], immos: (imm.error ? [] : imm.data) as Data['immos']
   };
   state.lastPull = new Date().toISOString();
   await persist();
@@ -96,7 +98,8 @@ export async function pull() {
 async function runOp(op: Op) {
   switch (op.kind) {
     case 'status':
-      return supabase.rpc('apply_status', { p_event: op.id, p_item: op.item, p_status: op.status, p_note: op.note ?? null, p_at: op.at });
+      return supabase.rpc('apply_status', { p_event: op.id, p_item: op.item, p_status: op.status, p_note: op.note ?? null, p_at: op.at,
+        p_who: op.who ?? null, p_from: op.from ?? null, p_until: op.until ?? null });
     case 'fault':
       return supabase.rpc('report_fault', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at });
     case 'resolve':
@@ -145,8 +148,18 @@ async function enqueue(op: Op) {
 }
 
 const now = () => new Date().toISOString();
-export const setStatus = (item: number, status: Status, note?: string) =>
-  enqueue({ id: uuid(), kind: 'status', item, status, note: note?.trim() || undefined, at: now() });
+export const setStatus = (item: number, status: Status, extra: { note?: string; who?: string; from?: string; until?: string } = {}) =>
+  enqueue({ id: uuid(), kind: 'status', item, status, note: extra.note?.trim() || undefined, who: extra.who?.trim() || undefined,
+    from: extra.from || undefined, until: extra.until || undefined, at: now() });
+
+/** Agenda : ajout / correction / suppression d'une période (en ligne uniquement). Renvoie un message d'erreur ou null. */
+export async function immoCall(fn: 'add_immo' | 'edit_immo' | 'delete_immo', params: Record<string, unknown>): Promise<string | null> {
+  if (!navigator.onLine) return 'Cette action demande une connexion.';
+  const { error } = await supabase.rpc(fn, params);
+  if (error) return error.message;
+  await pull(); emit();
+  return null;
+}
 export const reportFault = (item: number, description: string) =>
   enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now() });
 export const resolveFault = (fault: string, resolution?: string) =>

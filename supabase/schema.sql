@@ -176,27 +176,96 @@ create table if not exists item_events (
 );
 create index if not exists item_events_item_idx on item_events(item_id, at desc);
 
+-- Agenda d'un projecteur : ses immobilisations (prêts et périodes de SAV). Disponible = aucune ligne ouverte.
+create table if not exists immos (
+  id               uuid primary key default gen_random_uuid(),
+  item_id          integer not null references items(id) on delete cascade,
+  kind             text not null check (kind in ('pret', 'sav')),
+  who              text,                 -- emprunteur (prêts)
+  note             text,                 -- motif, remarque
+  start_date       date not null,
+  end_date         date,                 -- fin prévue (retour prévu / fin de SAV prévue) ; vide = non connue
+  closed_date      date,                 -- fin réelle (retour effectif / réparation terminée) ; vide = en cours
+  created_by       uuid references auth.users on delete set null,
+  created_by_label text,
+  created_at       timestamptz not null default now(),
+  constraint immos_dates check ((end_date is null or end_date >= start_date) and (closed_date is null or closed_date >= start_date))
+);
+create index if not exists immos_item_idx on immos(item_id, start_date);
+
 -- ---------- Fonctions appelées par l'appli (idempotentes) -------------
-create or replace function apply_status(p_event uuid, p_item int, p_status item_status, p_note text, p_at timestamptz)
+drop function if exists apply_status(uuid, int, item_status, text, timestamptz);
+create or replace function apply_status(p_event uuid, p_item int, p_status item_status, p_note text, p_at timestamptz,
+                                        p_who text default null, p_from date default null, p_until date default null)
 returns void language plpgsql security definer set search_path = public as $$
-declare prev item_status; cur_at timestamptz; n int;
+declare prev item_status; cur_at timestamptz; n int; lbl text; d date; d0 date;
 begin
   if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  d := (p_at at time zone 'Europe/Paris')::date;
+  d0 := coalesce(p_from, d);
+  if d0 > d then raise exception 'La date de début ne peut pas être dans le futur (utilise « Planifier » dans l''agenda)' using errcode = '22023'; end if;
+  if p_until is not null and p_until < d0 then raise exception 'La date de fin précède la date de début' using errcode = '22023'; end if;
   insert into item_events (id, item_id, kind, status, note, created_by, created_by_label, at)
-  values (p_event, p_item, 'status', p_status, p_note, auth.uid(), (select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = auth.uid()), p_at)
+  values (p_event, p_item, 'status', p_status, p_note, auth.uid(), lbl, p_at)
   on conflict (id) do nothing;
   get diagnostics n = row_count;
   if n = 0 then return; end if;                       -- déjà appliqué
   select status, status_at into prev, cur_at from items where id = p_item;
   if not found then raise exception 'Projecteur % introuvable', p_item using errcode = 'P0002'; end if;
-  perform log_event('STATUT', format('#%s : %s → %s%s%s', p_item, status_label(prev), status_label(p_status),
+  perform log_event('STATUT', format('#%s : %s → %s%s%s%s', p_item, status_label(prev), status_label(p_status),
+    case when nullif(trim(p_who), '') is not null then ' — ' || trim(p_who) else '' end,
     case when nullif(trim(p_note), '') is not null then ' — ' || trim(p_note) else '' end,
     case when p_at < cur_at then ' (ignoré : plus ancien que le dernier changement)' else '' end));
   if p_at >= cur_at then                              -- le plus récent gagne
     update items set status = p_status, status_at = p_at, updated_at = now(),
            last_service = case when prev = 'sav' and p_status = 'dispo' then p_at::date else last_service end
      where id = p_item;
+    -- agenda : on clôt ce qui était en cours, puis on ouvre la nouvelle immobilisation
+    update immos set closed_date = greatest(d, start_date) where item_id = p_item and closed_date is null and start_date <= d;
+    if p_status = 'en_pret' then
+      insert into immos (item_id, kind, who, note, start_date, end_date, created_by, created_by_label)
+      values (p_item, 'pret', nullif(trim(p_who), ''), nullif(trim(p_note), ''), d0, p_until, auth.uid(), lbl);
+    elsif p_status = 'sav' then
+      insert into immos (item_id, kind, note, start_date, end_date, created_by, created_by_label)
+      values (p_item, 'sav', nullif(trim(p_note), ''), d0, p_until, auth.uid(), lbl);
+    end if;
   end if;
+end $$;
+
+-- Agenda : ajout / correction / suppression manuelle d'une période (planifier un prêt futur, corriger une date…).
+-- Ne change pas l'état courant du projecteur.
+create or replace function add_immo(p_id uuid, p_item int, p_kind text, p_who text, p_note text, p_start date, p_end date, p_closed date)
+returns void language plpgsql security definer set search_path = public as $$
+declare lbl text; n int;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into immos (id, item_id, kind, who, note, start_date, end_date, closed_date, created_by, created_by_label)
+  values (p_id, p_item, p_kind, nullif(trim(p_who), ''), nullif(trim(p_note), ''), p_start, p_end, p_closed, auth.uid(), lbl)
+  on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then perform log_event('AGENDA', format('#%s : %s ajouté du %s%s%s', p_item, case p_kind when 'pret' then 'prêt' else 'SAV' end,
+      to_char(p_start, 'DD/MM/YYYY'), coalesce(' au ' || to_char(coalesce(p_closed, p_end), 'DD/MM/YYYY'), ''), coalesce(' — ' || nullif(trim(p_who), ''), ''))); end if;
+end $$;
+
+create or replace function edit_immo(p_id uuid, p_who text, p_note text, p_start date, p_end date, p_closed date)
+returns void language plpgsql security definer set search_path = public as $$
+declare it int;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  update immos set who = nullif(trim(p_who), ''), note = nullif(trim(p_note), ''), start_date = p_start, end_date = p_end, closed_date = p_closed
+   where id = p_id returning item_id into it;
+  if not found then raise exception 'Période introuvable' using errcode = '22023'; end if;
+  perform log_event('AGENDA', format('#%s : période modifiée (%s → %s)', it, to_char(p_start, 'DD/MM/YYYY'), coalesce(to_char(coalesce(p_closed, p_end), 'DD/MM/YYYY'), 'sans fin')));
+end $$;
+
+create or replace function delete_immo(p_id uuid) returns void language plpgsql security definer set search_path = public as $$
+declare it int;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  delete from immos where id = p_id returning item_id into it;
+  if found then perform log_event('AGENDA', format('#%s : période supprimée', it)); end if;
 end $$;
 
 create or replace function report_fault(p_id uuid, p_item int, p_description text, p_at timestamptz)
@@ -369,6 +438,12 @@ do $$ begin
   end if;
 end $$;
 
+-- Rattrapage : projecteurs déjà en SAV ou en prêt sans aucune période dans l'agenda.
+insert into immos (item_id, kind, start_date)
+select i.id, case i.status when 'sav' then 'sav' else 'pret' end, (i.status_at at time zone 'Europe/Paris')::date
+  from items i
+ where i.status in ('sav', 'en_pret') and not exists (select 1 from immos m where m.item_id = i.id);
+
 -- ---------- Sécurité (RLS) --------------------------------------------
 alter table profiles     enable row level security;
 alter table families     enable row level security;
@@ -382,6 +457,7 @@ alter table faults       enable row level security;
 alter table item_events  enable row level security;
 alter table fault_log    enable row level security;
 alter table app_log      enable row level security;
+alter table immos        enable row level security;
 
 -- profils : chacun voit le sien ; régisseurs généraux et admins voient tous les comptes ; seul l'admin modifie directement
 drop policy if exists profiles_select on profiles;
@@ -419,6 +495,8 @@ drop policy if exists faults_select on faults;
 create policy faults_select on faults for select using (has_role('technicien'));
 drop policy if exists fault_log_select on fault_log;
 create policy fault_log_select on fault_log for select using (has_role('technicien'));
+drop policy if exists immos_select on immos;
+create policy immos_select on immos for select using (has_role('technicien'));
 drop policy if exists app_log_select on app_log;
 create policy app_log_select on app_log for select using (has_role('admin'));
 drop policy if exists faults_admin on faults;
@@ -428,10 +506,16 @@ drop policy if exists item_events_select on item_events;
 create policy item_events_select on item_events for select using (has_role('technicien'));
 
 -- droits d'exécution des fonctions
-revoke all on function apply_status(uuid,int,item_status,text,timestamptz) from public;
+revoke all on function apply_status(uuid,int,item_status,text,timestamptz,text,date,date) from public;
+revoke all on function add_immo(uuid,int,text,text,text,date,date,date) from public;
+revoke all on function edit_immo(uuid,text,text,date,date,date) from public;
+revoke all on function delete_immo(uuid) from public;
 revoke all on function report_fault(uuid,int,text,timestamptz) from public;
 revoke all on function resolve_fault(uuid,uuid,text,timestamptz) from public;
-grant execute on function apply_status(uuid,int,item_status,text,timestamptz) to authenticated;
+grant execute on function apply_status(uuid,int,item_status,text,timestamptz,text,date,date) to authenticated;
+grant execute on function add_immo(uuid,int,text,text,text,date,date,date) to authenticated;
+grant execute on function edit_immo(uuid,text,text,date,date,date) to authenticated;
+grant execute on function delete_immo(uuid) to authenticated;
 grant execute on function report_fault(uuid,int,text,timestamptz) to authenticated;
 grant execute on function resolve_fault(uuid,uuid,text,timestamptz) to authenticated;
 revoke all on function add_fault_note(uuid,uuid,text,timestamptz) from public;

@@ -182,3 +182,24 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .k-STATUT { color: #ffd500; } .k-PANNE { color: #ff5a4f; } .k-RESOLU { color: #3be07a; } .k-INFO, .k-MODIF { color: #4fd8ff; }
 .k-PROJECTEUR, .k-CATALOGUE { color: #ff7ae0; } .k-COMPTE { color: #ffa94d; } .k-CONNEXION { color: #aaa; } .k-JOURNAL { color: #fff; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #888; margin-right: 4px; } .dot.on { background: #2fd36b; box-shadow: 0 0 6px #2fd36b; }
+
+/* agenda des immobilisations */
+.frise { display: grid; gap: 4px; }
+.frise .ticks { position: relative; height: 1.1em; font-size: .7rem; color: var(--muted); text-transform: uppercase; }
+.frise .ticks span { position: absolute; transform: translateX(2px); white-space: nowrap; }
+.frise .track { position: relative; border-left: 1px solid var(--ink); border-right: 1px solid var(--ink); }
+.frise .free { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--green); }
+.frise .today { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); }
+.bar { position: absolute; height: 12px; min-width: 3px; }
+.bar.pret { background: var(--yellow); } .bar.sav { background: var(--red); }
+.bar.planned { background-image: repeating-linear-gradient(135deg, rgba(0,0,0,.45) 0 3px, transparent 3px 6px); }
+.bar.late { outline: 2px solid var(--red); outline-offset: -2px; }
+.bar.open::after { content: '▶'; position: absolute; right: -1px; top: -1px; font-size: 11px; line-height: 14px; color: var(--ink); }
+.legend-mini { display: flex; gap: 14px; font-size: .78rem; color: var(--muted); }
+.sw { display: inline-block; width: 11px; height: 11px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid var(--ink); }
+.sw.dispo { background: var(--green); } .sw.pret { background: var(--yellow); } .sw.sav { background: var(--red); }
+.immo-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line, rgba(128,128,128,.35)); }
+.tag { display: inline-block; padding: 1px 6px; border: 1.5px solid var(--ink); font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+.tag.late { background: var(--red); border-color: var(--red); color: #fff; } .tag.run { background: var(--yellow); border-color: var(--yellow); color: #000; }
+.dlg { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 16px; width: min(92vw, 420px); }
+.dlg::backdrop { background: rgba(0,0,0,.6); }

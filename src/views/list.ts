@@ -1,6 +1,7 @@
 import type { ViewFactory } from '../router';
 import { view } from '../store';
-import { counts, esc } from '../logic';
+import { counts, esc, currentImmo, immoState, todayStr } from '../logic';
+import { fmtDay } from './agenda';
 import { describe, norm } from '../ref';
 import { STATUS_LABEL, STATUSES } from '../types';
 import type { Status } from '../types';
@@ -77,7 +78,8 @@ function pieSvg(c: { total: number; dispo: number; sav: number; en_pret: number 
 
 function paint(root: HTMLElement) {
   const data = view();
-  const rows = data.items.map((i) => ({ i, d: describe(data, i), open: data.faults.some((x) => x.item_id === i.id && !x.resolved_at) }));
+  const today = todayStr();
+  const rows = data.items.map((i) => ({ i, im: i.status === 'dispo' ? undefined : currentImmo(data.immos, i.id, today), d: describe(data, i), open: data.faults.some((x) => x.item_id === i.id && !x.resolved_at) }));
   const tokens = norm(f.q).split(/\s+/).filter(Boolean);
   const matchText = (r: (typeof rows)[number]) => {
     const h = norm(`${r.i.id} ${r.d.model?.name ?? ''} ${r.d.type?.name ?? ''} ${r.d.family?.name ?? ''} ${r.d.lamp?.name ?? ''}`);
@@ -137,7 +139,7 @@ function paint(root: HTMLElement) {
     <a class="item" href="#/item/${r.i.id}">
       <div class="num">${r.i.id}</div>
       <div class="grow"><div class="t">${esc(r.d.model?.name)}${r.open ? '<span class="dot" title="Panne en cours"></span>' : ''}</div>
-        <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}${r.i.pending ? ' <span class="pending">en attente</span>' : ''}</div></div>
+        <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}${r.i.pending ? ' <span class="pending">en attente</span>' : ''}${r.im ? `<br>${r.im.kind === 'pret' ? 'Prêté' + (r.im.who ? ' à ' + esc(r.im.who) : '') : 'SAV'}${r.im.end_date ? ' · ' + (r.im.kind === 'pret' ? 'retour' : 'fin') + ' ' + fmtDay(r.im.end_date) : ''}${immoState(r.im, today) === 'late' ? ' <span class="tag late">en retard</span>' : ''}` : ''}</div></div>
       <span class="badge ${r.i.status}">${STATUS_LABEL[r.i.status]}</span>
     </a>`).join('') : `<div class="empty">Aucun projecteur ne correspond</div>`;
 }

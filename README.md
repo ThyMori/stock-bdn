@@ -85,6 +85,13 @@ Les identifiants AppSheet sont conservés. Le projecteur d'essai (n° 0, `IsTest
 ## Sauvegarde
 Plan gratuit Supabase : pas de sauvegarde automatique et mise en pause après ~1 semaine sans activité. Pour un usage pro : plan Pro (sauvegardes quotidiennes) ou export régulier (`pg_dump` / Table Editor → Export CSV).
 
+## Agenda des projecteurs (immobilisations)
+
+Chaque projecteur a un agenda : frise sur 6 mois (vert = libre, jaune = prêt, rouge = SAV, hachuré = à venir, flèche = sans date de fin) et liste détaillée.
+- Passer un projecteur **En prêt** demande : à qui, date du prêt, retour prévu (facultatif), remarque. Passer en **SAV** : motif, début, fin prévue (facultative). Repasser **Disponible** clôt la période en cours. Fonctionne hors ligne.
+- Un régisseur général peut **planifier** un prêt futur, ajouter une période passée ou corriger une date (en ligne uniquement ; ne change pas l'état courant).
+- Un prêt dont le retour prévu est dépassé est signalé « en retard » (fiche et liste).
+
 ## Journal d'activité et pastille « update en cours »
 
 - **Journal** (admin) : Plus → Journal. Fenêtre type terminal, en direct (Supabase Realtime, repli toutes les 10 s) : changements d'état, pannes (déclarée, info, modification, résolue), projecteurs créés/modifiés/supprimés, catalogue, comptes (invitation, rôle, accès, nom), connexions. Les lignes se sélectionnent et se suppriment ; la suppression laisse une ligne « JOURNAL ». Les imports faits depuis l'éditeur SQL ne génèrent pas de lignes.

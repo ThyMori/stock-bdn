@@ -25,6 +25,11 @@ export interface Fault {
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;
 }
 /** Info ajoutée ou description modifiée sur une panne (la déclaration et la résolution sont dans Fault). */
+/** Immobilisation d'un projecteur (agenda) : prêt ou SAV. Sans closed_date = en cours ; sans end_date = fin non connue. */
+export interface Immo {
+  id: string; item_id: number; kind: 'pret' | 'sav'; who: string | null; note: string | null;
+  start_date: string; end_date: string | null; closed_date: string | null; created_by_label?: string | null; pending?: boolean;
+}
 export interface AppLog { id: number; at: string; actor_label: string | null; kind: string; message: string }
 export interface FaultLog {
   id: string; fault_id: string; kind: 'note' | 'edit'; text: string; old_text: string | null;
@@ -41,15 +46,15 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */
 export type Op =
-  | { id: string; kind: 'status'; item: number; status: Status; note?: string; at: string }
+  | { id: string; kind: 'status'; item: number; status: Status; note?: string; who?: string; from?: string; until?: string; at: string }
   | { id: string; kind: 'fault'; item: number; description: string; at: string }
   | { id: string; kind: 'resolve'; fault: string; resolution?: string; at: string }
   | { id: string; kind: 'fault_note'; fault: string; text: string; at: string }

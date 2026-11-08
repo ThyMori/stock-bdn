@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { applyPending, counts, isTransient, parseScan } from '../src/logic';
+import { addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
-import type { Data, Op } from '../src/types';
+import type { Data, Immo, Op } from '../src/types';
 
 let n = 0;
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name); };
@@ -68,6 +68,39 @@ t('applyPending : info ajoutée et description modifiée hors ligne, avec l\'anc
   assert.equal(base.faults[0].description, 'x', 'les données serveur ne sont pas modifiées');
   const synced = applyPending({ ...base, faultLog: [{ id: 'n1', fault_id: 'f1', kind: 'note', text: 'vu en répétition', old_text: null, by_label: 'a', at: '2026-02-01T00:00:00Z' }] }, [ops[0]]);
   assert.equal(synced.faultLog.length, 1, 'pas de doublon une fois synchronisée');
+});
+
+const im = (o: Partial<Immo>): Immo => ({ id: 'i', item_id: 1, kind: 'pret', who: null, note: null, start_date: '2026-11-10', end_date: null, closed_date: null, ...o });
+t('agenda : état d\'une période (à venir, en cours, en retard, terminée)', () => {
+  const today = '2026-11-20';
+  assert.equal(immoState(im({ start_date: '2026-12-01' }), today), 'planned');
+  assert.equal(immoState(im({ start_date: '2026-11-10', end_date: '2026-11-25' }), today), 'running');
+  assert.equal(immoState(im({ start_date: '2026-11-10' }), today), 'running', 'sans fin connue = en cours');
+  assert.equal(immoState(im({ start_date: '2026-11-01', end_date: '2026-11-15' }), today), 'late');
+  assert.equal(immoState(im({ start_date: '2026-11-01', end_date: '2026-11-15', closed_date: '2026-11-18' }), today), 'done');
+});
+t('agenda : position des barres dans la fenêtre', () => {
+  const w = ['2026-10-01', '2026-10-31'] as const; // 31 jours
+  const b = barSpan(im({ start_date: '2026-10-11', end_date: '2026-10-20' }), ...w)!;
+  assert.ok(Math.abs(b.left - (10 / 31) * 100) < 1e-9 && Math.abs(b.width - (10 / 31) * 100) < 1e-9 && !b.openEnd);
+  assert.equal(barSpan(im({ start_date: '2026-11-05', end_date: '2026-11-08' }), ...w), null, 'hors fenêtre');
+  const open = barSpan(im({ start_date: '2026-10-25' }), ...w)!;
+  assert.ok(open.openEnd && Math.abs(open.left + open.width - 100) < 1e-9, 'sans fin : se prolonge jusqu\'au bord');
+  const clip = barSpan(im({ start_date: '2026-09-20', end_date: '2026-10-05' }), ...w)!;
+  assert.ok(clip.clippedStart && clip.left === 0);
+  assert.equal(addDays('2026-02-27', 2), '2026-03-01');
+});
+t('applyPending : prêt hors ligne = période ouverte avec emprunteur ; retour = clôture', () => {
+  const today = dayOf(new Date().toISOString());
+  const data: Data = { ...base, items: [{ ...base.items[0], id: 1, status: 'dispo', status_at: '2000-01-01T00:00:00Z' }], immos: [] };
+  const at = new Date().toISOString();
+  const lent = applyPending(data, [{ id: 's1', kind: 'status', item: 1, status: 'en_pret', who: 'Odéon', until: addDays(today, 7), at }]);
+  assert.equal(lent.items[0].status, 'en_pret');
+  assert.deepEqual([lent.immos.length, lent.immos[0].who, lent.immos[0].kind, lent.immos[0].start_date, lent.immos[0].closed_date], [1, 'Odéon', 'pret', today, null]);
+  assert.equal(currentImmo(lent.immos, 1, today)?.who, 'Odéon');
+  const back = applyPending(data, [{ id: 's1', kind: 'status', item: 1, status: 'en_pret', who: 'Odéon', at }, { id: 's2', kind: 'status', item: 1, status: 'sav', note: 'lentille', at: new Date(Date.now() + 1000).toISOString() }]);
+  assert.deepEqual(back.immos.map((m) => [m.kind, m.closed_date]), [['pret', today], ['sav', null]], 'le prêt est clôturé, le SAV s\'ouvre');
+  assert.equal(data.immos.length, 0, 'les données serveur ne sont pas modifiées');
 });
 
 t('isTransient : réseau => réessayer ; erreur métier => rejeter', () => {

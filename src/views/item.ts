@@ -1,7 +1,9 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
-import { esc, fmtDate, fmtDateTime } from '../logic';
+import { can, immoCall, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
+import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uuid } from '../logic';
+import { agendaHtml, fmtDay } from './agenda';
+import { openForm } from '../ui/dialog';
 import { describe } from '../ref';
 import { STATUS_LABEL, STATUSES } from '../types';
 import type { ItemEvent } from '../types';
@@ -9,11 +11,13 @@ import { supabase } from '../supabase';
 
 export const itemView: ViewFactory = ([idStr]) => {
   const id = Number(idStr);
+  let offset = 0;                       // décalage de la frise de l'agenda, en mois
   return {
     mount(root) {
       root.innerHTML = `<div class="page">
         <div class="row"><a href="#/" class="sub">‹ Parc</a></div>
         <div id="dyn" class="stack"></div>
+        <div id="agenda" class="card stack"></div>
         <details class="card" id="faultForm"><summary>Signaler une panne</summary>
           <form class="stack" style="margin-top:12px">
             <textarea name="d" placeholder="Que se passe-t-il ? (ex. condenseur explosé, presse-étoupe…)"></textarea>
@@ -36,7 +40,11 @@ export const itemView: ViewFactory = ([idStr]) => {
       root.addEventListener('click', async (e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
         if (!el) return;
-        if (el.dataset.act === 'status') void setStatus(id, el.dataset.v as never);
+        const act = el.dataset.act;
+        if (act === 'status') void changeStatus(el.dataset.v as 'dispo' | 'sav' | 'en_pret');
+        if (act === 'agenda-nav') { offset = el.dataset.v === '0' ? 0 : offset + Number(el.dataset.v); paintAgenda(root); }
+        if (act === 'immo-add') void immoForm(root);
+        if (act === 'immo-edit') void immoForm(root, el.dataset.v);
         if (el.dataset.act === 'resolve') {
           const r = window.prompt('Résolution (facultatif)', '');
           if (r !== null) void resolveFault(el.dataset.v!, r);
@@ -47,20 +55,80 @@ export const itemView: ViewFactory = ([idStr]) => {
     update: (root) => paint(root)
   };
 
+  async function changeStatus(s: 'dispo' | 'sav' | 'en_pret') {
+    const item = view().items.find((i) => i.id === id);
+    if (!item || item.status === s) return;
+    const today = todayStr();
+    const dates = (v: Record<string, string>) => (v.from && v.from > today ? 'La date de début ne peut pas être dans le futur (utilise « Planifier » dans l\'agenda).'
+      : v.until && v.from && v.until < v.from ? 'La date de fin précède la date de début.' : null);
+    if (s === 'en_pret') {
+      const v = await openForm(`Prêter le n° ${id}`, [
+        { name: 'who', label: 'À qui ?', required: true, hint: 'Personne, compagnie, théâtre…' },
+        { name: 'from', label: 'Date du prêt', type: 'date', required: true, value: today, max: today },
+        { name: 'until', label: 'Retour prévu', type: 'date', min: today },
+        { name: 'note', label: 'Remarque' }], { submit: 'Valider le prêt', validate: dates });
+      if (v) void setStatus(id, s, { who: v.who, from: v.from, until: v.until, note: v.note });
+    } else if (s === 'sav') {
+      const v = await openForm(`Passer le n° ${id} en SAV`, [
+        { name: 'note', label: 'Motif' },
+        { name: 'from', label: 'Début du SAV', type: 'date', required: true, value: today, max: today },
+        { name: 'until', label: 'Fin prévue', type: 'date', min: today, hint: 'Laisse vide si la date de retour n\'est pas connue.' }], { submit: 'Passer en SAV', validate: dates });
+      if (v) void setStatus(id, s, { note: v.note, from: v.from, until: v.until });
+    } else {
+      void setStatus(id, s);
+    }
+  }
+
+  async function immoForm(root: HTMLElement, immoId?: string) {
+    const cur = immoId ? view().immos.find((m) => m.id === immoId) : undefined;
+    const today = todayStr();
+    const v = await openForm(cur ? 'Modifier la période' : 'Ajouter / planifier une période', [
+      ...(cur ? [] : [{ name: 'kind', label: 'Type', type: 'select' as const, value: 'pret', options: [['pret', 'Prêt'], ['sav', 'SAV']] as [string, string][] }]),
+      { name: 'who', label: 'À qui (prêt)', value: cur?.who ?? '' },
+      { name: 'note', label: 'Remarque / motif', value: cur?.note ?? '' },
+      { name: 'start', label: 'Début', type: 'date', required: true, value: cur?.start_date ?? today },
+      { name: 'end', label: 'Fin prévue', type: 'date', value: cur?.end_date ?? '' },
+      { name: 'closed', label: 'Fin réelle (retour / réparation terminée)', type: 'date', value: cur?.closed_date ?? '', hint: 'Pour corriger une date passée ; pour clôturer normalement, change l\'état du projecteur.' }],
+      { validate: (x) => (x.end && x.end < x.start) || (x.closed && x.closed < x.start) ? 'Une date de fin précède la date de début.' : null });
+    if (!v) return;
+    const err = cur
+      ? await immoCall('edit_immo', { p_id: cur.id, p_who: v.who || null, p_note: v.note || null, p_start: v.start, p_end: v.end || null, p_closed: v.closed || null })
+      : await immoCall('add_immo', { p_id: uuid(), p_item: id, p_kind: v.kind, p_who: v.who || null, p_note: v.note || null, p_start: v.start, p_end: v.end || null, p_closed: v.closed || null });
+    if (err) window.alert('Impossible : ' + err);
+    paint(root);
+  }
+
+  function paintAgenda(root: HTMLElement) {
+    const data = view();
+    const el = root.querySelector('#agenda'); if (!el) return;
+    el.innerHTML = agendaHtml(data.immos.filter((m) => m.item_id === id), offset, can('regisseur_general'));
+  }
+
   function paint(root: HTMLElement) {
     const data = view();
     const item = data.items.find((i) => i.id === id);
     const dyn = root.querySelector('#dyn')!;
     if (!item) { dyn.innerHTML = `<div class="card empty">Projecteur n° ${id} introuvable.<br><a href="#/scan">Scanner un autre QR</a></div>`; return; }
+    paintAgenda(root);
     const d = describe(data, item);
     const faults = data.faults.filter((f) => f.item_id === id);
     const open = faults.filter((f) => !f.resolved_at), closed = faults.filter((f) => f.resolved_at);
     const canStatus = can('regisseur_general'), canResolve = can('regisseur');
+    const today = todayStr();
+    const cur = currentImmo(data.immos, id, today);
+    const curInfo = cur ? (() => {
+      const st = immoState(cur, today);
+      const late = st === 'late' ? ` <span class="tag late">retour en retard de ${dayNum(today) - dayNum(cur.end_date!)} j</span>` : '';
+      return cur.kind === 'pret'
+        ? `<div class="sub"><b>Prêté</b>${cur.who ? ' à <b>' + esc(cur.who) + '</b>' : ''} depuis le ${fmtDay(cur.start_date)}${cur.end_date ? ' · retour prévu le ' + fmtDay(cur.end_date) : ''}${late}</div>`
+        : `<div class="sub"><b>En SAV</b> depuis le ${fmtDay(cur.start_date)}${cur.end_date ? ' · fin prévue le ' + fmtDay(cur.end_date) : ''}${cur.note ? ' · ' + esc(cur.note) : ''}${late}</div>`;
+    })() : '';
     dyn.innerHTML = `
       <div class="card stack">
         <div class="row"><div class="big">${id}</div>
           <div class="grow"><h1>${esc(d.model?.name)}</h1><div class="sub">${esc([d.type?.name, d.family?.name].filter(Boolean).join(' · '))}</div></div></div>
         <div class="seg">${STATUSES.map((s) => `<button class="${s}" data-act="status" data-v="${s}" aria-pressed="${item.status === s}" ${canStatus ? '' : 'disabled'}>${STATUS_LABEL[s]}</button>`).join('')}</div>
+        ${curInfo}
         ${item.pending ? '<div><span class="pending">En attente de synchronisation</span></div>' : ''}
         ${canStatus ? '' : '<div class="sub">Seuls les régisseurs généraux et les administrateurs peuvent changer l\'état.</div>'}
         <dl class="kv">
