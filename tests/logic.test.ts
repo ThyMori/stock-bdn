@@ -174,7 +174,7 @@ t('liste de prépa : tri par type, lampe requise pour les PAR', () => {
   const r = prepRows(d, 's');
   assert.deepEqual(r.map((x) => [x.type, x.id, x.lamp, x.current, x.sav]), [['découpe', 2, '', '', true], ['PAR', 5, 'CP62', 'CP60', false]]);
 });
-t('gélatines : groupées par couleur puis format puis référence', () => {
+t('gélatines : groupées par format puis couleur puis référence', () => {
   const d = { ...EMPTY_DATA, items: [{ id: 1, model_id: 'm' }, { id: 2, model_id: 'm' }], models: [{ id: 'm', name: 'X', type_id: null }],
     showGels: [
       { id: 'a', show_id: 's', item_id: 2, ref: 'LEE 201', color: 'Bleu' },

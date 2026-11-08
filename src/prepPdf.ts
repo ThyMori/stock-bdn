@@ -19,7 +19,7 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
   }
   const rank = (c: string) => { const i = GEL_COLORS.findIndex(([n]) => n === c); return i < 0 ? 99 : i; };
   return [...map.values()].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
-    .sort((a, b) => rank(a.color) - rank(b.color) || a.format.localeCompare(b.format, 'fr', { numeric: true }) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
+    .sort((a, b) => a.format.localeCompare(b.format, 'fr', { numeric: true }) || rank(a.color) - rank(b.color) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
 }
 
 /** Lignes de la liste de prépa : projecteurs du spectacle, triés par type, modèle puis numéro. */
@@ -89,29 +89,24 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
       y += 7;
     }
   }
-  // gélatines : par couleur, puis par format
+  // gélatines : par format (sous-titre), puis couleur
   const gels = gelGroups(data, showId);
   if (gels.length) {
     ensure(30); y += 8;
     doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
     doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); doc.setTextColor(0);
-    y += 6; doc.setFontSize(8); doc.setTextColor(110);
-    doc.text('PRÉPARÉ', M + 2, y); doc.text('RÉFÉRENCE', M + 24, y); doc.text('FORMAT', M + 70, y); doc.text('QTÉ', M + 108, y); doc.text('PROJECTEURS', M + 122, y);
-    doc.setTextColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.5, W - M, y + 1.5); y += 6;
-    let lastColor = '';
+    y += 7; let lastFormat = '';
     for (const g of gels) {
-      ensure(g.color === lastColor ? 8 : 16);
-      if (g.color !== lastColor) {
-        const hex = GEL_COLORS.find(([n]) => n === g.color)?.[1] ?? '#8d6e63';
-        doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setDrawColor(0); doc.setLineWidth(0.2);
-        doc.rect(M + 2, y - 3.6, 4, 4, 'FD');
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.color.toUpperCase(), M + 9, y); y += 6; lastColor = g.color;
+      if (g.format !== lastFormat) {
+        ensure(18); if (lastFormat) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0); doc.text(`Format ${g.format}`, M + 2, y);
+        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastFormat = g.format;
       }
+      ensure(9);
+      const hex = GEL_COLORS.find(([n]) => n === g.color)?.[1] ?? '#8d6e63';
       doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.ref, M + 24, y, { maxWidth: 44 });
-      doc.setFont('helvetica', 'normal'); doc.text(g.format, M + 70, y, { maxWidth: 36 });
-      doc.setFont('helvetica', 'bold'); doc.text(String(g.qty), M + 108, y);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(g.items.join(', '), M + 122, y, { maxWidth: W - M - (M + 122) });
+      doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setLineWidth(0.2); doc.rect(M + 13, y - 3.4, 4, 4, 'FD');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.ref, M + 24, y, { maxWidth: 62 });
+      doc.text(`x ${g.qty}`, M + 90, y);
       doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
       y += 7;
     }
