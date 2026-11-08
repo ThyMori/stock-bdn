@@ -121,8 +121,8 @@ details.card > summary { cursor: pointer; font-weight: 700; }
 /* navigation : onglets texte, l'onglet actif est un bloc noir (comme le bouton « Billetterie ») */
 nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: flex; justify-content: center; background: var(--paper);
   border-top: 2px solid var(--ink); padding-bottom: env(safe-area-inset-bottom); }
-nav.tabs .in { display: flex; width: 100%; max-width: 760px; padding: 6px 12px; gap: 6px; }
-nav.tabs a { flex: 1; height: calc(var(--nav-h) - 12px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+nav.tabs .in { display: flex; width: 100%; max-width: 760px; padding: 6px 8px; gap: 4px; }
+nav.tabs a { flex: 1; min-width: 0; height: calc(var(--nav-h) - 12px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   color: var(--ink); text-decoration: none; font-size: .74rem; font-weight: 700; position: relative; }
 nav.tabs a svg { width: 22px; height: 22px; }
 nav.tabs a[aria-current="page"] { background: var(--ink); color: var(--paper); }
@@ -203,3 +203,16 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .tag.late { background: var(--red); border-color: var(--red); color: #fff; } .tag.run { background: var(--yellow); border-color: var(--yellow); color: #000; }
 .dlg { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 16px; width: min(92vw, 420px); }
 .dlg::backdrop { background: rgba(0,0,0,.6); }
+
+/* spectacles : « utilisé » = vert hachuré de bleu */
+:root { --hatch: repeating-linear-gradient(135deg, var(--green) 0 6px, #2f6bff 6px 9px); }
+.bar.show, .sw.show, .lg i.utilise, .badge.utilise, .tile.utilise[aria-pressed="true"], .lg[aria-pressed="true"] i.utilise { background: var(--hatch); }
+.badge.utilise { color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; border-color: #2f6bff; }
+.tile.utilise b { color: var(--green); } .tile.utilise[aria-pressed="true"] b, .tile.utilise[aria-pressed="true"] span { color: #fff; text-shadow: 0 0 4px #000, 0 0 4px #000; }
+.slice.utilise { fill: url(#hatch); }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); }
+.cnt.utilise { color: #2f6bff; }
+
+.item input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--ink); }
+@media (max-width: 380px) { nav.tabs a { font-size: .64rem; } }
+.pick-list { max-height: 48vh; overflow-y: auto; }

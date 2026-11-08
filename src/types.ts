@@ -2,6 +2,10 @@ export type Status = 'dispo' | 'sav' | 'en_pret';
 export type Role = 'technicien' | 'regisseur' | 'regisseur_general' | 'admin';
 
 export const STATUSES: Status[] = ['dispo', 'sav', 'en_pret'];
+/** État affiché : « utilisé » est calculé (projecteur assigné à un spectacle en cours), il ne se règle pas à la main. */
+export type DisplayStatus = Status | 'utilise';
+export const DISPLAY_STATUSES: DisplayStatus[] = ['dispo', 'utilise', 'sav', 'en_pret'];
+export const DISPLAY_LABEL: Record<DisplayStatus, string> = { dispo: 'Disponible', utilise: 'Utilisé', sav: 'SAV', en_pret: 'En prêt' };
 export const STATUS_LABEL: Record<Status, string> = { dispo: 'Disponible', sav: 'SAV', en_pret: 'En prêt' };
 export const ROLE_LABEL: Record<Role, string> = { technicien: 'Technicien', regisseur: 'Régisseur', regisseur_general: 'Régisseur général', admin: 'Administrateur' };
 export const ROLE_RANK: Record<Role, number> = { technicien: 1, regisseur: 2, regisseur_general: 3, admin: 4 };
@@ -19,7 +23,11 @@ export interface Model {
 export interface Item {
   id: number; model_id: string; lamp_id: string | null; status: Status; status_at: string;
   last_service: string | null; note: string | null; pending?: boolean;
+  /** État affiché (calculé) : « utilisé » si assigné à un spectacle en cours et disponible. */
+  eff?: DisplayStatus;
 }
+export interface Show { id: string; name: string; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
+export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;
@@ -27,7 +35,7 @@ export interface Fault {
 /** Info ajoutée ou description modifiée sur une panne (la déclaration et la résolution sont dans Fault). */
 /** Immobilisation d'un projecteur (agenda) : prêt ou SAV. Sans closed_date = en cours ; sans end_date = fin non connue. */
 export interface Immo {
-  id: string; item_id: number; kind: 'pret' | 'sav'; who: string | null; note: string | null;
+  id: string; item_id: number; kind: 'pret' | 'sav' | 'show'; show_id?: string; who: string | null; note: string | null;
   start_date: string; end_date: string | null; closed_date: string | null; created_by_label?: string | null; pending?: boolean;
 }
 export interface AppLog { id: number; at: string; actor_label: string | null; kind: string; message: string }
@@ -46,10 +54,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */

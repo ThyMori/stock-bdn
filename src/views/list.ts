@@ -3,17 +3,17 @@ import { view } from '../store';
 import { counts, esc, currentImmo, immoState, todayStr } from '../logic';
 import { fmtDay } from './agenda';
 import { describe, norm } from '../ref';
-import { STATUS_LABEL, STATUSES } from '../types';
-import type { Status } from '../types';
+import { DISPLAY_LABEL, DISPLAY_STATUSES } from '../types';
+import type { DisplayStatus } from '../types';
 
 // Les filtres survivent à la navigation (on revient de la fiche sur la même liste).
 const store = { get: (): string | null => { try { return localStorage.getItem('stockbdn.chart'); } catch { return null; } },
   set: (v: string) => { try { localStorage.setItem('stockbdn.chart', v); } catch { /* stockage indisponible : sans conséquence */ } } };
-const f = { chart: store.get() === 'pie', q: '', status: '' as '' | Status, type: '', model: '', mode: 'units' as 'units' | 'models' };
+const f = { chart: store.get() === 'pie', q: '', status: '' as '' | DisplayStatus, type: '', model: '', mode: 'units' as 'units' | 'models' };
 
 export const listView: ViewFactory = (_p, query) => ({
   mount(root) {
-    if (query.get('status')) f.status = query.get('status') as Status;
+    if (query.get('status')) f.status = query.get('status') as DisplayStatus;
     root.innerHTML = `<div class="page">
       <div class="row"><h1 class="grow">Parc</h1>
         <div class="chips" role="group" aria-label="Affichage des compteurs">
@@ -30,7 +30,7 @@ export const listView: ViewFactory = (_p, query) => ({
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
       const { act, v } = el.dataset;
-      if (act === 'status') f.status = (f.status === v ? '' : v) as Status | '';
+      if (act === 'status') f.status = (f.status === v ? '' : v) as DisplayStatus | '';
       if (act === 'chart') { f.chart = v === 'pie'; store.set(v ?? 'tiles'); }
       if (act === 'type') { f.type = v ?? ''; f.model = ''; }
       if (act === 'mode') f.mode = v as 'units' | 'models';
@@ -44,10 +44,10 @@ export const listView: ViewFactory = (_p, query) => ({
 });
 
 /** Camembert SVG en perspective (vue inclinée, avec épaisseur) : toucher une part filtre la liste, comme les cases. */
-function pieSvg(c: { total: number; dispo: number; sav: number; en_pret: number }, sel: '' | Status): string {
+function pieSvg(c: { total: number; dispo: number; utilise: number; sav: number; en_pret: number }, sel: '' | DisplayStatus): string {
   const CX = 150, CY = 78, RX = 128, RY = 58, DEPTH = 26;       // RY/RX = inclinaison ; DEPTH = épaisseur
   const top = (a: number, dy = 0) => `${(CX + RX * Math.cos(a)).toFixed(1)} ${(CY + RY * Math.sin(a) + dy).toFixed(1)}`;
-  const parts = STATUSES.filter((s) => c[s] > 0);
+  const parts = DISPLAY_STATUSES.filter((s) => c[s] > 0);
   let a0 = -Math.PI / 2;
   const walls: string[] = [], tops: string[] = [];
   for (const s of parts) {
@@ -66,20 +66,20 @@ function pieSvg(c: { total: number; dispo: number; sav: number; en_pret: number 
     const d = frac >= 0.9999
       ? `M ${top(-Math.PI / 2)} A ${RX} ${RY} 0 1 1 ${top(Math.PI / 2)} A ${RX} ${RY} 0 1 1 ${top(-Math.PI / 2)} Z`
       : `M ${CX} ${CY} L ${top(a0)} A ${RX} ${RY} 0 ${frac > 0.5 ? 1 : 0} 1 ${top(a1)} Z`;
-    tops.push(`<path class="slice ${s}" data-act="status" data-v="${s}" d="${d}"${tr}><title>${STATUS_LABEL[s]} : ${c[s]}</title></path>`);
+    tops.push(`<path class="slice ${s}" data-act="status" data-v="${s}" d="${d}"${tr}><title>${DISPLAY_LABEL[s]} : ${c[s]}</title></path>`);
     a0 = a1;
   }
   // les parts dont le flanc est au premier plan sont dessinées en dernier
   const body = c.total
     ? `<ellipse cx="${CX}" cy="${CY + DEPTH + 6}" rx="${RX}" ry="${RY * 0.9}" class="ground"/>${walls.join('')}${tops.join('')}`
     : `<ellipse cx="${CX}" cy="${CY}" rx="${RX}" ry="${RY}" class="slice empty"/>`;
-  return `<svg class="pie-svg" viewBox="0 0 300 ${CY + RY + DEPTH + 22}" role="img" aria-label="Répartition du parc par état">${body}</svg>`;
+  return `<svg class="pie-svg" viewBox="0 0 300 ${CY + RY + DEPTH + 22}" role="img" aria-label="Répartition du parc par état"><defs><pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--ok, #2e9e5b)"/><rect width="4" height="8" fill="#3b82f6"/></pattern></defs>${body}</svg>`;
 }
 
 function paint(root: HTMLElement) {
   const data = view();
   const today = todayStr();
-  const rows = data.items.map((i) => ({ i, im: i.status === 'dispo' ? undefined : currentImmo(data.immos, i.id, today), d: describe(data, i), open: data.faults.some((x) => x.item_id === i.id && !x.resolved_at) }));
+  const rows = data.items.map((i) => ({ i, im: i.status === 'dispo' ? undefined : currentImmo(data.immos, i.id, today), d: describe(data, i), show: i.eff === 'utilise' ? data.immos.find((x) => x.kind === 'show' && x.item_id === i.id && immoState(x, today) === 'running') : undefined, open: data.faults.some((x) => x.item_id === i.id && !x.resolved_at) }));
   const tokens = norm(f.q).split(/\s+/).filter(Boolean);
   const matchText = (r: (typeof rows)[number]) => {
     const h = norm(`${r.i.id} ${r.d.model?.name ?? ''} ${r.d.type?.name ?? ''} ${r.d.family?.name ?? ''} ${r.d.lamp?.name ?? ''}`);
@@ -96,12 +96,12 @@ function paint(root: HTMLElement) {
     tilesEl.className = 'tiles';
     tilesEl.innerHTML =
       `<button class="tile" data-act="status" data-v="" aria-pressed="${f.status === ''}"><b>${c.total}</b><span>Total</span></button>` +
-      STATUSES.map((s) => `<button class="tile ${s === 'en_pret' && !c[s] ? '' : s}" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><b>${c[s]}</b><span>${STATUS_LABEL[s]}</span></button>`).join('');
+      DISPLAY_STATUSES.map((s) => `<button class="tile ${s === 'en_pret' && !c[s] ? '' : s}" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><b>${c[s]}</b><span>${DISPLAY_LABEL[s]}</span></button>`).join('');
   } else {
     tilesEl.className = 'pie';
     tilesEl.innerHTML = pieSvg(c, f.status) + `<div class="legend">` +
       `<button class="lg" data-act="status" data-v="" aria-pressed="${f.status === ''}"><i style="background:var(--ink)"></i><span>Total</span><b>${c.total}</b><em></em></button>` +
-      STATUSES.map((s) => `<button class="lg" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><i class="${s}"></i><span>${STATUS_LABEL[s]}</span><b>${c[s]}</b><em>${c.total ? Math.round((c[s] / c.total) * 100) : 0} %</em></button>`).join('') + `</div>`;
+      DISPLAY_STATUSES.map((s) => `<button class="lg" data-act="status" data-v="${s}" aria-pressed="${f.status === s}"><i class="${s}"></i><span>${DISPLAY_LABEL[s]}</span><b>${c[s]}</b><em>${c.total ? Math.round((c[s] / c.total) * 100) : 0} %</em></button>`).join('') + `</div>`;
   }
 
   const usedTypes = data.types.filter((t) => data.models.some((m) => m.type_id === t.id && data.items.some((i) => i.model_id === m.id)));
@@ -116,7 +116,7 @@ function paint(root: HTMLElement) {
     (f.model ? `<button class="chip" data-act="clearmodel" aria-pressed="true">${esc(modelName)} ✕</button>` : '');
 
   const out = root.querySelector('#results')!;
-  const withStatus = base.filter((r) => !f.status || r.i.status === f.status);
+  const withStatus = base.filter((r) => !f.status || (r.i.eff ?? r.i.status) === f.status);
 
   if (f.mode === 'models') {
     const groups = new Map<string, typeof rows>();
@@ -129,7 +129,7 @@ function paint(root: HTMLElement) {
       return `<button class="item" data-act="model" data-v="${id}">
         <div class="grow"><div class="t">${esc(m?.name)}</div><div class="s">${esc(type)}</div></div>
         <div class="s" style="text-align:right"><b style="font-size:1.1rem;color:var(--ink)">${k.total}</b><br>
-          <span class="cnt ${k.dispo ? 'dispo' : ''}" title="Disponibles">${k.dispo}</span> · <span class="cnt ${k.sav ? 'sav' : ''}" title="SAV">${k.sav}</span> · <span class="cnt ${k.en_pret ? 'en_pret' : ''}" title="En prêt">${k.en_pret}</span></div></button>`;
+          <span class="cnt ${k.dispo ? 'dispo' : ''}" title="Disponibles">${k.dispo}</span> · <span class="cnt ${k.utilise ? 'utilise' : ''}" title="Utilisés">${k.utilise}</span> · <span class="cnt ${k.sav ? 'sav' : ''}" title="SAV">${k.sav}</span> · <span class="cnt ${k.en_pret ? 'en_pret' : ''}" title="En prêt">${k.en_pret}</span></div></button>`;
     }).join('') : `<div class="empty">Aucun résultat</div>`;
     return;
   }
@@ -139,7 +139,7 @@ function paint(root: HTMLElement) {
     <a class="item" href="#/item/${r.i.id}">
       <div class="num">${r.i.id}</div>
       <div class="grow"><div class="t">${esc(r.d.model?.name)}${r.open ? '<span class="dot" title="Panne en cours"></span>' : ''}</div>
-        <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}${r.i.pending ? ' <span class="pending">en attente</span>' : ''}${r.im ? `<br>${r.im.kind === 'pret' ? 'Prêté' + (r.im.who ? ' à ' + esc(r.im.who) : '') : 'SAV'}${r.im.end_date ? ' · ' + (r.im.kind === 'pret' ? 'retour' : 'fin') + ' ' + fmtDay(r.im.end_date) : ''}${immoState(r.im, today) === 'late' ? ' <span class="tag late">en retard</span>' : ''}` : ''}</div></div>
-      <span class="badge ${r.i.status}">${STATUS_LABEL[r.i.status]}</span>
+        <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}${r.i.pending ? ' <span class="pending">en attente</span>' : ''}${r.show ? `<br>Spectacle${r.show.who ? ' · ' + esc(r.show.who) : ''}${r.show.end_date ? ' · jusqu’au ' + fmtDay(r.show.end_date) : ''}` : ''}${r.im ? `<br>${r.im.kind === 'pret' ? 'Prêté' + (r.im.who ? ' à ' + esc(r.im.who) : '') : 'SAV'}${r.im.end_date ? ' · ' + (r.im.kind === 'pret' ? 'retour' : 'fin') + ' ' + fmtDay(r.im.end_date) : ''}${immoState(r.im, today) === 'late' ? ' <span class="tag late">en retard</span>' : ''}` : ''}</div></div>
+      <span class="badge ${r.i.eff ?? r.i.status}">${DISPLAY_LABEL[r.i.eff ?? r.i.status]}</span>
     </a>`).join('') : `<div class="empty">Aucun projecteur ne correspond</div>`;
 }

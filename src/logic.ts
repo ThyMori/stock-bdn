@@ -1,4 +1,4 @@
-import type { Data, Immo, Op } from './types';
+import type { Data, DisplayStatus, Immo, Op } from './types';
 
 export const esc = (s: unknown): string =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -25,7 +25,27 @@ export function parseScan(text: string): number | null {
 
 /** Vue "optimiste" : les données serveur + les actions pas encore synchronisées. */
 export function applyPending(data: Data, pending: Op[]): Data {
-  if (!pending.length) return data;
+  return withDerived(pending.length ? overlay(data, pending) : data);
+}
+
+/** Calcule l'état affiché (« utilisé ») et ajoute les spectacles à l'agenda de chaque projecteur. */
+function withDerived(data: Data): Data {
+  if (!data.shows.length) return data.items.some((i) => i.eff !== i.status) ? { ...data, items: data.items.map((i) => ({ ...i, eff: i.status })) } : data;
+  const today = todayStr();
+  const byShow = new Map(data.shows.map((s) => [s.id, s]));
+  const inUse = new Set<number>();
+  const virtual: Immo[] = [];
+  for (const si of data.showItems) {
+    const s = byShow.get(si.show_id); if (!s) continue;
+    if (s.start_date <= today && today <= s.end_date) inUse.add(si.item_id);
+    virtual.push({ id: `show-${s.id}-${si.item_id}`, show_id: s.id, item_id: si.item_id, kind: 'show', who: s.name, note: null, start_date: s.start_date, end_date: s.end_date,
+      closed_date: s.end_date < today ? s.end_date : null });
+  }
+  const items = data.items.map((i) => ({ ...i, eff: (i.status === 'dispo' && inUse.has(i.id) ? 'utilise' : i.status) as DisplayStatus }));
+  return { ...data, items, immos: [...data.immos, ...virtual] };
+}
+
+function overlay(data: Data, pending: Op[]): Data {
   const items = data.items.map((i) => ({ ...i }));
   const byId = new Map(items.map((i) => [i.id, i]));
   const faults = data.faults.map((f) => ({ ...f }));
@@ -75,9 +95,9 @@ export function isTransient(err: { code?: string; message?: string; status?: num
   return !err.code; // pas de code Postgres/PostgREST => la requête n'a pas abouti
 }
 
-export function counts<T extends { status: string }>(items: T[]) {
-  const c = { total: items.length, dispo: 0, sav: 0, en_pret: 0 };
-  for (const i of items) if (i.status in c) (c as Record<string, number>)[i.status]++;
+export function counts<T extends { status: string; eff?: string }>(items: T[]) {
+  const c = { total: items.length, dispo: 0, utilise: 0, sav: 0, en_pret: 0 };
+  for (const i of items) { const k = i.eff ?? i.status; if (k in c) (c as Record<string, number>)[k]++; }
   return c;
 }
 
@@ -115,4 +135,4 @@ export function barSpan(i: Immo, from: string, to: string): { left: number; widt
 
 /** Période en cours (non clôturée, déjà commencée) d'un projecteur. */
 export const currentImmo = (immos: Immo[], item: number, today: string): Immo | undefined =>
-  immos.filter((m) => m.item_id === item && !m.closed_date && m.start_date <= today).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0];
+  immos.filter((m) => m.kind !== 'show' && m.item_id === item && !m.closed_date && m.start_date <= today).sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0];

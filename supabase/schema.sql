@@ -193,6 +193,28 @@ create table if not exists immos (
 );
 create index if not exists immos_item_idx on immos(item_id, start_date);
 
+-- Spectacles : un projecteur assigné à un spectacle est « utilisé » pendant ses dates (état calculé côté appli).
+create table if not exists shows (
+  id               uuid primary key default gen_random_uuid(),
+  name             text not null,
+  start_date       date not null,
+  end_date         date not null,
+  note             text,
+  created_by       uuid references auth.users on delete set null,
+  created_by_label text,
+  created_at       timestamptz not null default now(),
+  constraint shows_dates check (end_date >= start_date)
+);
+create table if not exists show_items (
+  show_id        uuid not null references shows(id) on delete cascade,
+  item_id        integer not null references items(id) on delete cascade,
+  lamp_id        text references lamps(id) on delete set null,   -- lampe requise (PAR : CP60, CP61, CP62, CP95)
+  added_by_label text,
+  added_at       timestamptz not null default now(),
+  primary key (show_id, item_id)
+);
+create index if not exists show_items_item_idx on show_items(item_id);
+
 -- ---------- Fonctions appelées par l'appli (idempotentes) -------------
 drop function if exists apply_status(uuid, int, item_status, text, timestamptz);
 create or replace function apply_status(p_event uuid, p_item int, p_status item_status, p_note text, p_at timestamptz,
@@ -404,6 +426,103 @@ end $$;
 revoke all on function delete_log_lines(bigint[]) from public;
 grant execute on function delete_log_lines(bigint[]) to authenticated;
 
+
+-- Spectacles : conflits, création, modification, assignation.
+-- Un projecteur ne peut pas être dans deux spectacles aux dates qui se recoupent, ni sur une période de prêt / SAV
+-- (un SAV sans date de fin connue le bloque tant qu'on n'a pas indiqué sa fin prévue).
+create or replace function item_conflict(p_item int, p_show uuid, p_start date, p_end date) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare r text;
+begin
+  select 'déjà dans « ' || s.name || ' » (' || to_char(s.start_date, 'DD/MM') || ' → ' || to_char(s.end_date, 'DD/MM') || ')' into r
+    from show_items si join shows s on s.id = si.show_id
+   where si.item_id = p_item and s.id is distinct from p_show and s.start_date <= p_end and s.end_date >= p_start limit 1;
+  if r is not null then return r; end if;
+  select (case m.kind when 'pret' then 'prêt' else 'SAV' end) || coalesce(' (' || m.who || ')', '') || ' du ' || to_char(m.start_date, 'DD/MM')
+         || coalesce(' au ' || to_char(coalesce(m.closed_date, m.end_date), 'DD/MM'), ' (fin non connue)') into r
+    from immos m
+   where m.item_id = p_item and m.start_date <= p_end and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p_start limit 1;
+  return r;
+end $$;
+
+create or replace function create_show(p_id uuid, p_name text, p_start date, p_end date, p_note text) returns void
+language plpgsql security definer set search_path = public as $$
+declare lbl text; n int;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if nullif(trim(p_name), '') is null then raise exception 'Nom obligatoire' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into shows (id, name, start_date, end_date, note, created_by, created_by_label)
+  values (p_id, trim(p_name), p_start, p_end, nullif(trim(p_note), ''), auth.uid(), lbl) on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then perform log_event('SPECTACLE', format('« %s » créé (%s → %s)', trim(p_name), to_char(p_start, 'DD/MM/YYYY'), to_char(p_end, 'DD/MM/YYYY'))); end if;
+end $$;
+
+create or replace function edit_show(p_id uuid, p_name text, p_start date, p_end date, p_note text) returns void
+language plpgsql security definer set search_path = public as $$
+declare c text;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if nullif(trim(p_name), '') is null then raise exception 'Nom obligatoire' using errcode = '22023'; end if;
+  -- les nouvelles dates ne doivent pas recouvrir un autre spectacle pour les projecteurs déjà assignés
+  select 'Nouvelles dates impossibles : #' || si.item_id || ' est déjà dans « ' || o.name || ' » (' || to_char(o.start_date, 'DD/MM') || ' → ' || to_char(o.end_date, 'DD/MM') || ')' into c
+    from show_items si join show_items sj on sj.item_id = si.item_id and sj.show_id <> p_id join shows o on o.id = sj.show_id
+   where si.show_id = p_id and o.start_date <= p_end and o.end_date >= p_start limit 1;
+  if c is not null then raise exception '%', c using errcode = '22023'; end if;
+  update shows set name = trim(p_name), start_date = p_start, end_date = p_end, note = nullif(trim(p_note), '') where id = p_id;
+  if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  perform log_event('SPECTACLE', format('« %s » modifié (%s → %s)', trim(p_name), to_char(p_start, 'DD/MM/YYYY'), to_char(p_end, 'DD/MM/YYYY')));
+end $$;
+
+create or replace function delete_show(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare nm text;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  delete from shows where id = p_id returning name into nm;
+  if found then perform log_event('SPECTACLE', format('« %s » supprimé', nm)); end if;
+end $$;
+
+-- Assigne des projecteurs (ceux qui posent problème sont ignorés et renvoyés avec la raison).
+create or replace function assign_items(p_show uuid, p_items int[], p_lamp text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare s shows; it int; c text; added int[] := '{}'; skipped jsonb := '[]'::jsonb; ispar boolean; lbl text;
+begin
+  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into s from shows where id = p_show;
+  if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  if p_lamp is not null and not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe inconnue' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  foreach it in array (select coalesce(array_agg(distinct x), '{}') from unnest(p_items) x) loop
+    if not exists (select 1 from items where id = it) then skipped := skipped || jsonb_build_object('item', it, 'reason', 'introuvable'); continue; end if;
+    select exists (select 1 from items i join models m on m.id = i.model_id join item_types t on t.id = m.type_id where i.id = it and t.name ilike 'PAR%') into ispar;
+    if ispar and p_lamp is null and not exists (select 1 from show_items where show_id = p_show and item_id = it and lamp_id is not null) then
+      skipped := skipped || jsonb_build_object('item', it, 'reason', 'lampe requise (PAR)'); continue; end if;
+    c := item_conflict(it, p_show, s.start_date, s.end_date);
+    if c is not null then skipped := skipped || jsonb_build_object('item', it, 'reason', c); continue; end if;
+    insert into show_items (show_id, item_id, lamp_id, added_by_label)
+    values (p_show, it, case when ispar then p_lamp end, lbl)
+    on conflict (show_id, item_id) do update set lamp_id = coalesce(case when ispar then excluded.lamp_id end, show_items.lamp_id);
+    added := added || it;
+  end loop;
+  if cardinality(added) > 0 then
+    perform log_event('SPECTACLE', format('« %s » : %s projecteur(s) assigné(s) (%s)', s.name, cardinality(added), array_to_string(added, ', ')));
+  end if;
+  return jsonb_build_object('added', to_jsonb(added), 'skipped', skipped);
+end $$;
+
+create or replace function unassign_items(p_show uuid, p_items int[]) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int; nm text;
+begin
+  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  delete from show_items where show_id = p_show and item_id = any(p_items);
+  get diagnostics n = row_count;
+  select name into nm from shows where id = p_show;
+  if n > 0 then perform log_event('SPECTACLE', format('« %s » : %s projecteur(s) retiré(s) (%s)', nm, n, array_to_string(p_items, ', '))); end if;
+  return n;
+end $$;
+
 -- Projecteurs : création, suppression, modification de fiche (les changements d'état passent par apply_status).
 create or replace function log_items() returns trigger language plpgsql security definer set search_path = public as $$
 begin
@@ -473,6 +592,8 @@ alter table item_events  enable row level security;
 alter table fault_log    enable row level security;
 alter table app_log      enable row level security;
 alter table immos        enable row level security;
+alter table shows        enable row level security;
+alter table show_items   enable row level security;
 
 -- profils : chacun voit le sien ; régisseurs généraux et admins voient tous les comptes ; seul l'admin modifie directement
 drop policy if exists profiles_select on profiles;
@@ -510,6 +631,10 @@ drop policy if exists faults_select on faults;
 create policy faults_select on faults for select using (has_role('technicien'));
 drop policy if exists fault_log_select on fault_log;
 create policy fault_log_select on fault_log for select using (has_role('technicien'));
+drop policy if exists shows_select on shows;
+create policy shows_select on shows for select using (has_role('technicien'));
+drop policy if exists show_items_select on show_items;
+create policy show_items_select on show_items for select using (has_role('technicien'));
 drop policy if exists immos_select on immos;
 create policy immos_select on immos for select using (has_role('technicien'));
 drop policy if exists app_log_select on app_log;
@@ -525,12 +650,23 @@ revoke all on function apply_status(uuid,int,item_status,text,timestamptz,text,d
 revoke all on function add_immo(uuid,int,text,text,text,date,date,date) from public;
 revoke all on function edit_immo(uuid,text,text,date,date,date) from public;
 revoke all on function delete_immo(uuid) from public;
+revoke all on function item_conflict(int,uuid,date,date) from public;
+revoke all on function create_show(uuid,text,date,date,text) from public;
+revoke all on function edit_show(uuid,text,date,date,text) from public;
+revoke all on function delete_show(uuid) from public;
+revoke all on function assign_items(uuid,int[],text) from public;
+revoke all on function unassign_items(uuid,int[]) from public;
 revoke all on function report_fault(uuid,int,text,timestamptz) from public;
 revoke all on function resolve_fault(uuid,uuid,text,timestamptz) from public;
 grant execute on function apply_status(uuid,int,item_status,text,timestamptz,text,date,date) to authenticated;
 grant execute on function add_immo(uuid,int,text,text,text,date,date,date) to authenticated;
 grant execute on function edit_immo(uuid,text,text,date,date,date) to authenticated;
 grant execute on function delete_immo(uuid) to authenticated;
+grant execute on function create_show(uuid,text,date,date,text) to authenticated;
+grant execute on function edit_show(uuid,text,date,date,text) to authenticated;
+grant execute on function delete_show(uuid) to authenticated;
+grant execute on function assign_items(uuid,int[],text) to authenticated;
+grant execute on function unassign_items(uuid,int[]) to authenticated;
 grant execute on function report_fault(uuid,int,text,timestamptz) to authenticated;
 grant execute on function resolve_fault(uuid,uuid,text,timestamptz) to authenticated;
 revoke all on function add_fault_note(uuid,uuid,text,timestamptz) from public;

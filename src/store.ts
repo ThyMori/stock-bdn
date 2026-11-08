@@ -77,10 +77,10 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date')
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items')
   ]);
   for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
   // agenda : si la table n'existe pas encore (base pas à jour), l'appli reste utilisable sans lui
@@ -88,7 +88,8 @@ export async function pull() {
   state.data = {
     families: fam.data as Data['families'], types: typ.data as Data['types'], sockets: soc.data as Data['sockets'],
     filterSizes: fs.data as Data['filterSizes'], lamps: lamps.data as Data['lamps'], models: models.data as Data['models'],
-    items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog'], immos: (imm.error ? [] : imm.data) as Data['immos']
+    items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog'], immos: (imm.error ? [] : imm.data) as Data['immos'],
+    shows: (shw.error ? [] : shw.data) as Data['shows'], showItems: (shi.error ? [] : shi.data) as Data['showItems']
   };
   state.lastPull = new Date().toISOString();
   await persist();
@@ -154,11 +155,16 @@ export const setStatus = (item: number, status: Status, extra: { note?: string; 
 
 /** Agenda : ajout / correction / suppression d'une période (en ligne uniquement). Renvoie un message d'erreur ou null. */
 export async function immoCall(fn: 'add_immo' | 'edit_immo' | 'delete_immo', params: Record<string, unknown>): Promise<string | null> {
-  if (!navigator.onLine) return 'Cette action demande une connexion.';
-  const { error } = await supabase.rpc(fn, params);
-  if (error) return error.message;
+  return (await rpcCall(fn, params)).error;
+}
+
+/** Appel serveur direct (spectacles, agenda…) : en ligne uniquement ; recharge les données ensuite. */
+export async function rpcCall(fn: string, params: Record<string, unknown>): Promise<{ error: string | null; data: unknown }> {
+  if (!navigator.onLine) return { error: 'Cette action demande une connexion.', data: null };
+  const { data, error } = await supabase.rpc(fn, params);
+  if (error) return { error: error.message, data: null };
   await pull(); emit();
-  return null;
+  return { error: null, data };
 }
 export const reportFault = (item: number, description: string) =>
   enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now() });

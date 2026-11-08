@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
+import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
 
@@ -111,6 +111,30 @@ t('isTransient : réseau => réessayer ; erreur métier => rejeter', () => {
   assert.equal(isTransient(null), false);
 });
 t('counts', () => {
-  assert.deepEqual(counts(base.items), { total: 2, dispo: 1, sav: 1, en_pret: 0 });
+  assert.deepEqual(counts(base.items), { total: 2, dispo: 1, utilise: 0, sav: 1, en_pret: 0 });
+});
+
+const today = todayStr();
+const withShows = (start: string, end: string): Data => ({ ...base,
+  shows: [{ id: 's1', name: 'Hamlet', start_date: start, end_date: end, note: null }],
+  showItems: [{ show_id: 's1', item_id: 1, lamp_id: null }, { show_id: 's1', item_id: 2, lamp_id: null }] });
+t('spectacle en cours : dispo → utilisé, SAV reste SAV', () => {
+  const v = applyPending(withShows(addDays(today, -1), addDays(today, 1)), []);
+  assert.equal(v.items[0].eff, 'utilise');
+  assert.equal(v.items[1].eff, 'sav');
+  assert.deepEqual(counts(v.items), { total: 2, dispo: 0, utilise: 1, sav: 1, en_pret: 0 });
+});
+t('spectacle à venir ou terminé : pas utilisé, mais présent dans l\'agenda', () => {
+  for (const [a, b] of [[addDays(today, 3), addDays(today, 5)], [addDays(today, -9), addDays(today, -5)]] as const) {
+    const v = applyPending(withShows(a, b), []);
+    assert.equal(v.items[0].eff, 'dispo');
+    const sh = v.immos.filter((m) => m.kind === 'show' && m.item_id === 1);
+    assert.equal(sh.length, 1);
+    assert.equal(currentImmo(v.immos, 1, today), undefined, 'un spectacle n\'est pas une immobilisation en cours');
+  }
+});
+t('spectacle : identifiants d\'agenda uniques par projecteur', () => {
+  const v = applyPending(withShows(today, today), []);
+  assert.equal(new Set(v.immos.map((m) => m.id)).size, v.immos.length);
 });
 console.log(`\n${n} tests OK`);

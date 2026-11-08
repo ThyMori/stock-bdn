@@ -10,6 +10,8 @@ import { itemView } from './views/item';
 import { scanView } from './views/scan';
 import { faultsView } from './views/faults';
 import { faultView } from './views/fault';
+import { showsView } from './views/shows';
+import { showView } from './views/show';
 import { logView } from './views/log';
 import { UPDATE_PENDING } from './flags';
 import { moreView } from './views/more';
@@ -27,6 +29,7 @@ const app = document.getElementById('app')!;
 
 const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   '': { f: listView, tab: 'list' }, item: { f: itemView, tab: 'list' }, scan: { f: scanView, tab: 'scan' },
+  shows: { f: showsView, tab: 'shows' }, show: { f: showView, tab: 'shows' },
   faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, log: { f: logView, tab: 'more', min: 'admin' }, more: { f: moreView, tab: 'more' },
   labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
@@ -34,6 +37,7 @@ const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
 const ICON = {
   list: '<path d="M4 6h16M4 12h16M4 18h10"/>',
   scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',
+  shows: '<path d="M3 7h18v10H3zM7 7v10M3 12h4M17 7v10M17 12h4"/>',
   faults: '<path d="M12 3 2.5 20h19L12 3zM12 10v4M12 17v.5"/>',
   more: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'
 };
@@ -61,7 +65,7 @@ function paintStatus() {
 function paintTabs(tab: string) {
   const open = view().faults.filter((f) => !f.resolved_at).length;
   const el = document.getElementById('tabs');
-  if (el) el.innerHTML = tabLink('list', '#/', 'Parc', tab) + tabLink('scan', '#/scan', 'Scan', tab) + tabLink('faults', '#/faults', 'Pannes', tab, open) + tabLink('more', '#/more', 'Plus', tab);
+  if (el) el.innerHTML = tabLink('list', '#/', 'Parc', tab) + tabLink('scan', '#/scan', 'Scan', tab) + tabLink('shows', '#/shows', 'Spectacles', tab) + tabLink('faults', '#/faults', 'Pannes', tab, open) + tabLink('more', '#/more', 'Plus', tab);
 }
 
 function route() {

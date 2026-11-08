@@ -1,6 +1,6 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, immoCall, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
+import { can, immoCall, rpcCall, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
 import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uuid } from '../logic';
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
@@ -18,6 +18,7 @@ export const itemView: ViewFactory = ([idStr]) => {
         <div class="row"><a href="#/" class="sub">‹ Parc</a></div>
         <div id="dyn" class="stack"></div>
         <div id="agenda" class="card stack"></div>
+        <div id="shows" class="card stack"></div>
         <details class="card" id="faultForm"><summary>Signaler une panne</summary>
           <form class="stack" style="margin-top:12px">
             <textarea name="d" placeholder="Que se passe-t-il ? (ex. condenseur explosé, presse-étoupe…)"></textarea>
@@ -43,6 +44,8 @@ export const itemView: ViewFactory = ([idStr]) => {
         const act = el.dataset.act;
         if (act === 'status') void changeStatus(el.dataset.v as 'dispo' | 'sav' | 'en_pret');
         if (act === 'agenda-nav') { offset = el.dataset.v === '0' ? 0 : offset + Number(el.dataset.v); paintAgenda(root); }
+        if (act === 'show-assign') void assignToShow(root);
+        if (act === 'show-remove') { const sid = el.dataset.v!; if (window.confirm('Retirer ce projecteur du spectacle ?')) void rpcCall('unassign_items', { p_show: sid, p_items: [id] }); }
         if (act === 'immo-add') void immoForm(root);
         if (act === 'immo-edit') void immoForm(root, el.dataset.v);
         if (act === 'immo-del') void immoDelete(root, el.dataset.v!);
@@ -110,6 +113,37 @@ export const itemView: ViewFactory = ([idStr]) => {
     paint(root);
   }
 
+  function paintShows(root: HTMLElement) {
+    const data = view(); const el = root.querySelector('#shows'); if (!el) return;
+    const mine = data.showItems.filter((x) => x.item_id === id).map((x) => ({ x, s: data.shows.find((s) => s.id === x.show_id) })).filter((r) => r.s)
+      .sort((a, b) => a.s!.start_date.localeCompare(b.s!.start_date));
+    el.innerHTML = `<h2>Spectacles</h2>` + (mine.length ? mine.map(({ x, s }) => {
+      const lamp = data.lamps.find((l) => l.id === x.lamp_id)?.name;
+      return `<div class="row"><div class="grow"><a href="#/show/${s!.id}"><b>${esc(s!.name)}</b></a><div class="sub">du ${fmtDay(s!.start_date)} au ${fmtDay(s!.end_date)}${lamp ? ' · lampe requise : ' + esc(lamp) : ''}</div></div>
+        ${can('regisseur') ? `<button class="btn" data-act="show-remove" data-v="${s!.id}">Retirer</button>` : ''}</div>`;
+    }).join('') : `<div class="sub">Aucun spectacle</div>`) + (can('regisseur') ? `<button class="btn" data-act="show-assign">Assigner à un spectacle</button>` : '');
+  }
+
+  async function assignToShow(root: HTMLElement) {
+    const data = view(); const today = todayStr();
+    const item = data.items.find((i) => i.id === id); if (!item) return;
+    const taken = new Set(data.showItems.filter((x) => x.item_id === id).map((x) => x.show_id));
+    const open = data.shows.filter((s) => s.end_date >= today && !taken.has(s.id));
+    if (!open.length) { window.alert('Aucun spectacle disponible (à venir ou en cours).'); return; }
+    const par = /^PAR/i.test(describe(data, item).type?.name ?? '');
+    const lamps = data.lamps.filter((l) => /^CP\d+/i.test(l.name));
+    const v = await openForm('Assigner à un spectacle', [
+      { name: 'show', label: 'Spectacle', type: 'select', options: open.map((s) => [s.id, `${s.name} (${fmtDay(s.start_date)} → ${fmtDay(s.end_date)})`]), required: true },
+      ...(par ? [{ name: 'lamp', label: 'Lampe requise', type: 'select' as const, required: true, options: lamps.map((l): [string, string] => [l.id, l.name]) }] : [])
+    ], { submit: 'Assigner' });
+    if (!v) return;
+    const r = await rpcCall('assign_items', { p_show: v.show, p_items: [id], p_lamp: par ? v.lamp : null });
+    const sk = (r.data as { skipped?: { reason: string }[] } | null)?.skipped ?? [];
+    const msg = r.error ?? sk[0]?.reason;
+    if (msg) window.alert(msg);
+    void root;
+  }
+
   function paintAgenda(root: HTMLElement) {
     const data = view();
     const el = root.querySelector('#agenda'); if (!el) return;
@@ -122,6 +156,7 @@ export const itemView: ViewFactory = ([idStr]) => {
     const dyn = root.querySelector('#dyn')!;
     if (!item) { dyn.innerHTML = `<div class="card empty">Projecteur n° ${id} introuvable.<br><a href="#/scan">Scanner un autre QR</a></div>`; return; }
     paintAgenda(root);
+    paintShows(root);
     const d = describe(data, item);
     const faults = data.faults.filter((f) => f.item_id === id);
     const open = faults.filter((f) => !f.resolved_at), closed = faults.filter((f) => f.resolved_at);

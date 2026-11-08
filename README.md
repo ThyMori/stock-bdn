@@ -92,6 +92,17 @@ Chaque projecteur a un agenda : frise sur 3 mois (mois précédent, courant et s
 - Un régisseur général peut **planifier** un prêt futur, ajouter une période passée ou corriger une date (en ligne uniquement ; ne change pas l'état courant).
 - Un prêt dont le retour prévu est dépassé est signalé « en retard » (fiche et liste).
 
+## Spectacles
+
+Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de fin, note).
+
+- **Créer / modifier / supprimer** un spectacle : régisseur général et admin.
+- **Assigner des projecteurs** : régisseur et au-dessus, par lot (sélection dans la liste avec filtres par type, ou scan QR en continu) ou depuis la fiche d'un projecteur.
+- **PAR** : la lampe requise (CP60, CP61, CP62, CP95) se précise à l'assignation ; la fiche du spectacle signale si la lampe montée diffère.
+- **État « Utilisé »** (vert hachuré de bleu) : calculé, un projecteur disponible assigné à un spectacle en cours. SAV et prêt restent prioritaires.
+- Un projecteur ne peut pas être assigné à deux spectacles qui se chevauchent, ni pendant un prêt ou un SAV (même sans date de fin).
+- Les actions sur les spectacles demandent une connexion.
+
 ## Journal d'activité et pastille « update en cours »
 
 - **Journal** (admin) : Plus → Journal. Fenêtre type terminal, en direct (Supabase Realtime, repli toutes les 10 s) : changements d'état, pannes (déclarée, info, modification, résolue), projecteurs créés/modifiés/supprimés, catalogue, comptes (invitation, rôle, accès, nom), connexions. Les lignes se sélectionnent et se suppriment ; la suppression laisse une ligne « JOURNAL ». Les imports faits depuis l'éditeur SQL ne génèrent pas de lignes.
