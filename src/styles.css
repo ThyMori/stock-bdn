@@ -278,3 +278,11 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .mention { color: #fff; background: var(--pc, #475569); padding: 0 4px; font-weight: 700; }
 .pitem { font-weight: 800; text-decoration: underline; }
 .linkbtn { background: none; border: 0; padding: 4px 2px; font: inherit; font-size: .8rem; text-decoration: underline; color: inherit; cursor: pointer; min-height: 32px; }
+
+/* mur global */
+.gposts { display: flex; flex-direction: column; gap: 12px; }
+.gpost { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.gpost .margin { display: flex; align-items: flex-start; padding: 6px 5px; color: #fff; text-decoration: none; font-size: .7rem; font-weight: 800; line-height: 1.15; overflow-wrap: anywhere; }
+.gpost .post { margin: 0; }
+nav.tabs .in { padding: 6px 4px; gap: 2px; }
+nav.tabs a { font-size: .68rem; }
