@@ -27,6 +27,7 @@ export interface Item {
   eff?: DisplayStatus;
 }
 export interface Show { id: string; name: string; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
+export interface ShowRegisseur { show_id: string; user_id: string; label: string | null }
 export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
@@ -54,10 +55,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */

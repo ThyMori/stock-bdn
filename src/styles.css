@@ -216,3 +216,21 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .item input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--ink); }
 @media (max-width: 380px) { nav.tabs a { font-size: .64rem; } }
 .pick-list { max-height: 48vh; overflow-y: auto; }
+
+/* calendrier des spectacles */
+.cal { display: flex; flex-direction: column; gap: 8px; }
+.ctitle { text-align: center; font-weight: 800; text-transform: capitalize; }
+.chead, .cweek { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.chead span { text-align: center; font-size: .75rem; font-weight: 700; color: var(--muted); }
+.cweek { grid-auto-rows: 22px; grid-template-rows: 20px; border-top: 2px solid var(--ink); }
+.cweek.tall { min-height: 160px; }
+.cday { border-left: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); padding: 1px 3px; font-size: .75rem; font-weight: 700; min-height: 48px; }
+.cday.off { color: var(--muted); font-weight: 400; background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.cday.today { box-shadow: inset 0 3px 0 var(--red); }
+.cbar { display: block; margin: 1px 2px; padding: 0 5px; font-size: .72rem; font-weight: 700; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; z-index: 1; }
+.cbar.mine { background: var(--ink); color: var(--paper); }
+.cbar.grey { background: color-mix(in srgb, var(--ink) 14%, var(--paper)); color: var(--muted); }
+.cbar.cut-l { margin-left: 0; border-top-left-radius: 0; } .cbar.cut-r { margin-right: 0; }
+.clegend i { display: inline-block; width: 22px; height: 10px; vertical-align: middle; margin: 0 4px 0 10px; padding: 0; }
+.cal .row .btn { padding: 6px 10px 4px; min-width: 0; }
+.ctitle { white-space: nowrap; font-size: .95rem; }

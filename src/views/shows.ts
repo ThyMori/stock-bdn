@@ -1,17 +1,27 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, rpcCall, view } from '../store';
+import { can, canActShow, rpcCall, view } from '../store';
+import { calendarHtml, shiftRef } from './calendar';
+import type { CalMode } from './calendar';
 import { esc, todayStr, uuid } from '../logic';
 import { openForm } from '../ui/dialog';
 import { fmtDay } from './agenda';
+
+const cal = { mode: 'list' as 'list' | CalMode, ref: todayStr() };
 
 /** Catalogue des spectacles : en cours / à venir d'abord, terminés ensuite. */
 export const showsView: ViewFactory = () => ({
   mount(root) {
     root.innerHTML = `<div class="page"><div class="row"><h1 class="grow">Spectacles</h1>
-      ${can('regisseur_general') ? '<button class="btn primary" data-act="new">+ Nouveau</button>' : ''}</div><div id="err" class="sub warn" role="alert"></div><div id="list" class="list"></div></div>`;
+      ${can('regisseur_general') ? '<button class="btn primary" data-act="new">+ Nouveau</button>' : ''}</div><div class="chips" role="group" aria-label="Affichage">
+        <button class="chip" data-act="vmode" data-v="list">Liste</button><button class="chip" data-act="vmode" data-v="month">Mois</button><button class="chip" data-act="vmode" data-v="week">Semaine</button></div>
+      <div id="err" class="sub warn" role="alert"></div><div id="list" class="list"></div></div>`;
     root.addEventListener('click', async (e) => {
-      if (!(e.target as HTMLElement).closest('[data-act="new"]')) return;
+      const a = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset;
+      if (a?.act === 'vmode') { cal.mode = a.v as typeof cal.mode; paint(root); return; }
+      if (a?.act === 'cal-prev' || a?.act === 'cal-next') { cal.ref = shiftRef(cal.ref, cal.mode === 'week' ? 'week' : 'month', a.act === 'cal-next' ? 1 : -1); paint(root); return; }
+      if (a?.act === 'cal-today') { cal.ref = todayStr(); paint(root); return; }
+      if (a?.act !== 'new') return;
       const today = todayStr();
       const v = await openForm('Nouveau spectacle', [
         { name: 'name', label: 'Nom', required: true },
@@ -31,6 +41,8 @@ export const showsView: ViewFactory = () => ({
 
 function paint(root: HTMLElement) {
   const { shows, showItems } = view();
+  root.querySelectorAll<HTMLElement>('[data-act="vmode"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cal.mode)));
+  if (cal.mode !== 'list') { root.querySelector('#list')!.innerHTML = calendarHtml(shows, cal.ref, cal.mode, canActShow); return; }
   const today = todayStr();
   const n = (id: string) => showItems.filter((s) => s.show_id === id).length;
   const live = shows.filter((s) => s.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));

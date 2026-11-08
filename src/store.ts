@@ -28,6 +28,9 @@ const emit = () => listeners.forEach((fn) => fn());
 
 /** Données à afficher = serveur + actions en attente. */
 export const view = (): Data => applyPending(state.data, state.pending);
+/** Peut agir sur ce spectacle : régisseur général et au-dessus, ou régisseur assigné. */
+export const canActShow = (showId: string): boolean =>
+  can('regisseur_general') || (can('regisseur') && !!state.profile && state.data.showRegisseurs.some((r) => r.show_id === showId && r.user_id === state.profile!.id));
 export const can = (min: Role): boolean => !!state.profile && ROLE_RANK[state.profile.role] >= ROLE_RANK[min];
 
 // ---------- persistance locale (IndexedDB) ----------
@@ -77,10 +80,10 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items')
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs')
   ]);
   for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
   // agenda : si la table n'existe pas encore (base pas à jour), l'appli reste utilisable sans lui
@@ -89,7 +92,8 @@ export async function pull() {
     families: fam.data as Data['families'], types: typ.data as Data['types'], sockets: soc.data as Data['sockets'],
     filterSizes: fs.data as Data['filterSizes'], lamps: lamps.data as Data['lamps'], models: models.data as Data['models'],
     items: items.data as Data['items'], faults: faults.data as Data['faults'], faultLog: flog.data as Data['faultLog'], immos: (imm.error ? [] : imm.data) as Data['immos'],
-    shows: (shw.error ? [] : shw.data) as Data['shows'], showItems: (shi.error ? [] : shi.data) as Data['showItems']
+    shows: (shw.error ? [] : shw.data) as Data['shows'], showItems: (shi.error ? [] : shi.data) as Data['showItems'],
+    showRegisseurs: (shr.error ? [] : shr.data) as Data['showRegisseurs']
   };
   state.lastPull = new Date().toISOString();
   await persist();

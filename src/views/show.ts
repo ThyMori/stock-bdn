@@ -1,7 +1,9 @@
 import QrScanner from 'qr-scanner';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, rpcCall, view } from '../store';
+import { can, canActShow, rpcCall, view } from '../store';
+import { supabase } from '../supabase';
+import { fullName } from '../types';
 import { esc, parseScan, todayStr } from '../logic';
 import { describe, norm } from '../ref';
 import { openForm } from '../ui/dialog';
@@ -34,8 +36,9 @@ export const showView: ViewFactory = ([id]) => {
     const el = root.querySelector('#dyn')!;
     if (!show) { el.innerHTML = `<div class="card empty">Spectacle introuvable.<br><a href="#/shows">Retour aux spectacles</a></div>`; return; }
     const today = todayStr();
+    const regs = d.showRegisseurs.filter((r) => r.show_id === id).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
     const mine = d.showItems.filter((s) => s.show_id === id).sort((a, b) => a.item_id - b.item_id);
-    const canAssign = can('regisseur'), canEdit = can('regisseur_general');
+    const canAssign = canActShow(id), canEdit = can('regisseur_general');
     const lampName = (lid: string | null) => d.lamps.find((l) => l.id === lid)?.name;
 
     const assigned = mine.map((s) => {
@@ -79,6 +82,9 @@ export const showView: ViewFactory = ([id]) => {
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
         <div id="serr" class="sub warn" role="alert"></div></div>
+      <div class="card stack"><div class="row"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
+        ${regs.map((r) => `<div class="row"><div class="grow">${esc(r.label)}</div>${canEdit ? `<button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
+        ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       <div class="card"><div class="row"><h2 class="grow">Projecteurs (${mine.length})</h2>${canAssign && mode === 'view' ? '<button class="btn primary" data-act="mode" data-v="pick">+ Assigner</button>' : ''}</div>
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}`;
     wire(root);
@@ -117,6 +123,16 @@ export const showView: ViewFactory = ([id]) => {
     if (btn) { btn.disabled = !staged.length; btn.textContent = `Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}`; }
     const need = staged.some(isPar);
     if (need !== !!root.querySelector('#lamp')) { stopScan?.(); stopScan = null; paint(root); }
+  }
+
+  /** Ouvre le client mail avec une invitation prête à envoyer (aucun service d'envoi à configurer). */
+  async function mailInvite(userId: string, err: (m: string) => void) {
+    const show = view().shows.find((x) => x.id === id); if (!show) return;
+    const { data: p, error } = await supabase.from('profiles').select('email,first_name,last_name').eq('id', userId).maybeSingle();
+    if (error || !p) { err(error?.message ?? 'Compte introuvable'); return; }
+    const link = `${location.origin}${location.pathname}#/show/${id}`;
+    const body = `Bonjour ${p.first_name || ''},\n\nTu es assigné(e) comme régisseur sur « ${show.name} » (du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}).\n\nTu peux y assigner les projecteurs ici : ${link}\n\nMerci !`;
+    location.href = `mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent('Spectacle « ' + show.name + ' » : tu es assigné(e)')}&body=${encodeURIComponent(body)}`;
   }
 
   return {
@@ -158,6 +174,24 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'remove') {
           if (!window.confirm(`Retirer le projecteur n° ${v} de ce spectacle ?`)) return;
           const r = await rpcCall('unassign_items', { p_show: id, p_items: [Number(v)] });
+          if (r.error) err(r.error);
+        }
+        else if (act === 'reg-add') {
+          const { data: ps, error } = await supabase.from('profiles').select('id,email,role,first_name,last_name').in('role', ['regisseur', 'regisseur_general', 'admin']).eq('active', true);
+          if (error) { err(error.message); return; }
+          const have = new Set(view().showRegisseurs.filter((r) => r.show_id === id).map((r) => r.user_id));
+          const opts = (ps ?? []).filter((p) => p.role === 'regisseur' && !have.has(p.id)).sort((a, b) => fullName(a).localeCompare(fullName(b))).map((p): [string, string] => [p.id, fullName(p)]);
+          if (!opts.length) { err('Aucun régisseur à assigner (les régisseurs généraux et admins agissent déjà sur tous les spectacles).'); return; }
+          const f = await openForm('Assigner un régisseur', [{ name: 'user', label: 'Régisseur', type: 'select', options: opts, required: true }], { submit: 'Assigner' });
+          if (!f) return;
+          const r = await rpcCall('assign_regisseur', { p_show: id, p_user: f.user });
+          if (r.error) { err(r.error); return; }
+          if (window.confirm('Régisseur assigné. Lui envoyer une invitation par mail ?')) await mailInvite(f.user, err);
+        }
+        else if (act === 'reg-mail') await mailInvite(v!, err);
+        else if (act === 'reg-del') {
+          if (!window.confirm('Retirer ce régisseur du spectacle ?')) return;
+          const r = await rpcCall('unassign_regisseur', { p_show: id, p_user: v });
           if (r.error) err(r.error);
         }
         else if (act === 'edit') {

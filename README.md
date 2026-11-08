@@ -103,6 +103,12 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un projecteur ne peut pas être assigné à deux spectacles qui se chevauchent, ni pendant un prêt ou un SAV (même sans date de fin).
 - Les actions sur les spectacles demandent une connexion.
 
+### Calendrier et régisseurs assignés (v1.1)
+
+- Dans l'onglet « Spectacles », les boutons **Liste / Mois / Semaine** affichent les spectacles sur un calendrier. Chacun voit tous les spectacles ; ceux sur lesquels il ne peut pas agir sont **grisés**.
+- Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
+- Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
+
 ## Journal d'activité et pastille « update en cours »
 
 - **Journal** (admin) : Plus → Journal. Fenêtre type terminal, en direct (Supabase Realtime, repli toutes les 10 s) : changements d'état, pannes (déclarée, info, modification, résolue), projecteurs créés/modifiés/supprimés, catalogue, comptes (invitation, rôle, accès, nom), connexions. Les lignes se sélectionnent et se suppriment ; la suppression laisse une ligne « JOURNAL ». Les imports faits depuis l'éditeur SQL ne génèrent pas de lignes.

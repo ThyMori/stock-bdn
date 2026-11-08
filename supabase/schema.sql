@@ -214,6 +214,15 @@ create table if not exists show_items (
   primary key (show_id, item_id)
 );
 create index if not exists show_items_item_idx on show_items(item_id);
+-- Régisseurs assignés à un spectacle : seuls eux (et les régisseurs généraux / admins) peuvent y assigner des projecteurs.
+create table if not exists show_regisseurs (
+  show_id        uuid not null references shows(id) on delete cascade,
+  user_id        uuid not null references auth.users on delete cascade,
+  label          text,
+  added_by_label text,
+  added_at       timestamptz not null default now(),
+  primary key (show_id, user_id)
+);
 
 -- ---------- Fonctions appelées par l'appli (idempotentes) -------------
 drop function if exists apply_status(uuid, int, item_status, text, timestamptz);
@@ -483,12 +492,49 @@ begin
   if found then perform log_event('SPECTACLE', format('« %s » supprimé', nm)); end if;
 end $$;
 
+-- Peut agir sur un spectacle : régisseur général / admin, ou régisseur assigné à ce spectacle.
+create or replace function can_act_show(p_show uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select has_role('regisseur_general')
+      or (has_role('regisseur') and exists (select 1 from show_regisseurs where show_id = p_show and user_id = auth.uid()));
+$$;
+
+-- Assigne / retire un régisseur d'un spectacle (régisseur général et admin).
+create or replace function assign_regisseur(p_show uuid, p_user uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare s shows; u profiles; lbl text; n int;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into s from shows where id = p_show;
+  if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  select * into u from profiles where id = p_user;
+  if not found or not u.active then raise exception 'Compte introuvable ou désactivé' using errcode = '22023'; end if;
+  if role_rank(u.role) < role_rank('regisseur') then raise exception 'Seul un régisseur (ou plus) peut être assigné' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_regisseurs (show_id, user_id, label, added_by_label)
+  values (p_show, p_user, coalesce(nullif(trim(u.first_name || ' ' || u.last_name), ''), u.email), lbl) on conflict do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then perform log_event('SPECTACLE', format('« %s » : %s assigné(e) comme régisseur', s.name, coalesce(nullif(trim(u.first_name || ' ' || u.last_name), ''), u.email))); end if;
+end $$;
+
+create or replace function unassign_regisseur(p_show uuid, p_user uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare nm text; who text;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  delete from show_regisseurs where show_id = p_show and user_id = p_user returning label into who;
+  if found then
+    select name into nm from shows where id = p_show;
+    perform log_event('SPECTACLE', format('« %s » : %s n''est plus régisseur du spectacle', nm, who));
+  end if;
+end $$;
+
 -- Assigne des projecteurs (ceux qui posent problème sont ignorés et renvoyés avec la raison).
 create or replace function assign_items(p_show uuid, p_items int[], p_lamp text) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare s shows; it int; c text; added int[] := '{}'; skipped jsonb := '[]'::jsonb; ispar boolean; lbl text;
 begin
-  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   select * into s from shows where id = p_show;
   if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
   if p_lamp is not null and not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe inconnue' using errcode = '22023'; end if;
@@ -515,7 +561,7 @@ create or replace function unassign_items(p_show uuid, p_items int[]) returns in
 language plpgsql security definer set search_path = public as $$
 declare n int; nm text;
 begin
-  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   delete from show_items where show_id = p_show and item_id = any(p_items);
   get diagnostics n = row_count;
   select name into nm from shows where id = p_show;
@@ -594,6 +640,7 @@ alter table app_log      enable row level security;
 alter table immos        enable row level security;
 alter table shows        enable row level security;
 alter table show_items   enable row level security;
+alter table show_regisseurs enable row level security;
 
 -- profils : chacun voit le sien ; régisseurs généraux et admins voient tous les comptes ; seul l'admin modifie directement
 drop policy if exists profiles_select on profiles;
@@ -635,6 +682,8 @@ drop policy if exists shows_select on shows;
 create policy shows_select on shows for select using (has_role('technicien'));
 drop policy if exists show_items_select on show_items;
 create policy show_items_select on show_items for select using (has_role('technicien'));
+drop policy if exists show_regisseurs_select on show_regisseurs;
+create policy show_regisseurs_select on show_regisseurs for select using (has_role('technicien'));
 drop policy if exists immos_select on immos;
 create policy immos_select on immos for select using (has_role('technicien'));
 drop policy if exists app_log_select on app_log;
@@ -656,6 +705,9 @@ revoke all on function edit_show(uuid,text,date,date,text) from public;
 revoke all on function delete_show(uuid) from public;
 revoke all on function assign_items(uuid,int[],text) from public;
 revoke all on function unassign_items(uuid,int[]) from public;
+revoke all on function can_act_show(uuid) from public;
+revoke all on function assign_regisseur(uuid,uuid) from public;
+revoke all on function unassign_regisseur(uuid,uuid) from public;
 revoke all on function report_fault(uuid,int,text,timestamptz) from public;
 revoke all on function resolve_fault(uuid,uuid,text,timestamptz) from public;
 grant execute on function apply_status(uuid,int,item_status,text,timestamptz,text,date,date) to authenticated;
@@ -667,6 +719,9 @@ grant execute on function edit_show(uuid,text,date,date,text) to authenticated;
 grant execute on function delete_show(uuid) to authenticated;
 grant execute on function assign_items(uuid,int[],text) to authenticated;
 grant execute on function unassign_items(uuid,int[]) to authenticated;
+grant execute on function can_act_show(uuid) to authenticated;
+grant execute on function assign_regisseur(uuid,uuid) to authenticated;
+grant execute on function unassign_regisseur(uuid,uuid) to authenticated;
 grant execute on function report_fault(uuid,int,text,timestamptz) to authenticated;
 grant execute on function resolve_fault(uuid,uuid,text,timestamptz) to authenticated;
 revoke all on function add_fault_note(uuid,uuid,text,timestamptz) from public;

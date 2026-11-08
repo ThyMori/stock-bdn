@@ -1,6 +1,6 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, immoCall, rpcCall, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
+import { can, canActShow, immoCall, rpcCall, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
 import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uuid } from '../logic';
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
@@ -120,7 +120,7 @@ export const itemView: ViewFactory = ([idStr]) => {
     el.innerHTML = `<h2>Spectacles</h2>` + (mine.length ? mine.map(({ x, s }) => {
       const lamp = data.lamps.find((l) => l.id === x.lamp_id)?.name;
       return `<div class="row"><div class="grow"><a href="#/show/${s!.id}"><b>${esc(s!.name)}</b></a><div class="sub">du ${fmtDay(s!.start_date)} au ${fmtDay(s!.end_date)}${lamp ? ' · lampe requise : ' + esc(lamp) : ''}</div></div>
-        ${can('regisseur') ? `<button class="btn" data-act="show-remove" data-v="${s!.id}">Retirer</button>` : ''}</div>`;
+        ${canActShow(s!.id) ? `<button class="btn" data-act="show-remove" data-v="${s!.id}">Retirer</button>` : ''}</div>`;
     }).join('') : `<div class="sub">Aucun spectacle</div>`) + (can('regisseur') ? `<button class="btn" data-act="show-assign">Assigner à un spectacle</button>` : '');
   }
 
@@ -128,8 +128,8 @@ export const itemView: ViewFactory = ([idStr]) => {
     const data = view(); const today = todayStr();
     const item = data.items.find((i) => i.id === id); if (!item) return;
     const taken = new Set(data.showItems.filter((x) => x.item_id === id).map((x) => x.show_id));
-    const open = data.shows.filter((s) => s.end_date >= today && !taken.has(s.id));
-    if (!open.length) { window.alert('Aucun spectacle disponible (à venir ou en cours).'); return; }
+    const open = data.shows.filter((s) => s.end_date >= today && !taken.has(s.id) && canActShow(s.id));
+    if (!open.length) { window.alert('Aucun spectacle disponible : il faut être assigné à un spectacle à venir ou en cours.'); return; }
     const par = /^PAR/i.test(describe(data, item).type?.name ?? '');
     const lamps = data.lamps.filter((l) => /^CP\d+/i.test(l.name));
     const v = await openForm('Assigner à un spectacle', [
