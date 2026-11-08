@@ -168,3 +168,17 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .lg[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 .lg[aria-pressed="true"] em { color: inherit; }
 .lg[aria-pressed="true"] i { border-color: var(--paper); }
+
+/* pastille « update en cours » (voir src/flags.ts) */
+.update-note { position: fixed; right: 8px; bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 90; background: #e30613; color: #fff; font: 700 .72rem/1 system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; padding: 6px 9px; pointer-events: none; box-shadow: 0 0 0 2px #fff; }
+
+/* journal d'activité (terminal) */
+.term { background: #0b0b0b; color: #d6d6d6; border: 2px solid var(--ink); padding: 8px 0; height: max(46vh, 280px); overflow: auto; font: .74rem/1.45 ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; -webkit-overflow-scrolling: touch; }
+.term .ln { padding: 1px 10px; white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+.term .ln.sel { background: #26324a; outline: 1px solid #5b7bd5; }
+.term .ln.dim, .term .ln.err { cursor: default; } .term .ln.err { color: #ff6b6b; } .term .dim { color: #777; }
+.term .ts { color: #7f7f7f; } .term .who { color: #9ad; }
+.term .k { font-weight: 700; }
+.k-STATUT { color: #ffd500; } .k-PANNE { color: #ff5a4f; } .k-RESOLU { color: #3be07a; } .k-INFO, .k-MODIF { color: #4fd8ff; }
+.k-PROJECTEUR, .k-CATALOGUE { color: #ff7ae0; } .k-COMPTE { color: #ffa94d; } .k-CONNEXION { color: #aaa; } .k-JOURNAL { color: #fff; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #888; margin-right: 4px; } .dot.on { background: #2fd36b; box-shadow: 0 0 6px #2fd36b; }

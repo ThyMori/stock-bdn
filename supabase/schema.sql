@@ -189,6 +189,9 @@ begin
   if n = 0 then return; end if;                       -- déjà appliqué
   select status, status_at into prev, cur_at from items where id = p_item;
   if not found then raise exception 'Projecteur % introuvable', p_item using errcode = 'P0002'; end if;
+  perform log_event('STATUT', format('#%s : %s → %s%s%s', p_item, status_label(prev), status_label(p_status),
+    case when nullif(trim(p_note), '') is not null then ' — ' || trim(p_note) else '' end,
+    case when p_at < cur_at then ' (ignoré : plus ancien que le dernier changement)' else '' end));
   if p_at >= cur_at then                              -- le plus récent gagne
     update items set status = p_status, status_at = p_at, updated_at = now(),
            last_service = case when prev = 'sav' and p_status = 'dispo' then p_at::date else last_service end
@@ -209,6 +212,7 @@ begin
   if n > 0 then
     insert into item_events (id, item_id, kind, note, created_by, created_by_label, at)
     values (gen_random_uuid(), p_item, 'fault', p_description, auth.uid(), lbl, p_at);
+    perform log_event('PANNE', format('#%s : panne déclarée%s', p_item, coalesce(' — ' || nullif(trim(p_description), ''), '')));
   end if;
 end $$;
 
@@ -226,12 +230,13 @@ begin
     insert into item_events (id, item_id, kind, note, created_by, created_by_label, at)
     values (p_event, it, 'fault_resolved', p_resolution, auth.uid(), lbl, p_at)
     on conflict (id) do nothing;
+    perform log_event('RESOLU', format('#%s : panne résolue%s', it, coalesce(' — ' || nullif(trim(p_resolution), ''), '')));
   end if;
 end $$;
 
 create or replace function add_fault_note(p_id uuid, p_fault uuid, p_note text, p_at timestamptz)
 returns void language plpgsql security definer set search_path = public as $$
-declare lbl text;
+declare lbl text; n int; it int;
 begin
   if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   if nullif(trim(p_note), '') is null then raise exception 'Texte vide' using errcode = '22023'; end if;
@@ -240,6 +245,11 @@ begin
   insert into fault_log (id, fault_id, kind, text, by, by_label, at)
   values (p_id, p_fault, 'note', trim(p_note), auth.uid(), lbl, p_at)
   on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then
+    select item_id into it from faults where id = p_fault;
+    perform log_event('INFO', format('#%s : info ajoutée à la panne — %s', it, trim(p_note)));
+  end if;
 end $$;
 
 -- Modifier la description : le régisseur et au-dessus pour toutes les pannes, un technicien pour celles qu'il a déclarées.
@@ -257,7 +267,106 @@ begin
   values (p_id, p_fault, 'edit', trim(p_description), f.description, auth.uid(), lbl, p_at)
   on conflict (id) do nothing;
   get diagnostics n = row_count;
-  if n > 0 then update faults set description = trim(p_description) where id = p_fault; end if;
+  if n > 0 then
+    update faults set description = trim(p_description) where id = p_fault;
+    perform log_event('MODIF', format('#%s : description de panne modifiée — « %s » → « %s »', f.item_id, coalesce(f.description, ''), trim(p_description)));
+  end if;
+end $$;
+
+
+-- ---------- Journal d'activité (réservé aux administrateurs) -----------------
+create table if not exists app_log (
+  id          bigint generated always as identity primary key,
+  at          timestamptz not null default now(),
+  actor       uuid,
+  actor_label text,
+  kind        text not null,
+  message     text not null
+);
+create index if not exists app_log_at_idx on app_log(at);
+
+create or replace function status_label(s item_status) returns text language sql immutable as $$
+  select case s when 'dispo' then 'dispo' when 'sav' then 'SAV' when 'en_pret' then 'en prêt' else s::text end $$;
+
+-- Écrit une ligne (appelée par les fonctions et déclencheurs ci-dessous, jamais directement par un utilisateur).
+create or replace function log_event(p_kind text, p_msg text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into app_log (actor, actor_label, kind, message)
+  values (auth.uid(), (select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = auth.uid()), p_kind, p_msg);
+end $$;
+revoke all on function log_event(text, text) from public;
+
+-- Connexion : appelée par l'appli juste après l'identification.
+create or replace function log_login() returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not has_role('technicien') then return; end if;
+  perform log_event('CONNEXION', 'connexion à l''application');
+end $$;
+revoke all on function log_login() from public;
+grant execute on function log_login() to authenticated;
+
+-- Suppression de lignes du journal (la suppression laisse elle-même une trace).
+create or replace function delete_log_lines(p_ids bigint[]) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not has_role('admin') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  delete from app_log where id = any(p_ids);
+  get diagnostics n = row_count;
+  if n > 0 then perform log_event('JOURNAL', format('%s ligne(s) du journal supprimée(s)', n)); end if;
+  return n;
+end $$;
+revoke all on function delete_log_lines(bigint[]) from public;
+grant execute on function delete_log_lines(bigint[]) to authenticated;
+
+-- Projecteurs : création, suppression, modification de fiche (les changements d'état passent par apply_status).
+create or replace function log_items() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return null; end if;   -- import / maintenance depuis l'éditeur SQL : pas de bruit
+  if tg_op = 'INSERT' then perform log_event('PROJECTEUR', format('#%s : projecteur créé (modèle %s)', new.id, new.model_id));
+  elsif tg_op = 'DELETE' then perform log_event('PROJECTEUR', format('#%s : projecteur supprimé', old.id));
+  elsif (new.model_id, new.lamp_id, new.note, new.last_service) is distinct from (old.model_id, old.lamp_id, old.note, old.last_service) then
+    perform log_event('PROJECTEUR', format('#%s : fiche modifiée', new.id));
+  end if;
+  return null;
+end $$;
+drop trigger if exists items_log on items;
+create trigger items_log after insert or update or delete on items for each row execute function log_items();
+
+-- Catalogue (familles, types, douilles, porte-filtres, lampes, modèles)
+create or replace function log_catalogue() returns trigger language plpgsql security definer set search_path = public as $$
+declare r jsonb := to_jsonb(coalesce(new, old));
+begin
+  if auth.uid() is null then return null; end if;
+  perform log_event('CATALOGUE', format('%s « %s » : %s', tg_table_name, coalesce(r->>'name', r->>'id'),
+    case tg_op when 'INSERT' then 'ajouté' when 'DELETE' then 'supprimé' else 'modifié' end));
+  return null;
+end $$;
+do $$ declare t text; begin
+  foreach t in array array['families','item_types','sockets','filter_sizes','lamps','models'] loop
+    execute format('drop trigger if exists %I on %I', t || '_log', t);
+    execute format('create trigger %I after insert or update or delete on %I for each row execute function log_catalogue()', t || '_log', t);
+  end loop;
+end $$;
+
+-- Comptes : changements faits directement en base par un admin connecté (ceux de la fonction admin-users sont journalisés par elle).
+create or replace function log_profiles() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return null; end if;
+  if new.role is distinct from old.role then perform log_event('COMPTE', format('%s : rôle %s → %s', new.email, old.role, new.role)); end if;
+  if new.active is distinct from old.active then perform log_event('COMPTE', format('%s : accès %s', new.email, case when new.active then 'rétabli' else 'révoqué' end)); end if;
+  return null;
+end $$;
+drop trigger if exists profiles_log on profiles;
+create trigger profiles_log after update on profiles for each row execute function log_profiles();
+
+-- Temps réel : Supabase diffuse les nouvelles lignes aux administrateurs connectés (si la publication existe).
+do $$ begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    begin alter publication supabase_realtime add table app_log;
+    exception when duplicate_object then null; end;
+  end if;
 end $$;
 
 -- ---------- Sécurité (RLS) --------------------------------------------
@@ -272,6 +381,7 @@ alter table items        enable row level security;
 alter table faults       enable row level security;
 alter table item_events  enable row level security;
 alter table fault_log    enable row level security;
+alter table app_log      enable row level security;
 
 -- profils : chacun voit le sien ; régisseurs généraux et admins voient tous les comptes ; seul l'admin modifie directement
 drop policy if exists profiles_select on profiles;
@@ -309,6 +419,8 @@ drop policy if exists faults_select on faults;
 create policy faults_select on faults for select using (has_role('technicien'));
 drop policy if exists fault_log_select on fault_log;
 create policy fault_log_select on fault_log for select using (has_role('technicien'));
+drop policy if exists app_log_select on app_log;
+create policy app_log_select on app_log for select using (has_role('admin'));
 drop policy if exists faults_admin on faults;
 create policy faults_admin on faults for all using (has_role('admin')) with check (has_role('admin'));
 

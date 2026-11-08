@@ -40,6 +40,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/items"><div class="grow"><div class="t">Ajouter des projecteurs</div><div class="s">Nouvelles unités dans le parc</div></div>›</a>
         <a class="item" href="#/admin/users"><div class="grow"><div class="t">Utilisateurs et droits</div></div>›</a>` : ''}
       ${can('admin') ? `
+        <a class="item" href="#/log"><div class="grow"><div class="t">Journal</div><div class="s">Activité en temps réel</div></div>›</a>
         <a class="item" href="#/admin/models"><div class="grow"><div class="t">Modèles</div><div class="s">Catalogue des références</div></div>›</a>
         <a class="item" href="#/admin/lamps"><div class="grow"><div class="t">Lampes</div><div class="s">Références et puissances</div></div>›</a>
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}

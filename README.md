@@ -16,6 +16,7 @@ PWA de suivi du parc de projecteurs (remplace l'appli AppSheet). Hors ligne, sca
 | Changer l'état d'un projecteur (prêt / SAV / OK) | | | ✅ | ✅ |
 | Créer des projecteurs, imprimer les étiquettes QR | | | ✅ | ✅ |
 | Inviter des utilisateurs (prénom, nom, e-mail, rôle), changer leur nom et leur rôle, révoquer / rétablir leur accès | | | ✅ (techniciens et régisseurs uniquement) | ✅ (tous) |
+| Consulter / purger le journal d'activité (Plus → Journal) | | | | ✅ |
 | Modifier / supprimer un projecteur, éditer modèles, lampes, référentiels | | | | ✅ |
 
 Les droits sont appliqués **par la base** (RLS + fonctions SQL), pas seulement par l'interface. Un accès révoqué est coupé au niveau de la base.
@@ -83,3 +84,8 @@ Les identifiants AppSheet sont conservés. Le projecteur d'essai (n° 0, `IsTest
 
 ## Sauvegarde
 Plan gratuit Supabase : pas de sauvegarde automatique et mise en pause après ~1 semaine sans activité. Pour un usage pro : plan Pro (sauvegardes quotidiennes) ou export régulier (`pg_dump` / Table Editor → Export CSV).
+
+## Journal d'activité et pastille « update en cours »
+
+- **Journal** (admin) : Plus → Journal. Fenêtre type terminal, en direct (Supabase Realtime, repli toutes les 10 s) : changements d'état, pannes (déclarée, info, modification, résolue), projecteurs créés/modifiés/supprimés, catalogue, comptes (invitation, rôle, accès, nom), connexions. Les lignes se sélectionnent et se suppriment ; la suppression laisse une ligne « JOURNAL ». Les imports faits depuis l'éditeur SQL ne génèrent pas de lignes.
+- **`src/flags.ts`** : `UPDATE_PENDING = true` affiche une pastille rouge « update en cours » dans l'appli pendant qu'une mise à jour Supabase est à faire. Repasser à `false` une fois les requêtes exécutées.

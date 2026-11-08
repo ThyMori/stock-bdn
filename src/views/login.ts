@@ -18,7 +18,7 @@ export function showLogin(root: HTMLElement, onDone: () => void) {
     const fd = new FormData(form);
     const { error } = await supabase.auth.signInWithPassword({ email: String(fd.get('email')).trim(), password: String(fd.get('pw')) });
     if (error) err.textContent = /banned/i.test(error.message) ? 'Ton accès à l\'application a été révoqué. Contacte un administrateur.' : /invalid/i.test(error.message) ? 'E-mail ou mot de passe incorrect.' : error.message;
-    else onDone();
+    else { void supabase.rpc('log_login'); onDone(); }
   });
   root.querySelector('#forgot')!.addEventListener('click', async () => {
     const email = String(new FormData(form).get('email') ?? '').trim();

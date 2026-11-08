@@ -20,6 +20,7 @@ function fake(opts: { targetRole?: string; callerRole?: string; callerActive?: b
       const chain = {
         select: () => chain, order: () => Promise.resolve({ data: [{ id: 'A', email: 'a@x', role: 'admin', active: true }, { id: 'B', email: 'b@x', role: 'lecteur', active: true }], error: null }),
         update: (p: unknown) => { mode = 'update'; patch = p; return chain; },
+        insert: async (row: unknown) => { calls.push(['log:' + table, row]); return { error: null }; },
         eq: (_c: string, v: string) => { q.id = v; return chain; },
         maybeSingle: async () => (q.id === 'ME' ? { data: { role: opts.callerRole ?? 'admin', active: opts.callerActive ?? true } } : { data: opts.targetRole === 'none' ? null : { role: opts.targetRole ?? 'technicien' } }),
         then: (res: (v: unknown) => void) => {
@@ -63,7 +64,7 @@ await t('invitation : e-mail invalide, rôle invalide, compte existant', async (
 await t('révocation : droits coupés dans la base PUIS connexion bloquée', async () => {
   const f = fake(); const r = await out(await call({ action: 'set_access', id: 'B', active: false }, f));
   assert.equal(r.status, 200);
-  assert.deepEqual(f.calls, [['update:profiles', ['B', { active: false }]], ['ban', ['B', { ban_duration: '876000h' }]]]);
+  assert.deepEqual(f.calls.filter(([k]) => !k.startsWith('log:')), [['update:profiles', ['B', { active: false }]], ['ban', ['B', { ban_duration: '876000h' }]]]);
 });
 await t('rétablissement : accès rendu et blocage levé', async () => {
   const f = fake(); await call({ action: 'set_access', id: 'B', active: true }, f);
@@ -129,6 +130,18 @@ await t('prénom et nom : soi-même ou rang inférieur, jamais un rang égal ou 
   assert.equal((await out(await call({ action: 'set_name', id: 'X', first_name: 'A', last_name: 'B' }, fake({ callerRole: 'regisseur_general', targetRole: 'regisseur' })))).status, 200);
   assert.equal((await out(await call({ action: 'set_name', id: 'X', first_name: 'A', last_name: 'B' }, fake({ callerRole: 'regisseur_general', targetRole: 'admin' })))).status, 403);
   assert.equal((await out(await call({ action: 'set_name', id: 'X', first_name: '', last_name: 'B' }, fake()))).status, 400);
+});
+await t('journal : chaque action sur un compte laisse une ligne signée', async () => {
+  const f = fake({ callerRole: 'admin', targetRole: 'technicien' });
+  await call({ action: 'set_role', id: 'X', role: 'regisseur' }, f);
+  await call({ action: 'set_access', id: 'X', active: false }, f);
+  const logs = f.calls.filter(([k]) => k === 'log:app_log').map(([, r]) => r as { actor: string; kind: string; message: string });
+  assert.equal(logs.length, 2);
+  assert.ok(logs.every((l) => l.actor === 'ME' && l.kind === 'COMPTE'));
+  assert.match(logs[0].message, /rôle technicien → regisseur/); assert.match(logs[1].message, /accès révoqué/);
+  const refused = fake({ callerRole: 'regisseur_general', targetRole: 'admin' });
+  await call({ action: 'set_access', id: 'X', active: false }, refused);
+  assert.equal(refused.calls.length, 0, 'action refusée = rien dans le journal');
 });
 await t('liste : profils + statut d\'activation + dernière connexion', async () => {
   const r = await out(await call({ action: 'list' }, fake()));

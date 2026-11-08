@@ -25,6 +25,7 @@ export interface Fault {
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;
 }
 /** Info ajoutée ou description modifiée sur une panne (la déclaration et la résolution sont dans Fault). */
+export interface AppLog { id: number; at: string; actor_label: string | null; kind: string; message: string }
 export interface FaultLog {
   id: string; fault_id: string; kind: 'note' | 'edit'; text: string; old_text: string | null;
   by_label: string | null; at: string; pending?: boolean;

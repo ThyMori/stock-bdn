@@ -10,6 +10,8 @@ import { itemView } from './views/item';
 import { scanView } from './views/scan';
 import { faultsView } from './views/faults';
 import { faultView } from './views/fault';
+import { logView } from './views/log';
+import { UPDATE_PENDING } from './flags';
 import { moreView } from './views/more';
 import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
@@ -25,7 +27,7 @@ const app = document.getElementById('app')!;
 
 const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   '': { f: listView, tab: 'list' }, item: { f: itemView, tab: 'list' }, scan: { f: scanView, tab: 'scan' },
-  faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, more: { f: moreView, tab: 'more' },
+  faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, log: { f: logView, tab: 'more', min: 'admin' }, more: { f: moreView, tab: 'more' },
   labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
 
@@ -41,7 +43,7 @@ const tabLink = (key: keyof typeof ICON, href: string, label: string, cur: strin
 let current: { view: View; root: HTMLElement; cleanup?: void | (() => void) } | null = null;
 
 function shell() {
-  app.innerHTML = `<div id="status"></div><main id="view"></main><nav class="tabs"><div class="in" id="tabs"></div></nav>`;
+  app.innerHTML = `${UPDATE_PENDING ? '<div class="update-note" role="status">update en cours</div>' : ''}<div id="status"></div><main id="view"></main><nav class="tabs"><div class="in" id="tabs"></div></nav>`;
 }
 
 function paintStatus() {

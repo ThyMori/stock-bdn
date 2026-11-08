@@ -51,12 +51,19 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
   if (whoErr || !caller) return json(401, { error: 'Session invalide, reconnecte-toi' });
 
   // 2) est-il régisseur général ou administrateur, et actif ?
-  const { data: me } = await admin.from('profiles').select('role,active').eq('id', caller.id).maybeSingle();
+  const { data: me } = await admin.from('profiles').select('role,active,first_name,last_name,email').eq('id', caller.id).maybeSingle();
   if (!me || !me.active || (RANK[me.role] ?? 0) < RANK.regisseur_general) return json(403, { error: 'Réservé aux régisseurs généraux et aux administrateurs' });
   const myRole: string = me.role;
+  let targetEmail = '';
   const targetRole = async (id: string): Promise<string | null> => {
-    const { data } = await admin.from('profiles').select('role').eq('id', id).maybeSingle();
+    const { data } = await admin.from('profiles').select('role,email').eq('id', id).maybeSingle();
+    targetEmail = data?.email ?? id;
     return data?.role ?? null;
+  };
+  // Journal d'activité (consultable par les admins) : au mieux, un échec n'interrompt jamais l'action.
+  const actorLabel = [me.first_name, me.last_name].filter(Boolean).join(' ') || me.email || 'inconnu';
+  const log = async (message: string) => {
+    try { await admin.from('app_log').insert({ actor: caller.id, actor_label: actorLabel, kind: 'COMPTE', message }); } catch { /* ignoré */ }
   };
 
   let body: Record<string, unknown>;
@@ -91,6 +98,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       // le profil est créé par un déclencheur (rôle « technicien ») : on applique le rôle choisi
       const { error: e2 } = await admin.from('profiles').update({ role, first_name: clean(body.first_name), last_name: clean(body.last_name) }).eq('id', data.user.id);
       if (e2) return json(500, { error: 'Invitation envoyée mais rôle non appliqué : ' + e2.message });
+      await log(`${email} : invitation envoyée (${role})`);
       return json(200, { ok: true, id: data.user.id });
     }
 
@@ -104,6 +112,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       if (u.email_confirmed_at ?? u.confirmed_at) return json(400, { error: 'Ce compte est déjà activé : utilise « Mot de passe oublié » sur l\'écran de connexion.' });
       const { error: e2 } = await admin.auth.admin.inviteUserByEmail(u.email, { redirectTo });
       if (e2) return json(400, { error: e2.message });
+      await log(`${u.email} : invitation renvoyée`);
       return json(200, { ok: true });
     }
 
@@ -119,6 +128,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       const { data: upd, error } = await admin.from('profiles').update({ first_name, last_name }).eq('id', id).select('id');
       if (error) return json(400, { error: error.message });
       if (!upd?.length) return json(404, { error: 'Compte introuvable' });
+      await log(`${id === caller.id ? actorLabel : targetEmail || id} : nom → ${first_name} ${last_name}`);
       return json(200, { ok: true });
     }
 
@@ -132,6 +142,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       const { data: upd, error } = await admin.from('profiles').update({ role }).eq('id', id).select('id');
       if (error) return json(400, { error: error.message });
       if (!upd?.length) return json(404, { error: 'Compte introuvable' });
+      await log(`${targetEmail || id} : rôle ${tr} → ${role}`);
       return json(200, { ok: true });
     }
 
@@ -148,6 +159,7 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       // 2) interdiction (ou autorisation) de se reconnecter
       const { error: e2 } = await admin.auth.admin.updateUserById(id, { ban_duration: body.active ? 'none' : BAN_FOREVER });
       if (e2) return json(500, { error: 'Droits modifiés, mais le blocage de connexion a échoué : ' + e2.message });
+      await log(`${targetEmail || id} : accès ${body.active ? 'rétabli' : 'révoqué'}`);
       return json(200, { ok: true });
     }
 
