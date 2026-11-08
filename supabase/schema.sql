@@ -547,6 +547,55 @@ begin
   if found then perform log_event('SPECTACLE', format('« %s » supprimé', nm)); end if;
 end $$;
 
+-- Gélatines : plusieurs gels possibles par projecteur d'un spectacle (le format vient du porte-filtre du modèle).
+create table if not exists show_gels (
+  id             uuid primary key default gen_random_uuid(),
+  show_id        uuid not null,
+  item_id        int  not null,
+  ref            text not null check (length(trim(ref)) between 1 and 60),
+  color          text not null,
+  added_by_label text,
+  added_at       timestamptz not null default now(),
+  foreign key (show_id, item_id) references show_items(show_id, item_id) on delete cascade
+);
+create index if not exists show_gels_show_idx on show_gels(show_id);
+alter table show_gels enable row level security;
+drop policy if exists show_gels_select on show_gels;
+create policy show_gels_select on show_gels for select using (has_role('technicien'));
+
+create or replace function gel_colors() returns text[] language sql immutable as $$
+  select array['Rouge','Orange','Ambre','Jaune','Vert','Bleu','Violet','Rose','Correction (CTO/CTB)','Diffusion','Neutre (ND)','Autre'];
+$$;
+
+-- Ajoute le même gel à un ou plusieurs projecteurs d'un spectacle (ceux qui n'y sont pas assignés sont ignorés).
+create or replace function add_gels(p_show uuid, p_items int[], p_ref text, p_color text) returns int
+language plpgsql security definer set search_path = public as $$
+declare lbl text; n int; nm text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  if nullif(trim(p_ref), '') is null or length(trim(p_ref)) > 60 then raise exception 'Référence du gel obligatoire (60 caractères maximum)' using errcode = '22023'; end if;
+  if not (p_color = any (gel_colors())) then raise exception 'Couleur de gel inconnue' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_gels (show_id, item_id, ref, color, added_by_label)
+  select p_show, si.item_id, trim(p_ref), p_color, lbl from show_items si where si.show_id = p_show and si.item_id = any (p_items);
+  get diagnostics n = row_count;
+  select name into nm from shows where id = p_show;
+  if n > 0 then perform log_event('SPECTACLE', format('« %s » : gel %s (%s) ajouté sur %s projecteur(s) (%s)', nm, trim(p_ref), p_color, n, array_to_string(p_items, ', '))); end if;
+  return n;
+end $$;
+
+create or replace function delete_gel(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare g show_gels; nm text;
+begin
+  select * into g from show_gels where id = p_id;
+  if not found then return; end if;
+  if not can_act_show(g.show_id) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  delete from show_gels where id = p_id;
+  select name into nm from shows where id = g.show_id;
+  perform log_event('SPECTACLE', format('« %s » : gel %s retiré du projecteur %s', nm, g.ref, g.item_id));
+end $$;
+
 -- Mur du spectacle : messages signés, modifiables / effaçables par leur auteur.
 create table if not exists show_posts (
   id           uuid primary key,
@@ -855,6 +904,8 @@ revoke all on function delete_show(uuid) from public;
 revoke all on function assign_items(uuid,int[],text) from public;
 revoke all on function unassign_items(uuid,int[]) from public;
 revoke all on function can_act_show(uuid) from public;
+revoke all on function add_gels(uuid,int[],text,text) from public;
+revoke all on function delete_gel(uuid) from public;
 revoke all on function post_show_message(uuid,uuid,text) from public;
 revoke all on function edit_show_message(uuid,text) from public;
 revoke all on function delete_show_message(uuid) from public;
@@ -875,6 +926,8 @@ grant execute on function delete_show(uuid) to authenticated;
 grant execute on function assign_items(uuid,int[],text) to authenticated;
 grant execute on function unassign_items(uuid,int[]) to authenticated;
 grant execute on function can_act_show(uuid) to authenticated;
+grant execute on function add_gels(uuid,int[],text,text) to authenticated;
+grant execute on function delete_gel(uuid) to authenticated;
 grant execute on function post_show_message(uuid,uuid,text) to authenticated;
 grant execute on function edit_show_message(uuid,text) to authenticated;
 grant execute on function delete_show_message(uuid) to authenticated;

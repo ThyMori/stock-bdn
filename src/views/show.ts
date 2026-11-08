@@ -3,7 +3,7 @@ import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
-import { fullName, showColor, SHOW_COLORS } from '../types';
+import { fullName, GEL_COLORS, gelCss, showColor, SHOW_COLORS } from '../types';
 import { esc, fmtDateTime, parseScan, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
@@ -21,6 +21,7 @@ export const showView: ViewFactory = ([id]) => {
   let type = '', q = '', lamp = '', msg = '';
   let stopScan: (() => void) | null = null;
   let composer: HTMLElement | null = null;
+  let gref = '', gcol = '';
 
   /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
   const makeComposer = (): HTMLElement => {
@@ -63,12 +64,16 @@ export const showView: ViewFactory = ([id]) => {
     const canAssign = canActShow(id), canEdit = can('regisseur_general');
     const lampName = (lid: string | null) => d.lamps.find((l) => l.id === lid)?.name;
 
+    const gelChips = (itemId: number) => {
+      const gs = d.showGels.filter((g) => g.show_id === id && g.item_id === itemId).sort((a, b) => a.ref.localeCompare(b.ref));
+      return gs.length ? `<div class="gels">${gs.map((g) => `<span class="gel"><i style="background:${gelCss(g.color)}"></i>${esc(g.ref)}${canAssign ? `<button class="gx" data-act="gel-del" data-v="${g.id}" aria-label="Retirer le gel ${esc(g.ref)}">×</button>` : ''}</span>`).join('')}</div>` : '';
+    };
     const assigned = mine.map((s) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
       return `<div class="item"><a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
-        <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
-        ${canAssign ? `<button class="btn" data-act="remove" data-v="${s.item_id}" aria-label="Retirer le projecteur ${s.item_id}">Retirer</button>` : ''}</div>`;
+        <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
+        ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button><button class="btn" data-act="remove" data-v="${s.item_id}" aria-label="Retirer le projecteur ${s.item_id}">Retirer</button></div>` : ''}</div>`;
     }).join('');
 
     let picker = '';
@@ -93,6 +98,8 @@ export const showView: ViewFactory = ([id]) => {
           <div class="list pick-list">${rows.map(({ i, d: ds }) => `<label class="item"><input type="checkbox" data-act="toggle" data-v="${i.id}" ${sel.has(i.id) ? 'checked' : ''}>
             <div class="num">${i.id}</div><div class="grow"><div class="t">${esc(ds.model?.name)}</div><div class="s">${esc(ds.type?.name)}</div></div>
             <span class="badge ${i.eff ?? i.status}">${esc({ dispo: 'Disponible', utilise: 'Utilisé', sav: 'SAV', en_pret: 'En prêt' }[i.eff ?? i.status])}</span></label>`).join('') || '<div class="empty">Aucun projecteur</div>'}</div>`}
+        <div class="gelpick"><label class="f">Gel (facultatif, appliqué à tout le lot)<input id="gref" placeholder="Réf., ex. LEE 201" value="${esc(gref)}" autocomplete="off"></label>
+          <label class="f">Couleur du gel<select id="gcol"><option value="">—</option>${GEL_COLORS.map(([n]) => `<option ${n === gcol ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label></div>
         ${needLamp ? `<label class="f">Lampe requise pour les PAR<select id="lamp"><option value="">— choisir —</option>${lampOptions().map((l) => `<option value="${l.id}" ${l.id === lamp ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>` : ''}
         <div id="aerr" class="sub warn" role="alert">${esc(mode === 'pick' ? msg : '')}</div>
         <div class="row"><button class="btn primary grow" data-act="assign" ${staged.length ? '' : 'disabled'}>Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}</button>
@@ -200,9 +207,10 @@ export const showView: ViewFactory = ([id]) => {
       paint(root);
       root.addEventListener('input', (e) => {
         const t = e.target as HTMLInputElement;
+        if (t.id === 'gref') gref = t.value;
         if (t.id === 'q') { q = t.value; const pos = t.selectionStart; paint(root); const n = root.querySelector<HTMLInputElement>('#q'); n?.focus(); n?.setSelectionRange(pos, pos); }
       });
-      root.addEventListener('change', (e) => { const t = e.target as HTMLSelectElement; if (t.id === 'lamp') lamp = t.value; });
+      root.addEventListener('change', (e) => { const t = e.target as HTMLSelectElement; if (t.id === 'lamp') lamp = t.value; if (t.id === 'gcol') gcol = t.value; });
       root.addEventListener('submit', (e) => {
         if ((e.target as HTMLElement).id !== 'manual') return;
         e.preventDefault();
@@ -228,13 +236,33 @@ export const showView: ViewFactory = ([id]) => {
         }
         else if (act === 'assign') {
           const items = [...sel];
+          if ((gref.trim() && !gcol) || (!gref.trim() && gcol)) { msg = 'Gel : renseigne la référence ET la couleur (ou aucun des deux).'; const a = root.querySelector('#aerr'); if (a) a.textContent = msg; return; }
           if (items.some(isPar) && !lamp) { msg = 'Choisis la lampe requise pour les PAR.'; const a = root.querySelector('#aerr'); if (a) a.textContent = msg; return; }
           const r = await rpcCall('assign_items', { p_show: id, p_items: items, p_lamp: items.some(isPar) ? lamp : null });
           if (r.error) { msg = r.error; const a = root.querySelector('#aerr'); if (a) a.textContent = msg; return; }
           const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
           const skipped = res?.skipped ?? [];
-          sel.clear(); lamp = ''; mode = 'view'; paint(root);
-          err(`${res?.added.length ?? 0} assigné(s).` + (skipped.length ? ' Refusés : ' + skipped.map((s) => `n° ${s.item} (${s.reason})`).join(' ; ') : ''));
+          let gelNote = '';
+          if (gref.trim() && gcol && res?.added.length) {
+            const g = await rpcCall('add_gels', { p_show: id, p_items: res.added, p_ref: gref.trim(), p_color: gcol });
+            gelNote = g.error ? ` Gel non ajouté : ${g.error}` : ` Gel ${gref.trim()} ajouté.`;
+          }
+          sel.clear(); lamp = ''; gref = ''; gcol = ''; mode = 'view'; paint(root);
+          err(`${res?.added.length ?? 0} assigné(s).` + gelNote + (skipped.length ? ' Refusés : ' + skipped.map((s) => `n° ${s.item} (${s.reason})`).join(' ; ') : ''));
+        }
+        else if (act === 'gel') {
+          const used = [...new Set(view().showGels.filter((g) => g.show_id === id).map((g) => g.ref))].sort();
+          const f = await openForm(`Gel sur le projecteur ${v}`, [
+            { name: 'ref', label: 'Référence du gel', required: true, hint: used.length ? `Déjà utilisés ici : ${used.join(', ')}` : 'Ex. LEE 201, Rosco R80' },
+            { name: 'color', label: 'Couleur', type: 'select', options: GEL_COLORS.map(([n]): [string, string] => [n, n]), required: true }
+          ], { submit: 'Ajouter le gel' });
+          if (!f) return;
+          const r = await rpcCall('add_gels', { p_show: id, p_items: [Number(v)], p_ref: f.ref.trim(), p_color: f.color });
+          if (r.error) err(r.error);
+        }
+        else if (act === 'gel-del') {
+          const r = await rpcCall('delete_gel', { p_id: v });
+          if (r.error) err(r.error);
         }
         else if (act === 'remove') {
           if (!window.confirm(`Retirer le projecteur n° ${v} de ce spectacle ?`)) return;

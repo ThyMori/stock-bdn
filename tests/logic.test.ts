@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
-import { prepRows } from '../src/prepPdf';
+import { prepRows, gelGroups } from '../src/prepPdf';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -172,5 +172,16 @@ t('liste de prépa : tri par type, lampe requise pour les PAR', () => {
     showItems: [{ show_id: 's', item_id: 5, lamp_id: 'l62' }, { show_id: 's', item_id: 2, lamp_id: null }, { show_id: 'autre', item_id: 5, lamp_id: null }] } as unknown as Data;
   const r = prepRows(d, 's');
   assert.deepEqual(r.map((x) => [x.type, x.id, x.lamp, x.current, x.sav]), [['découpe', 2, '', '', true], ['PAR', 5, 'CP62', 'CP60', false]]);
+});
+t('gélatines : groupées par couleur puis format puis référence', () => {
+  const d = { ...EMPTY_DATA, items: [{ id: 1, model_id: 'm' }, { id: 2, model_id: 'm' }], models: [{ id: 'm', name: 'X', type_id: null }],
+    showGels: [
+      { id: 'a', show_id: 's', item_id: 2, ref: 'LEE 201', color: 'Bleu' },
+      { id: 'b', show_id: 's', item_id: 1, ref: 'lee 201', color: 'Bleu' },
+      { id: 'c', show_id: 's', item_id: 1, ref: 'R26', color: 'Rouge' },
+      { id: 'd', show_id: 'autre', item_id: 1, ref: 'R26', color: 'Rouge' }] } as unknown as Data;
+  const g = gelGroups(d, 's');
+  assert.deepEqual(g.map((x) => [x.color, x.ref, x.qty, x.items]), [['Rouge', 'R26', 1, [1]], ['Bleu', 'LEE 201', 2, [1, 2]]]);
+  assert.equal(g[0].format, 'Format inconnu');
 });
 console.log(`\n${n} tests OK`);

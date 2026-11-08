@@ -109,6 +109,9 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Gélatines (v1.7)
+Chaque projecteur d'un spectacle peut recevoir **plusieurs gels** (référence libre + couleur dans une liste fixe). On les pose à l'assignation (champs facultatifs appliqués à tout le lot) ou avec le bouton **Gel** de la ligne ; la croix du badge le retire. Le format est déduit de la taille du porte-filtre du modèle. Droits : les mêmes que pour assigner (régisseur assigné, RG+). Les gels disparaissent quand le projecteur quitte le spectacle. Le PDF de prépa les liste à la fin, par couleur puis format (RPC `add_gels` / `delete_gel`, table `show_gels`).
+
 ### Liste de prépa en PDF (v1.6)
 
 Sur la fiche d'un spectacle, **« Générer la liste de prépa »** télécharge un PDF A4 : titre, dates, régie, récapitulatif par type, puis les projecteurs **classés par type** (n°, modèle, case à cocher « préparé »). Pour les **PAR**, la lampe requise figure en gras, avec « montée : CPxx » si la lampe actuellement montée est différente, et « EN SAV » le cas échéant. Le PDF est fabriqué dans l'appli (aucun envoi de données) ; la bibliothèque n'est chargée qu'au premier clic.
