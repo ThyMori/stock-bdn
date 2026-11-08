@@ -286,3 +286,5 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .gpost .post { margin: 0; }
 nav.tabs .in { padding: 6px 4px; gap: 2px; }
 nav.tabs a { font-size: .68rem; }
+.btn .ico { width: 20px; height: 20px; margin-right: 8px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; }
+[data-act="prep"] { gap: 0; border-width: 3px; }

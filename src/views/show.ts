@@ -103,7 +103,7 @@ export const showView: ViewFactory = ([id]) => {
     el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
-        <div class="row wrap"><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}>Générer la liste de prépa</button></div>
+        <div class="row wrap"><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button></div>
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${wall}
