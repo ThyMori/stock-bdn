@@ -261,11 +261,26 @@ begin
 end $$;
 
 create or replace function delete_immo(p_id uuid) returns void language plpgsql security definer set search_path = public as $$
-declare it int;
+declare m immos; lbl text; st item_status; want item_status;
 begin
   if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
-  delete from immos where id = p_id returning item_id into it;
-  if found then perform log_event('AGENDA', format('#%s : période supprimée', it)); end if;
+  delete from immos where id = p_id returning * into m;
+  if not found then return; end if;
+  perform log_event('AGENDA', format('#%s : période supprimée', m.item_id));
+  -- Supprimer une période en cours remet le projecteur disponible (sans toucher à la date de dernier SAV :
+  -- la période est considérée comme n'ayant jamais eu lieu), sauf s'il reste une autre période en cours.
+  if m.closed_date is null and m.start_date <= (now() at time zone 'Europe/Paris')::date
+     and not exists (select 1 from immos o where o.item_id = m.item_id and o.closed_date is null and o.start_date <= (now() at time zone 'Europe/Paris')::date) then
+    select status into st from items where id = m.item_id;
+    want := (case m.kind when 'pret' then 'en_pret' else 'sav' end)::item_status;
+    if st = want then
+      select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+      update items set status = 'dispo', status_at = now(), updated_at = now() where id = m.item_id;
+      insert into item_events (id, item_id, kind, status, note, created_by, created_by_label, at)
+      values (gen_random_uuid(), m.item_id, 'status', 'dispo', 'période supprimée', auth.uid(), lbl, now());
+      perform log_event('STATUT', format('#%s : %s → dispo (période supprimée)', m.item_id, status_label(st)));
+    end if;
+  end if;
 end $$;
 
 create or replace function report_fault(p_id uuid, p_item int, p_description text, p_at timestamptz)

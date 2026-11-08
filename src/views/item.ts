@@ -85,7 +85,7 @@ export const itemView: ViewFactory = ([idStr]) => {
     if (!m) return;
     const running = !m.closed_date && m.start_date <= todayStr();
     const what = `${m.kind === 'pret' ? 'prêt' : 'SAV'}${m.who ? ' (' + m.who + ')' : ''} du ${fmtDay(m.start_date)}`;
-    if (!window.confirm(`Supprimer cette période : ${what} ?${running ? '\n\nElle est en cours : l\'état du projecteur ne change pas (utilise les boutons d\'état pour le remettre disponible).' : ''}`)) return;
+    if (!window.confirm(`Supprimer cette période : ${what} ?${running ? '\n\nElle est en cours : le projecteur redeviendra « Disponible ».' : ''}`)) return;
     const err = await immoCall('delete_immo', { p_id: immoId });
     if (err) window.alert('Impossible : ' + err);
     paint(root);
