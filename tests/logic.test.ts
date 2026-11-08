@@ -137,4 +137,10 @@ t('spectacle : identifiants d\'agenda uniques par projecteur', () => {
   const v = applyPending(withShows(today, today), []);
   assert.equal(new Set(v.immos.map((m) => m.id)).size, v.immos.length);
 });
+t('changement de lampe en attente visible immédiatement', () => {
+  const v = applyPending(base, [{ id: 'o1', kind: 'lamp', item: 1, lamp: 'l62', at: new Date().toISOString() }]);
+  assert.equal(v.items[0].lamp_id, 'l62');
+  assert.equal(v.items[0].pending, true);
+  assert.equal(base.items[0].lamp_id === 'l62', false, 'données d\'origine intactes');
+});
 console.log(`\n${n} tests OK`);

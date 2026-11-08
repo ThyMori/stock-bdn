@@ -1,4 +1,4 @@
-import type { Data, Item } from './types';
+import type { Data, Item, Lamp } from './types';
 
 /** Résout les identifiants (modèle, type, lampe…) d'un projecteur en libellés. */
 export function describe(data: Data, item: Item) {
@@ -12,3 +12,11 @@ export function describe(data: Data, item: Item) {
 }
 
 export const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** Le projecteur est-il un PAR ? */
+export const isPar = (data: Data, item: Item): boolean => /^PAR/i.test(describe(data, item).type?.name ?? '');
+/** Lampes proposées en changement rapide, dans l'ordre d'usage : CP62, CP61, CP60, CP95. */
+export function parLamps(data: Data): Lamp[] {
+  const rank = (n: string) => { const i = ['CP62', 'CP61', 'CP60', 'CP95'].findIndex((k) => n.toUpperCase().startsWith(k)); return i < 0 ? 99 : i; };
+  return data.lamps.filter((l) => /^CP\d+/i.test(l.name)).sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+}

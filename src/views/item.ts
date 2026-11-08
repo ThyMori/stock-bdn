@@ -1,10 +1,10 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, canActShow, immoCall, rpcCall, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
+import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
 import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uuid } from '../logic';
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
-import { describe } from '../ref';
+import { describe, isPar, parLamps } from '../ref';
 import { STATUS_LABEL, STATUSES, showColor } from '../types';
 import type { ItemEvent } from '../types';
 import { supabase } from '../supabase';
@@ -44,6 +44,7 @@ export const itemView: ViewFactory = ([idStr]) => {
         const act = el.dataset.act;
         if (act === 'status') void changeStatus(el.dataset.v as 'dispo' | 'sav' | 'en_pret');
         if (act === 'agenda-nav') { offset = el.dataset.v === '0' ? 0 : offset + Number(el.dataset.v); paintAgenda(root); }
+        if (act === 'lamp') setLamp(id, el.dataset.v!);
         if (act === 'show-assign') void assignToShow(root);
         if (act === 'show-remove') { const sid = el.dataset.v!; if (window.confirm('Retirer ce projecteur du spectacle ?')) void rpcCall('unassign_items', { p_show: sid, p_items: [id] }); }
         if (act === 'immo-add') void immoForm(root);
@@ -178,6 +179,7 @@ export const itemView: ViewFactory = ([idStr]) => {
         ${curInfo}
         ${item.pending ? '<div><span class="pending">En attente de synchronisation</span></div>' : ''}
         ${canStatus ? '' : '<div class="sub">Seuls les régisseurs généraux et les administrateurs peuvent changer l\'état.</div>'}
+        ${isPar(data, item) && can('technicien') ? `<div class="lampquick"><div class="sub">Lampe du PAR</div><div class="seg" role="group" aria-label="Changer la lampe">${parLamps(data).map((l) => `<button data-act="lamp" data-v="${esc(l.id)}" aria-pressed="${item.lamp_id === l.id}">${esc(l.name)}</button>`).join('')}</div></div>` : ''}
         <dl class="kv">
           <dt>Lampe</dt><dd>${d.lamp ? esc(d.lamp.name) + (d.lamp.power_w ? ` · ${d.lamp.power_w} W` : '') : '—'}</dd>
           <dt>Douille</dt><dd>${esc(d.socket?.name ?? '—')}</dd>

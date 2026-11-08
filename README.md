@@ -109,6 +109,10 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Changement rapide de lampe (v1.2)
+
+Sur la fiche d'un **PAR**, quatre boutons **CP62 · CP61 · CP60 · CP95** changent la lampe d'un seul geste, dès le rôle technicien. Le changement passe par la file hors ligne (comme les états) et est journalisé (« #12 : lampe CP60 → CP62 »). Sur la fiche d'un spectacle, quand la lampe montée diffère de la lampe requise, le bouton « passer en CPxx » la corrige directement.
+
 ### Couleurs des spectacles (v1.1.1)
 
 Chaque spectacle a une couleur (palette de 10). Elle est attribuée **automatiquement** à la création, de façon que deux spectacles qui se suivent ou se chevauchent n'aient jamais la même. Un régisseur général peut la changer dans « Modifier » ; une couleur déjà prise par le spectacle précédent, suivant ou concomitant est refusée. Si un changement de dates crée un conflit, la couleur est recalculée.

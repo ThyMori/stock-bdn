@@ -71,6 +71,7 @@ export type Op =
   | { id: string; kind: 'fault'; item: number; description: string; at: string }
   | { id: string; kind: 'resolve'; fault: string; resolution?: string; at: string }
   | { id: string; kind: 'fault_note'; fault: string; text: string; at: string }
-  | { id: string; kind: 'fault_edit'; fault: string; description: string; at: string };
+  | { id: string; kind: 'fault_edit'; fault: string; description: string; at: string }
+  | { id: string; kind: 'lamp'; item: number; lamp: string; at: string };
 
 export interface Rejected { op: Op; message: string }

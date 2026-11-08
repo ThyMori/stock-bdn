@@ -1,7 +1,7 @@
 import QrScanner from 'qr-scanner';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, canActShow, rpcCall, view } from '../store';
+import { can, canActShow, rpcCall, setLamp, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, showColor, SHOW_COLORS } from '../types';
 import { esc, parseScan, todayStr } from '../logic';
@@ -45,7 +45,7 @@ export const showView: ViewFactory = ([id]) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
       return `<div class="item"><a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
-        <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${want && cur && cur !== want ? ' <span class="tag late">changer la lampe</span>' : ''}</div></div>
+        <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
         ${canAssign ? `<button class="btn" data-act="remove" data-v="${s.item_id}" aria-label="Retirer le projecteur ${s.item_id}">Retirer</button>` : ''}</div>`;
     }).join('');
 
@@ -194,6 +194,7 @@ export const showView: ViewFactory = ([id]) => {
           const r = await rpcCall('unassign_regisseur', { p_show: id, p_user: v });
           if (r.error) err(r.error);
         }
+        else if (act === 'fix-lamp') setLamp(Number(v), el.dataset.l!);
         else if (act === 'edit') {
           const s = view().shows.find((x) => x.id === id); if (!s) return;
           const f = await openForm('Modifier le spectacle', [

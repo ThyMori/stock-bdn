@@ -630,6 +630,7 @@ begin
   if auth.uid() is null then return null; end if;   -- import / maintenance depuis l'éditeur SQL : pas de bruit
   if tg_op = 'INSERT' then perform log_event('PROJECTEUR', format('#%s : projecteur créé (modèle %s)', new.id, new.model_id));
   elsif tg_op = 'DELETE' then perform log_event('PROJECTEUR', format('#%s : projecteur supprimé', old.id));
+  elsif coalesce(current_setting('app.lamp_change', true), '') = '1' then null;   -- changement de lampe : déjà journalisé par set_lamp
   elsif (new.model_id, new.lamp_id, new.note, new.last_service) is distinct from (old.model_id, old.lamp_id, old.note, old.last_service) then
     perform log_event('PROJECTEUR', format('#%s : fiche modifiée', new.id));
   end if;
@@ -637,6 +638,26 @@ begin
 end $$;
 drop trigger if exists items_log on items;
 create trigger items_log after insert or update or delete on items for each row execute function log_items();
+
+-- Changement de lampe d'un PAR (CP60, CP61, CP62, CP95…) : ouvert dès le technicien.
+create or replace function set_lamp(p_item int, p_lamp text) returns void
+language plpgsql security definer set search_path = public as $$
+declare it items; lm lamps; ty text; old_name text;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into it from items where id = p_item;
+  if not found then raise exception 'Projecteur % introuvable', p_item using errcode = '22023'; end if;
+  select * into lm from lamps where id = p_lamp;
+  if not found or lm.name !~* '^CP[0-9]+' then raise exception 'Lampe inconnue' using errcode = '22023'; end if;
+  select t.name into ty from models m join item_types t on t.id = m.type_id where m.id = it.model_id;
+  if ty is null or ty !~* '^PAR' then raise exception 'Le changement rapide de lampe ne concerne que les PAR' using errcode = '22023'; end if;
+  if it.lamp_id is not distinct from p_lamp then return; end if;
+  select name into old_name from lamps where id = it.lamp_id;
+  perform set_config('app.lamp_change', '1', true);
+  update items set lamp_id = p_lamp, updated_at = now() where id = p_item;
+  perform set_config('app.lamp_change', '', true);
+  perform log_event('PROJECTEUR', format('#%s : lampe %s → %s', p_item, coalesce(old_name, '—'), lm.name));
+end $$;
 
 -- Catalogue (familles, types, douilles, porte-filtres, lampes, modèles)
 create or replace function log_catalogue() returns trigger language plpgsql security definer set search_path = public as $$
@@ -763,6 +784,7 @@ revoke all on function delete_show(uuid) from public;
 revoke all on function assign_items(uuid,int[],text) from public;
 revoke all on function unassign_items(uuid,int[]) from public;
 revoke all on function can_act_show(uuid) from public;
+revoke all on function set_lamp(int,text) from public;
 revoke all on function assign_regisseur(uuid,uuid) from public;
 revoke all on function unassign_regisseur(uuid,uuid) from public;
 revoke all on function report_fault(uuid,int,text,timestamptz) from public;
@@ -777,6 +799,7 @@ grant execute on function delete_show(uuid) to authenticated;
 grant execute on function assign_items(uuid,int[],text) to authenticated;
 grant execute on function unassign_items(uuid,int[]) to authenticated;
 grant execute on function can_act_show(uuid) to authenticated;
+grant execute on function set_lamp(int,text) to authenticated;
 grant execute on function assign_regisseur(uuid,uuid) to authenticated;
 grant execute on function unassign_regisseur(uuid,uuid) to authenticated;
 grant execute on function report_fault(uuid,int,text,timestamptz) to authenticated;

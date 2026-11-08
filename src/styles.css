@@ -261,3 +261,8 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 /* titres de cartes : ne jamais passer sous les boutons voisins */
 .row > h1, .row > h2 { min-width: 0; overflow-wrap: anywhere; }
 .row > .btn { flex: none; }
+.fixlamp { border: 0; cursor: pointer; font: inherit; font-size: .72rem; font-weight: 800; min-height: 34px; padding: 0 10px; }
+.lampquick .seg button { min-width: 0; }
+.lampquick .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.lampquick .seg button { min-height: 52px; font-weight: 800; }
+.lampquick .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }

@@ -64,6 +64,9 @@ function overlay(data: Data, pending: Op[]): Data {
         if (op.status !== 'dispo') immos = [...immos, { id: 'p-' + op.id, item_id: op.item, kind: op.status === 'sav' ? 'sav' : 'pret', who: op.who ?? null, note: op.note ?? null,
           start_date: op.from ?? day, end_date: op.until ?? null, closed_date: null, pending: true }];
       }
+    } else if (op.kind === 'lamp') {
+      const it = byId.get(op.item);
+      if (it) { it.lamp_id = op.lamp; it.pending = true; }
     } else if (op.kind === 'fault') {
       if (!fById.has(op.id)) {
         const f = { id: op.id, item_id: op.item, description: op.description || null, reported_by_label: null,

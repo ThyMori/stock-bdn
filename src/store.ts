@@ -111,6 +111,8 @@ async function runOp(op: Op) {
       return supabase.rpc('resolve_fault', { p_event: op.id, p_fault: op.fault, p_resolution: op.resolution ?? null, p_at: op.at });
     case 'fault_note':
       return supabase.rpc('add_fault_note', { p_id: op.id, p_fault: op.fault, p_note: op.text, p_at: op.at });
+    case 'lamp':
+      return supabase.rpc('set_lamp', { p_item: op.item, p_lamp: op.lamp });
     case 'fault_edit':
       return supabase.rpc('edit_fault', { p_id: op.id, p_fault: op.fault, p_description: op.description, p_at: op.at });
   }
@@ -175,6 +177,8 @@ export const reportFault = (item: number, description: string) =>
 export const resolveFault = (fault: string, resolution?: string) =>
   enqueue({ id: uuid(), kind: 'resolve', fault, resolution: resolution?.trim() || undefined, at: now() });
 
+/** Change la lampe d'un PAR (file d'attente : fonctionne aussi hors ligne). */
+export const setLamp = (item: number, lamp: string) => enqueue({ id: uuid(), kind: 'lamp', item, lamp, at: now() });
 export const addFaultNote = (fault: string, text: string) =>
   enqueue({ id: uuid(), kind: 'fault_note', fault, text: text.trim(), at: now() });
 export const editFault = (fault: string, description: string) =>
