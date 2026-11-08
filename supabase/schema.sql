@@ -597,6 +597,20 @@ begin
   delete from show_posts where id = p_id;
 end $$;
 
+-- Chacun peut changer son propre prénom / nom (les signatures du mur et la liste des régisseurs suivent).
+create or replace function set_my_name(p_first text, p_last text) returns void
+language plpgsql security definer set search_path = public as $$
+declare f text := trim(coalesce(p_first, '')); l text := trim(coalesce(p_last, '')); lbl text;
+begin
+  if auth.uid() is null or not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if f = '' or l = '' then raise exception 'Prénom et nom obligatoires' using errcode = '22023'; end if;
+  if length(f) > 60 or length(l) > 60 then raise exception 'Nom trop long (60 caractères maximum)' using errcode = '22023'; end if;
+  update profiles set first_name = f, last_name = l where id = auth.uid();
+  lbl := f || ' ' || l;
+  update show_posts set author_label = lbl where author_id = auth.uid();
+  update show_regisseurs set label = lbl where user_id = auth.uid();
+end $$;
+
 -- Annuaire minimal pour citer une personne (nom seulement, comptes actifs).
 create or replace function list_people() returns table(id uuid, label text)
 language sql stable security definer set search_path = public as $$
@@ -845,6 +859,7 @@ revoke all on function post_show_message(uuid,uuid,text) from public;
 revoke all on function edit_show_message(uuid,text) from public;
 revoke all on function delete_show_message(uuid) from public;
 revoke all on function list_people() from public;
+revoke all on function set_my_name(text,text) from public;
 revoke all on function set_lamp(int,text) from public;
 revoke all on function assign_regisseur(uuid,uuid) from public;
 revoke all on function unassign_regisseur(uuid,uuid) from public;
@@ -864,6 +879,7 @@ grant execute on function post_show_message(uuid,uuid,text) to authenticated;
 grant execute on function edit_show_message(uuid,text) to authenticated;
 grant execute on function delete_show_message(uuid) to authenticated;
 grant execute on function list_people() to authenticated;
+grant execute on function set_my_name(text,text) to authenticated;
 grant execute on function set_lamp(int,text) to authenticated;
 grant execute on function assign_regisseur(uuid,uuid) to authenticated;
 grant execute on function unassign_regisseur(uuid,uuid) to authenticated;

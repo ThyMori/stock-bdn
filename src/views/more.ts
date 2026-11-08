@@ -1,5 +1,6 @@
 import type { ViewFactory } from '../router';
-import { can, clearLocal, dismissRejected, state, sync } from '../store';
+import { can, clearLocal, dismissRejected, loadProfile, rpcCall, state, sync } from '../store';
+import { openForm } from '../ui/dialog';
 import { esc, fmtDateTime } from '../logic';
 import { ROLE_LABEL, fullName } from '../types';
 import { supabase } from '../supabase';
@@ -10,6 +11,18 @@ export const moreView: ViewFactory = () => ({
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
       if (el.dataset.act === 'sync') void sync();
+      if (el.dataset.act === 'rename' && state.profile) {
+        const p = state.profile;
+        const f = await openForm('Mon profil', [
+          { name: 'first', label: 'Prénom', required: true, value: p.first_name ?? '' },
+          { name: 'last', label: 'Nom', required: true, value: p.last_name ?? '' }
+        ], { validate: (x) => (x.first.trim() && x.last.trim() ? null : 'Prénom et nom obligatoires.') });
+        if (!f) return;
+        const r = await rpcCall('set_my_name', { p_first: f.first, p_last: f.last });
+        if (r.error) { const x = root.querySelector('#profErr'); if (x) x.textContent = r.error; return; }
+        await loadProfile(p.id).catch(() => {});
+        paint(root);
+      }
       if (el.dataset.act === 'dismiss') void dismissRejected(Number(el.dataset.v));
       if (el.dataset.act === 'logout') {
         if (state.pending.length && !window.confirm(`${state.pending.length} action(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return;
@@ -29,6 +42,7 @@ function paint(root: HTMLElement) {
   root.innerHTML = `<div class="page"><h1>Plus</h1>
     <div class="card stack">
       <div><div class="t">${esc(p ? fullName(p) : '—')}</div><div class="sub">${p ? ROLE_LABEL[p.role] + (fullName(p) !== p.email ? ' · ' + esc(p.email) : '') : ''}</div></div>
+      <div class="row wrap"><button class="btn" data-act="rename" ${state.online ? '' : 'disabled'}>Modifier mon nom</button></div><div id="profErr" class="sub warn" role="alert"></div>
       <div class="sub">${state.lastPull ? 'Dernière mise à jour : ' + fmtDateTime(state.lastPull) : 'Jamais synchronisé'} · ${state.pending.length} action(s) en attente</div>
       <div class="row"><button class="btn grow" data-act="sync" ${state.online ? '' : 'disabled'}>${state.syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}</button></div>
     </div>
@@ -46,5 +60,5 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.3.1</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.4.0</div></div>`;
 }

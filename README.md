@@ -109,6 +109,10 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Mon profil (v1.4)
+
+Dans l'onglet **Plus**, « Modifier mon nom » permet à chacun de changer son prénom et son nom (connexion requise). Les signatures du mur et le nom dans la liste des régisseurs d'un spectacle suivent ; l'historique (journal, pannes passées) garde le nom d'époque. Le rôle et l'e-mail ne se changent pas ici.
+
 ### Mur du spectacle (v1.3)
 
 Chaque spectacle a un **mur** (juste sous son en-tête) où tout le monde, dès le rôle technicien, peut écrire : to-do, passation de régie, planning, changements d'horaires, problèmes techniques, dézonage fumée…
