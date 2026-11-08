@@ -42,7 +42,7 @@ export function calendarHtml(shows: Show[], ref: string, mode: CalMode, mine: (i
   const today = todayStr();
   const nav = `<div class="row"><button class="btn" data-act="cal-prev" aria-label="Période précédente">‹</button>
     <div class="grow ctitle">${esc(title(ref, mode))}</div>
-    <button class="btn" data-act="cal-today">Aujourd'hui</button><button class="btn" data-act="cal-next" aria-label="Période suivante">›</button></div>`;
+    <button class="btn" data-act="cal-today">Auj.</button><button class="btn" data-act="cal-next" aria-label="Période suivante">›</button></div>`;
   const head = `<div class="chead">${DOW.map((d) => `<span>${d}</span>`).join('')}</div>`;
   let body = '';
   if (mode === 'month') {

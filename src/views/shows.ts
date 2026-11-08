@@ -8,12 +8,12 @@ import { openForm } from '../ui/dialog';
 import { fmtDay } from './agenda';
 import { showColor } from '../types';
 
-const cal = { mode: 'list' as 'list' | CalMode, ref: todayStr() };
+const cal = { mode: 'month' as 'list' | CalMode, ref: todayStr() };
 
 /** Catalogue des spectacles : en cours / à venir d'abord, terminés ensuite. */
 export const showsView: ViewFactory = () => ({
   mount(root) {
-    root.innerHTML = `<div class="page"><div class="row"><h1 class="grow">Spectacles</h1>
+    root.innerHTML = `<div class="page"><div class="row shows-head"><h1 class="grow">Spectacles</h1>
       ${can('regisseur_general') ? '<button class="btn primary" data-act="new">+ Nouveau</button>' : ''}</div><div class="chips" role="group" aria-label="Affichage">
         <button class="chip" data-act="vmode" data-v="list">Liste</button><button class="chip" data-act="vmode" data-v="month">Mois</button><button class="chip" data-act="vmode" data-v="week">Semaine</button></div>
       <div id="err" class="sub warn" role="alert"></div><div id="list" class="list"></div></div>`;

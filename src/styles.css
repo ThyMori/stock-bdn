@@ -253,3 +253,8 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .row.wrap { flex-wrap: wrap; }
 .reg { padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); }
 .reg .t { font-weight: 700; overflow-wrap: anywhere; }
+.shows-head h1 { font-size: clamp(1.3rem, 7vw, 1.9rem); min-width: 0; }
+.shows-head .btn { padding: 8px 12px 6px; font-size: .9rem; flex: none; }
+.cal .row { gap: 6px; }
+.cal .row .btn { padding: 6px 9px 4px; font-size: .85rem; flex: none; }
+.ctitle { min-width: 0; font-size: clamp(.8rem, 4vw, .95rem); overflow: hidden; text-overflow: ellipsis; }
