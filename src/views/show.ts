@@ -163,7 +163,7 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'toggle') {
           const n = Number(v);
           if (el instanceof HTMLInputElement) { el.checked ? sel.add(n) : sel.delete(n); } else sel.delete(n);
-          if (mode === 'scan') repaintKeepVideo(root); else paint(root);
+          repaintKeepVideo(root);   // mise à jour sur place : la liste ne bouge pas
         }
         else if (act === 'assign') {
           const items = [...sel];
