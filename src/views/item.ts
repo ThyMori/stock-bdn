@@ -45,6 +45,7 @@ export const itemView: ViewFactory = ([idStr]) => {
         if (act === 'agenda-nav') { offset = el.dataset.v === '0' ? 0 : offset + Number(el.dataset.v); paintAgenda(root); }
         if (act === 'immo-add') void immoForm(root);
         if (act === 'immo-edit') void immoForm(root, el.dataset.v);
+        if (act === 'immo-del') void immoDelete(root, el.dataset.v!);
         if (el.dataset.act === 'resolve') {
           const r = window.prompt('Résolution (facultatif)', '');
           if (r !== null) void resolveFault(el.dataset.v!, r);
@@ -77,6 +78,17 @@ export const itemView: ViewFactory = ([idStr]) => {
     } else {
       void setStatus(id, s);
     }
+  }
+
+  async function immoDelete(root: HTMLElement, immoId: string) {
+    const m = view().immos.find((x) => x.id === immoId);
+    if (!m) return;
+    const running = !m.closed_date && m.start_date <= todayStr();
+    const what = `${m.kind === 'pret' ? 'prêt' : 'SAV'}${m.who ? ' (' + m.who + ')' : ''} du ${fmtDay(m.start_date)}`;
+    if (!window.confirm(`Supprimer cette période : ${what} ?${running ? '\n\nElle est en cours : l\'état du projecteur ne change pas (utilise les boutons d\'état pour le remettre disponible).' : ''}`)) return;
+    const err = await immoCall('delete_immo', { p_id: immoId });
+    if (err) window.alert('Impossible : ' + err);
+    paint(root);
   }
 
   async function immoForm(root: HTMLElement, immoId?: string) {

@@ -41,7 +41,7 @@ export function agendaHtml(immos: Immo[], offset: number, canEdit: boolean): str
     const tag = st === 'late' ? `<span class="tag late">en retard de ${late} j</span>` : st === 'planned' ? '<span class="tag">à venir</span>' : st === 'running' ? '<span class="tag run">en cours</span>' : '';
     return `<div class="immo-row"><i class="sw ${i.kind}"></i><div class="grow"><div><b>${KIND[i.kind]}</b>${i.who ? ' · ' + esc(i.who) : ''} ${tag}${i.pending ? ' <span class="pending">en attente</span>' : ''}</div>
         <div class="sub">${when}${i.note ? ' · ' + esc(i.note) : ''}</div></div>
-      ${canEdit && !i.pending ? `<button class="btn small" data-act="immo-edit" data-v="${i.id}">Modifier</button>` : ''}</div>`;
+      ${canEdit && !i.pending ? `<div class="stack" style="gap:6px"><button class="btn small" data-act="immo-edit" data-v="${i.id}">Modifier</button><button class="btn small danger" data-act="immo-del" data-v="${i.id}">Supprimer</button></div>` : ''}</div>`;
   }).join('');
   return `<div class="row"><h2 class="grow">Agenda</h2>
       <button class="chip" data-act="agenda-nav" data-v="-3" aria-label="Période précédente">‹</button>
