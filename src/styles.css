@@ -13,11 +13,11 @@
   :root { --paper: #000; --ink: #fff; --muted: #a6a6a6; --red: #ff3b30; --green: #2fd36b; --yellow-text: #ffd500; color-scheme: dark; }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.4 var(--font-body); }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.4 var(--font-body); }
 body { min-height: 100dvh; }
 a { color: inherit; text-underline-offset: 3px; }
 h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-stretch: 125%; line-height: 1.05; }
-h1 { font-size: 1.5rem; } h2 { font-size: 1.15rem; } h3 { font-size: 1rem; }
+h1 { font-size: 1.4rem; } h2 { font-size: 1rem; } h3 { font-size: .95rem; }
 button, input, select, textarea { font: inherit; color: inherit; border-radius: 0; }
 b, strong { font-weight: 700; }
 
@@ -55,7 +55,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-vi
   outline: 3px solid var(--ink); outline-offset: 2px; }
 ::placeholder { color: var(--muted); opacity: 1; }
 label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 700; }
-.btn { min-height: 46px; padding: 9px 16px 7px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+.btn { min-height: 42px; padding: 8px 13px 6px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); cursor: pointer; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 .btn.primary { background: var(--ink); color: var(--paper); }
 .btn.danger { color: var(--red); border-color: var(--red); }
 .btn.small { min-height: 36px; padding: 5px 12px 3px; font-size: .9rem; }
@@ -258,3 +258,6 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .cal .row { gap: 6px; }
 .cal .row .btn { padding: 6px 9px 4px; font-size: .85rem; flex: none; }
 .ctitle { min-width: 0; font-size: clamp(.8rem, 4vw, .95rem); overflow: hidden; text-overflow: ellipsis; }
+/* titres de cartes : ne jamais passer sous les boutons voisins */
+.row > h1, .row > h2 { min-width: 0; overflow-wrap: anywhere; }
+.row > .btn { flex: none; }
