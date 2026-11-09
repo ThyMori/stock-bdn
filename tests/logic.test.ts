@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
 import { prepRows, gelGroups } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
+import { compareShows } from '../src/teardown';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -195,5 +196,18 @@ t('gélatines : couleur déduite de la référence (Lee / Rosco)', () => {
   assert.equal(gelColorOf('Rosco 3202'), 'Correction (CTO/CTB)');
   assert.equal(gelColorOf('119'), 'Bleu');
   assert.equal(gelColorOf('machin'), 'Autre');
+});
+t('démontage : à préparer / conserver / ranger, changement de lampe des PAR', () => {
+  const d = { ...EMPTY_DATA,
+    types: [{ id: 'tp', name: 'PAR' }, { id: 'td', name: 'découpe' }], lamps: [{ id: 'l62', name: 'CP62' }, { id: 'l60', name: 'CP60' }],
+    models: [{ id: 'mp', name: 'PAR64', type_id: 'tp' }, { id: 'md', name: '614 SX', type_id: 'td' }],
+    items: [1, 2, 3, 4, 5].map((id) => ({ id, model_id: id === 4 ? 'md' : 'mp', lamp_id: 'l60', status: 'dispo' })),
+    showItems: [
+      { show_id: 'a', item_id: 1, lamp_id: 'l60' }, { show_id: 'a', item_id: 2, lamp_id: 'l60' }, { show_id: 'a', item_id: 3, lamp_id: 'l60' }, { show_id: 'a', item_id: 4, lamp_id: null },
+      { show_id: 'b', item_id: 1, lamp_id: 'l62' }, { show_id: 'b', item_id: 2, lamp_id: 'l60' }, { show_id: 'b', item_id: 5, lamp_id: 'l62' }, { show_id: 'b', item_id: 3, lamp_id: null }] } as unknown as Data;
+  const r = compareShows(d, 'a', 'b');
+  assert.deepEqual(r.prepare.map((x) => x.id), [5]);
+  assert.deepEqual(r.keep.map((x) => [x.id, x.from, x.to, x.change, x.toUnknown]), [[1, 'CP60', 'CP62', true, false], [2, 'CP60', 'CP60', false, false], [3, 'CP60', '', false, true]]);
+  assert.deepEqual(r.store.map((x) => x.id), [4]);
 });
 console.log(`\n${n} tests OK`);

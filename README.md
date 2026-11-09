@@ -109,6 +109,9 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
+### Rapport de démontage (v1.8)
+Bouton **Rapport de démontage** sur la page d'un spectacle : on choisit le prochain spectacle, l'appli compare les deux listes et génère un PDF : **à préparer** (prévus pour la suite, absents du spectacle en cours), **à conserver** (dans les deux ; pour les PAR, « CHANGER : CP60 > CP62 » en rouge si la lampe diffère ou « à préciser » si la suite ne l'indique pas) et **à ranger** (présents, absents du suivant). Les gélatines sont ignorées. Calcul côté client (`src/teardown.ts`), aucun changement en base.
+
 ### Gélatines (v1.7)
 Chaque projecteur d'un spectacle peut recevoir **plusieurs gels** (référence libre ; la couleur du badge est déduite de la référence : L201 / LEE 201 = Lee, R80 / #80 = Rosco, sinon « Autre »). On les pose à l'assignation (champ facultatif appliqué à tout le lot) ou avec le bouton **Gel** de la ligne ; la croix du badge le retire. Le format est déduit de la taille du porte-filtre du modèle. Droits : les mêmes que pour assigner (régisseur assigné, RG+). Les gels disparaissent quand le projecteur quitte le spectacle. Le PDF de prépa les liste à la fin, par format de projecteur (PAR64, 613 SX / 614 SX… : les modèles de même porte-filtre sont regroupés) puis couleur, avec la quantité (RPC `add_gels` / `delete_gel`, table `show_gels`).
 

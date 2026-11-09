@@ -110,7 +110,8 @@ export const showView: ViewFactory = ([id]) => {
     el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
-        <div class="row wrap"><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button></div>
+        <div class="row wrap"><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button>
+          <button class="btn" data-act="teardown"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10M18 15l2 2 3-4"/></svg>Rapport de démontage</button></div>
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${wall}
@@ -289,6 +290,22 @@ export const showView: ViewFactory = ([id]) => {
           try {
             const { buildPrepPdf } = await import('../prepPdf');
             const { blob, filename } = await buildPrepPdf(view(), id);
+            await deliverPdf(blob, filename);
+          } catch (e) { err('Impossible de générer le PDF : ' + String(e)); }
+        }
+        else if (act === 'teardown') {
+          const d = view();
+          const others = d.shows.filter((s) => s.id !== id).sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name));
+          if (!others.length) { err('Aucun autre spectacle : crée d’abord le prochain spectacle.'); return; }
+          const cs = d.shows.find((s) => s.id === id)!;
+          const def = others.find((s) => s.start_date >= cs.start_date) ?? others[others.length - 1];
+          const f = await openForm('Rapport de démontage : prochain spectacle ?', [
+            { name: 'next', label: 'Prochain spectacle', type: 'select', value: def.id, required: true,
+              options: others.map((s): [string, string] => [s.id, `${s.name} (${fmtDay(s.start_date)} - ${fmtDay(s.end_date)})`]) }], { submit: 'Générer le rapport' });
+          if (!f) return;
+          try {
+            const { buildTeardownPdf } = await import('../teardown');
+            const { blob, filename } = await buildTeardownPdf(view(), id, f.next);
             await deliverPdf(blob, filename);
           } catch (e) { err('Impossible de générer le PDF : ' + String(e)); }
         }
