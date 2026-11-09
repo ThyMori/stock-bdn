@@ -174,16 +174,18 @@ t('liste de prépa : tri par type, lampe requise pour les PAR', () => {
   const r = prepRows(d, 's');
   assert.deepEqual(r.map((x) => [x.type, x.id, x.lamp, x.current, x.sav]), [['découpe', 2, '', '', true], ['PAR', 5, 'CP62', 'CP60', false]]);
 });
-t('gélatines : groupées par format puis couleur puis référence', () => {
-  const d = { ...EMPTY_DATA, items: [{ id: 1, model_id: 'm' }, { id: 2, model_id: 'm' }], models: [{ id: 'm', name: 'X', type_id: null }],
+t('gélatines : sections par format de projecteur, modèles à même porte-filtre regroupés', () => {
+  const d = { ...EMPTY_DATA, filterSizes: [{ id: 'f', label: '255 x 255' }], types: [],
+    models: [{ id: 'a', name: '613 SX', type_id: null, filter_size_id: 'f' }, { id: 'b', name: '614 SX', type_id: null, filter_size_id: 'f' }, { id: 'c', name: 'PAR64', type_id: null, filter_size_id: null }],
+    items: [{ id: 1, model_id: 'a' }, { id: 2, model_id: 'b' }, { id: 3, model_id: 'c' }],
     showGels: [
-      { id: 'a', show_id: 's', item_id: 2, ref: 'LEE 201', color: 'Bleu' },
-      { id: 'b', show_id: 's', item_id: 1, ref: 'lee 201', color: 'Bleu' },
-      { id: 'c', show_id: 's', item_id: 1, ref: 'R26', color: 'Rouge' },
-      { id: 'd', show_id: 'autre', item_id: 1, ref: 'R26', color: 'Rouge' }] } as unknown as Data;
+      { id: '1', show_id: 's', item_id: 1, ref: 'L201', color: 'Correction (CTO/CTB)' },
+      { id: '2', show_id: 's', item_id: 2, ref: 'l201', color: 'Correction (CTO/CTB)' },
+      { id: '3', show_id: 's', item_id: 2, ref: 'R26', color: 'Rouge' },
+      { id: '4', show_id: 's', item_id: 3, ref: 'L106', color: 'Rouge' },
+      { id: '5', show_id: 'autre', item_id: 3, ref: 'L106', color: 'Rouge' }] } as unknown as Data;
   const g = gelGroups(d, 's');
-  assert.deepEqual(g.map((x) => [x.color, x.ref, x.qty, x.items]), [['Rouge', 'R26', 1, [1]], ['Bleu', 'LEE 201', 2, [1, 2]]]);
-  assert.equal(g[0].format, 'Format inconnu');
+  assert.deepEqual(g.map((x) => [x.title, x.ref, x.qty]), [['613 SX / 614 SX', 'R26', 1], ['613 SX / 614 SX', 'L201', 2], ['PAR64', 'L106', 1]]);
 });
 t('gélatines : couleur déduite de la référence (Lee / Rosco)', () => {
   assert.equal(gelColorOf('L201'), 'Correction (CTO/CTB)');

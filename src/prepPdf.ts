@@ -5,21 +5,31 @@ import { describe } from './ref';
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
 export interface PrepRow { id: number; model: string; type: string; lamp: string; current: string; sav: boolean; gels: string[] }
-export interface GelGroup { color: string; format: string; ref: string; qty: number; items: number[] }
+export interface GelGroup { title: string; size: string; color: string; ref: string; qty: number; items: number[] }
 
-/** Gélatines du spectacle regroupées par couleur, puis format (porte-filtre du projecteur), puis référence. */
+/** Gélatines du spectacle : une section par « format de projecteur » (PAR64, 613 SX / 614 SX…).
+ *  Les modèles qui ont la même taille de porte-filtre sont regroupés dans une même section ; sans taille connue, un modèle = une section.
+ *  Dans chaque section : couleur la plus proche, puis référence. */
 export function gelGroups(data: Data, showId: string): GelGroup[] {
-  const map = new Map<string, GelGroup>();
-  for (const g of data.showGels.filter((x) => x.show_id === showId)) {
+  const rows = data.showGels.filter((x) => x.show_id === showId).map((g) => {
     const it = data.items.find((i) => i.id === g.item_id);
-    const format = (it && describe(data, it).filter?.label) || 'Format inconnu';
-    const key = [g.color, format, g.ref.trim().toLowerCase()].join('|');
-    const cur = map.get(key) ?? { color: g.color, format, ref: g.ref.trim(), qty: 0, items: [] };
-    cur.qty++; cur.items.push(g.item_id); map.set(key, cur);
+    const d = it ? describe(data, it) : null;
+    const model = d?.model?.name ?? '?';
+    const size = d?.filter?.label ?? '';
+    return { g, model, size, key: size || 'm:' + model };
+  });
+  const models = new Map<string, Set<string>>();
+  for (const r of rows) { const m = models.get(r.key) ?? new Set<string>(); m.add(r.model); models.set(r.key, m); }
+  const titleOf = (k: string) => [...(models.get(k) ?? [])].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true })).join(' / ');
+  const map = new Map<string, GelGroup>();
+  for (const r of rows) {
+    const key = [r.key, r.g.color, r.g.ref.trim().toLowerCase()].join('|');
+    const cur = map.get(key) ?? { title: titleOf(r.key), size: r.size, color: r.g.color, ref: r.g.ref.trim(), qty: 0, items: [] };
+    cur.qty++; cur.items.push(r.g.item_id); map.set(key, cur);
   }
   const rank = (c: string) => { const i = GEL_COLORS.findIndex(([n]) => n === c); return i < 0 ? 99 : i; };
   return [...map.values()].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
-    .sort((a, b) => a.format.localeCompare(b.format, 'fr', { numeric: true }) || rank(a.color) - rank(b.color) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
+    .sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true }) || rank(a.color) - rank(b.color) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
 }
 
 /** Lignes de la liste de prépa : projecteurs du spectacle, triés par type, modèle puis numéro. */
@@ -95,11 +105,11 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
     ensure(30); y += 8;
     doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
     doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); doc.setTextColor(0);
-    y += 7; let lastFormat = '';
+    y += 7; let lastTitle = '';
     for (const g of gels) {
-      if (g.format !== lastFormat) {
-        ensure(18); if (lastFormat) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0); doc.text(`Format ${g.format}`, M + 2, y);
-        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastFormat = g.format;
+      if (g.title !== lastTitle) {
+        ensure(18); if (lastTitle) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0); doc.text(g.title, M + 2, y); if (g.size) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`(${g.size})`, W - M - 2, y, { align: 'right' }); doc.setTextColor(0); }
+        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastTitle = g.title;
       }
       ensure(9);
       const hex = GEL_COLORS.find(([n]) => n === g.color)?.[1] ?? '#8d6e63';
