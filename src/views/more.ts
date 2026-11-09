@@ -8,6 +8,16 @@ import { disablePush, enablePush, forgetPushOnLogout, pushStatus, testPush } fro
 import type { PushStatus } from '../push';
 
 let pushSt: PushStatus | null = null;
+let newEmail: string | null = null;   // changement d'e-mail demandé, pas encore confirmé
+const loadNewEmail = async (root: HTMLElement) => {
+  try { newEmail = (await supabase.auth.getUser()).data.user?.new_email ?? null; } catch { /* hors ligne */ }
+  if (root.isConnected) paint(root);
+};
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const mailError = (m: string): string =>
+  /already|registered|exists/i.test(m) ? 'Cette adresse est déjà utilisée par un autre compte.'
+  : /rate limit|seconds/i.test(m) ? 'Trop de demandes : réessaie dans quelques minutes.'
+  : /same|identical/i.test(m) ? 'C’est déjà ton adresse actuelle.' : m;
 const refreshPush = async (root: HTMLElement) => {
   const uid = state.session?.user.id;
   pushSt = uid ? await pushStatus(uid) : null;
@@ -17,10 +27,26 @@ const refreshPush = async (root: HTMLElement) => {
 export const moreView: ViewFactory = () => ({
   mount(root) {
     void refreshPush(root);
+    if (navigator.onLine) void loadNewEmail(root);
     root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
       if (el.dataset.act === 'sync') void sync();
+      if (el.dataset.act === 'chmail' && state.profile) {
+        const msg = (t: string) => { const x = root.querySelector('#mailMsg'); if (x) x.textContent = t; };
+        const f = await openForm('Changer mon e-mail', [
+          { name: 'email', label: 'Nouvelle adresse e-mail', required: true, value: newEmail ?? '' }
+        ], {
+          submit: 'Envoyer le lien',
+          validate: (x) => (!EMAIL_RE.test(x.email.trim()) ? 'Adresse e-mail invalide.' : x.email.trim().toLowerCase() === state.profile!.email.toLowerCase() ? 'C’est déjà ton adresse actuelle.' : null)
+        });
+        if (!f) return;
+        const { error } = await supabase.auth.updateUser({ email: f.email.trim() }, { emailRedirectTo: location.origin + import.meta.env.BASE_URL });
+        if (error) { msg(mailError(error.message)); return; }
+        newEmail = f.email.trim();
+        paint(root);
+        msg('E-mail de confirmation envoyé : clique sur le lien (sur la nouvelle adresse, et sur l’ancienne si elle te le demande aussi).');
+      }
       if (el.dataset.act === 'rename' && state.profile) {
         const p = state.profile;
         const f = await openForm('Mon profil', [
@@ -61,7 +87,8 @@ function paint(root: HTMLElement) {
   root.innerHTML = `<div class="page"><h1>Plus</h1>
     <div class="card stack">
       <div><div class="t">${esc(p ? fullName(p) : '—')}</div><div class="sub">${p ? ROLE_LABEL[p.role] + (fullName(p) !== p.email ? ' · ' + esc(p.email) : '') : ''}</div></div>
-      <div class="row wrap"><button class="btn" data-act="rename" ${state.online ? '' : 'disabled'}>Modifier mon nom</button></div><div id="profErr" class="sub warn" role="alert"></div>
+      <div class="row wrap"><button class="btn" data-act="rename" ${state.online ? '' : 'disabled'}>Modifier mon nom</button><button class="btn" data-act="chmail" ${state.online ? '' : 'disabled'}>Changer mon e-mail</button></div><div id="profErr" class="sub warn" role="alert"></div>
+      ${newEmail ? `<div class="sub">Changement d’e-mail en attente de confirmation : <b>${esc(newEmail)}</b>. Tant que tu n’as pas cliqué sur le lien reçu, tu te connectes avec ton adresse actuelle.</div>` : ''}<div id="mailMsg" class="sub" role="status"></div>
       <div class="sub">${state.lastPull ? 'Dernière mise à jour : ' + fmtDateTime(state.lastPull) : 'Jamais synchronisé'} · ${state.pending.length} action(s) en attente</div>
       <div class="row"><button class="btn grow" data-act="sync" ${state.online ? '' : 'disabled'}>${state.syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}</button></div>
     </div>
@@ -80,7 +107,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.12.3</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.13.0</div></div>`;
 }
 
 function pushCard(): string {

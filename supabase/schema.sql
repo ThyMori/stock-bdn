@@ -1300,3 +1300,19 @@ do $$ begin
     grant execute on function push_targets(uuid) to service_role;
   end if;
 end $$;
+
+-- ---------- v1.13 : changement d'e-mail par l'utilisateur ----------
+-- L'e-mail est l'identifiant de connexion (auth.users) ; profiles.email en est une copie, tenue à jour ici une fois
+-- le changement confirmé par le lien reçu par e-mail. Tout le reste (rôle, messages, abonnements…) suit l'identifiant du compte.
+create or replace function sync_profile_email() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update profiles set email = new.email where id = new.id and email is distinct from new.email;
+  insert into app_log (actor, actor_label, kind, message)
+  values (new.id, (select coalesce(nullif(trim(first_name || ' ' || last_name), ''), new.email) from profiles where id = new.id),
+          'COMPTE', format('e-mail modifié : %s → %s', old.email, new.email));
+  return new;
+end $$;
+drop trigger if exists on_auth_user_email_changed on auth.users;
+create trigger on_auth_user_email_changed after update of email on auth.users
+  for each row when (old.email is distinct from new.email and new.email is not null) execute function sync_profile_email();
