@@ -18,3 +18,13 @@ export function showAlerts(data: Data, today: string): ShowAlert[] {
 }
 export const alertText = (a: ShowAlert): string =>
   [...a.missing.map((m) => `il manque ${m.n} × ${m.label}`), ...(a.problems.length ? [`${a.problems.length} projecteur${a.problems.length > 1 ? 's' : ''} indisponible${a.problems.length > 1 ? 's' : ''}`] : [])].join(' · ');
+
+/** Raison pour laquelle un projecteur ne peut pas servir à ce spectacle (autre spectacle aux mêmes dates, prêt / SAV, panne ouverte), sinon null. */
+export function blockedReason(data: Data, itemId: number, show: Show): string | null {
+  const other = data.showItems.find((r) => r.item_id === itemId && r.show_id !== show.id && data.shows.some((s) => s.id === r.show_id && s.start_date <= show.end_date && s.end_date >= show.start_date));
+  if (other) return `déjà dans « ${data.shows.find((s) => s.id === other.show_id)?.name ?? '?'} »`;
+  const imm = data.immos.find((m) => m.item_id === itemId && m.start_date <= show.end_date && (m.closed_date ?? m.end_date ?? '9999-12-31') >= show.start_date);
+  if (imm) return imm.kind === 'pret' ? 'prêt' : 'SAV';
+  if (data.faults.some((f) => f.item_id === itemId && !f.resolved_at)) return 'en panne';
+  return null;
+}

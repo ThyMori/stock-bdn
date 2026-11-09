@@ -3,7 +3,7 @@ import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, per
 import { prepRows, gelGroups } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
 import { compareShows } from '../src/teardown';
-import { showAlerts, alertText } from '../src/alerts';
+import { showAlerts, alertText, blockedReason } from '../src/alerts';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -220,5 +220,18 @@ t('alertes matériel : demandes non satisfaites et projecteurs indisponibles, sp
   assert.deepEqual(a.map((x) => x.show.id), ['a', 'c']);
   assert.equal(alertText(a[0]), 'il manque 2 × PAR64 CP62');
   assert.equal(alertText(a[1]), '1 projecteur indisponible');
+});
+t('projecteur indisponible pour un spectacle : autre spectacle, SAV / prêt, panne', () => {
+  const show = { id: 'a', name: 'A', start_date: '2026-11-10', end_date: '2026-11-12' } as unknown as Data['shows'][number];
+  const d = { ...EMPTY_DATA, shows: [show, { id: 'b', name: 'B', start_date: '2026-11-11', end_date: '2026-11-15' }, { id: 'c', name: 'C', start_date: '2026-12-01', end_date: '2026-12-02' }],
+    showItems: [{ show_id: 'b', item_id: 1 }, { show_id: 'c', item_id: 2 }],
+    immos: [{ item_id: 3, kind: 'sav', start_date: '2026-11-01', end_date: null, closed_date: null }, { item_id: 4, kind: 'pret', start_date: '2026-11-01', end_date: '2026-11-05', closed_date: null }],
+    faults: [{ item_id: 5, resolved_at: null }, { item_id: 6, resolved_at: '2026-11-01' }] } as unknown as Data;
+  assert.equal(blockedReason(d, 1, show), 'déjà dans « B »');
+  assert.equal(blockedReason(d, 2, show), null);
+  assert.equal(blockedReason(d, 3, show), 'SAV');
+  assert.equal(blockedReason(d, 4, show), null);
+  assert.equal(blockedReason(d, 5, show), 'en panne');
+  assert.equal(blockedReason(d, 6, show), null);
 });
 console.log(`\n${n} tests OK`);

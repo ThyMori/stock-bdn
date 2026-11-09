@@ -5,7 +5,8 @@ import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf } from '../gels';
-import { alertText, showAlerts } from '../alerts';
+import { alertText, blockedReason, showAlerts } from '../alerts';
+import { toast } from '../ui/toast';
 import { esc, fmtDateTime, parseScan, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
@@ -24,6 +25,7 @@ export const showView: ViewFactory = ([id]) => {
   let stopScan: (() => void) | null = null;
   let composer: HTMLElement | null = null;
   let gref = '';
+  const rsel = new Set<number>();
 
   /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
   const makeComposer = (): HTMLElement => {
@@ -70,12 +72,14 @@ export const showView: ViewFactory = ([id]) => {
       const gs = d.showGels.filter((g) => g.show_id === id && g.item_id === itemId).sort((a, b) => a.ref.localeCompare(b.ref));
       return gs.length ? `<div class="gels">${gs.map((g) => `<span class="gel"><i style="background:${gelCss(g.color)}"></i>${esc(g.ref)}${canAssign ? `<button class="gx" data-act="gel-del" data-v="${g.id}" aria-label="Retirer le gel ${esc(g.ref)}">×</button>` : ''}</span>`).join('')}</div>` : '';
     };
+    const manual = canAssign ? mine.filter((s) => !s.demand_id) : [];
+    for (const n of [...rsel]) if (!manual.some((s) => s.item_id === n)) rsel.delete(n);
     const origin = (s: (typeof mine)[number]) => (s.demand_id ? ` <span class="tag auto">${s.pinned ? 'choisi' : 'auto'}</span>` : '')
       + (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
     const assigned = mine.map((s) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
-      return `<div class="item"><a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
+      return `<div class="item">${canAssign && !s.demand_id ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
         <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${origin(s)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
         ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button>${s.demand_id
           ? `<button class="btn" data-act="swap" data-v="${s.item_id}" aria-label="Changer le projecteur ${s.item_id}">Changer</button>${s.pinned ? `<button class="btn" data-act="release" data-v="${s.item_id}" aria-label="Remettre le projecteur ${s.item_id} en automatique">Auto</button>` : ''}`
@@ -137,6 +141,7 @@ export const showView: ViewFactory = ([id]) => {
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       ${demandCard}
       <div class="card"><div class="row"><h2 class="grow">Projecteurs (${mine.length})</h2>${canAssign && mode === 'view' ? '<button class="btn" data-act="mode" data-v="pick">+ Choisir à la main</button>' : ''}</div>
+        ${manual.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${rsel.size === manual.length ? 'Tout décocher' : 'Tout cocher (manuels)'}</button>${rsel.size ? `<button class="btn primary" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}`;
     if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
     const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
@@ -245,7 +250,7 @@ export const showView: ViewFactory = ([id]) => {
           const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
           ta.value = ta.value.slice(0, a) + t + ta.value.slice(b); ta.focus(); ta.setSelectionRange(a + t.length, a + t.length);
         };
-        const err = (m: string) => { const x = root.querySelector('#serr'); if (x) x.textContent = m; };
+        const err = (m: string) => { const x = root.querySelector('#serr'); if (x) x.textContent = m; toast(m); };
         const sendDemand = async (model: string, lampId: string, qty: number) => {
           const r = await rpcCall('set_demand', { p_show: id, p_model: model, p_lamp: lampId || null, p_qty: qty });
           if (r.error) { err(r.error); return; }
@@ -314,9 +319,10 @@ export const showView: ViewFactory = ([id]) => {
           const dd = view(); const row = dd.showItems.find((r) => r.show_id === id && r.item_id === Number(v)); const it = dd.items.find((i) => i.id === Number(v)); if (!row || !it) return;
           const lampName = (lid: string | null) => dd.lamps.find((l) => l.id === lid)?.name;
           const taken = new Set(dd.showItems.filter((r) => r.show_id === id).map((r) => r.item_id));
-          const cands = dd.items.filter((i) => i.model_id === it.model_id && !taken.has(i.id))
+          const cs = dd.shows.find((x) => x.id === id);
+          const cands = dd.items.filter((i) => i.model_id === it.model_id && !taken.has(i.id) && (!cs || !blockedReason(dd, i.id, cs)))
             .sort((a, b) => Number(b.lamp_id === row.lamp_id) - Number(a.lamp_id === row.lamp_id) || a.id - b.id);
-          if (!cands.length) { err('Aucun autre projecteur de ce modèle.'); return; }
+          if (!cands.length) { err('Aucun autre projecteur de ce modèle n\'est disponible pendant ce spectacle (déjà pris, SAV, prêt ou en panne).'); return; }
           const st = (i: (typeof cands)[number]) => ({ dispo: 'disponible', utilise: 'utilisé', sav: 'SAV', en_pret: 'en prêt' }[i.eff ?? i.status]);
           const f = await openForm(`Remplacer le projecteur ${v}`, [{ name: 'to', label: 'Par le projecteur', type: 'select', required: true,
             options: cands.map((i): [string, string] => [String(i.id), `n° ${i.id} · ${lampName(i.lamp_id) ?? 'sans lampe'} · ${st(i)}`]) }], { submit: 'Remplacer' });
@@ -331,6 +337,18 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'gel-del') {
           const r = await rpcCall('delete_gel', { p_id: v });
           if (r.error) err(r.error);
+        }
+        else if (act === 'rtoggle') { const n = Number(v); if (rsel.has(n)) rsel.delete(n); else rsel.add(n); paint(root); }
+        else if (act === 'rall') {
+          const man = view().showItems.filter((r) => r.show_id === id && !r.demand_id).map((r) => r.item_id);
+          if (rsel.size === man.length) rsel.clear(); else man.forEach((n) => rsel.add(n));
+          paint(root);
+        }
+        else if (act === 'remove-sel') {
+          const list = [...rsel].sort((a, b) => a - b); if (!list.length) return;
+          if (!window.confirm(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?`)) return;
+          const r = await rpcCall('unassign_items', { p_show: id, p_items: list });
+          if (r.error) err(r.error); else { rsel.clear(); toast(`${list.length} projecteur${list.length > 1 ? 's' : ''} retiré${list.length > 1 ? 's' : ''}.`, 'ok'); }
         }
         else if (act === 'remove') {
           if (!window.confirm(`Retirer le projecteur n° ${v} de ce spectacle ?`)) return;
