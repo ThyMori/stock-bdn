@@ -3,7 +3,7 @@ import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, per
 import { prepRows, gelGroups } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
 import { compareShows } from '../src/teardown';
-import { showAlerts, alertText, blockedReason } from '../src/alerts';
+import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -233,5 +233,15 @@ t('projecteur indisponible pour un spectacle : autre spectacle, SAV / prêt, pan
   assert.equal(blockedReason(d, 4, show), null);
   assert.equal(blockedReason(d, 5, show), 'en panne');
   assert.equal(blockedReason(d, 6, show), null);
+});
+t('prêts / locations : libellé et rappel de calendrier', () => {
+  const d = { ...EMPTY_DATA, models: [{ id: 'm', name: 'PAR64' }], lamps: [{ id: 'l', name: 'CP62' }],
+    showDemands: [{ id: 'd', show_id: 's', model_id: 'm', lamp_id: 'l', qty: 4, missing: 0 }],
+    showExternals: [{ id: 'e', show_id: 's', demand_id: 'd', kind: 'location', provider: 'Dushow', qty: 4, delivery_date: '2026-11-04', return_date: '2026-11-20' },
+      { id: 'f', show_id: 's', demand_id: 'd', kind: 'pret', provider: 'Vidy', qty: 1, delivery_date: '2026-11-05', return_date: '2026-11-18' }] } as unknown as Data;
+  const c = calendarExternals(d);
+  assert.equal(c[0].label, '4 × PAR64 CP62 loués chez Dushow · jusqu\'au 20/11');
+  assert.equal(c[1].label, '1 × PAR64 CP62 prêté par Vidy · jusqu\'au 18/11');
+  assert.deepEqual([c[0].start, c[0].end], ['2026-11-04', '2026-11-20']);
 });
 console.log(`\n${n} tests OK`);

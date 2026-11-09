@@ -1,6 +1,7 @@
 import { GEL_COLORS } from './types';
 import type { Data } from './types';
 import { describe } from './ref';
+import { externalLabel } from './alerts';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
@@ -74,6 +75,12 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
     y += 3; doc.setTextColor(200, 0, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
     const txt = 'ATTENTION - matériel manquant : ' + miss.map((x) => `${x.missing} x ${data.models.find((m) => m.id === x.model_id)?.name ?? '?'}${x.lamp_id ? ' ' + (data.lamps.find((l) => l.id === x.lamp_id)?.name ?? '') : ''}`).join(', ');
     doc.text(txt, M, y, { maxWidth: W - 2 * M }); y += 5 * Math.ceil(doc.getTextWidth(txt) / (W - 2 * M)); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+  }
+  const exts = data.showExternals.filter((e) => e.show_id === showId);
+  if (exts.length) {
+    y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(29, 107, 255); doc.text('Matériel prêté / loué', M, y); y += 5; doc.setFont('helvetica', 'normal');
+    for (const e of exts) { const t = `${externalLabel(data, e)} - livraison ${DAY(e.delivery_date)}, reprise ${DAY(e.return_date)}`; ensure(6); doc.text(t, M + 2, y, { maxWidth: W - 2 * M - 2 }); y += 5 * Math.ceil(doc.getTextWidth(t) / (W - 2 * M - 2)); }
+    doc.setTextColor(0);
   }
   // récapitulatif par type
   const types = [...new Set(rows.map((r) => r.type))];

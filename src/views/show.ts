@@ -5,7 +5,7 @@ import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf } from '../gels';
-import { alertText, blockedReason, showAlerts } from '../alerts';
+import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
 import { toast } from '../ui/toast';
 import { esc, fmtDateTime, parseScan, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
@@ -91,14 +91,18 @@ export const showView: ViewFactory = ([id]) => {
 
     const demands = d.showDemands.filter((x) => x.show_id === id).map((x) => ({ x, m: d.models.find((m) => m.id === x.model_id), l: lampName(x.lamp_id) }))
       .sort((a, b) => (a.m?.name ?? '').localeCompare(b.m?.name ?? '', 'fr', { numeric: true }) || (a.l ?? '').localeCompare(b.l ?? ''));
+    const own = (demId: string) => d.showItems.filter((r) => r.show_id === id && r.demand_id === demId && !r.problem).length;
+    const extQty = (demId: string) => d.showExternals.filter((e) => e.demand_id === demId).reduce((n, e) => n + e.qty, 0);
     const myAlert = showAlerts(d, '0000-00-00').find((a) => a.show.id === id);
     const alertCard = myAlert && show.end_date >= today ? `<div class="alert-card" role="alert">⚠ ALERTE MATÉRIEL : ${esc(alertText(myAlert))}<br>À réparer, louer ou emprunter.
       <ul>${myAlert.missing.map((m) => `<li>manque ${m.n} × ${esc(m.label)}</li>`).join('')}${myAlert.problems.map((p) => `<li>n° ${p.item} : ${esc(p.why)}</li>`).join('')}</ul></div>` : '';
     const demandCard = `<div class="card"><div class="row wrap"><h2 class="grow">Matériel demandé (${demands.reduce((n, r) => n + r.x.qty, 0)})</h2>${canAssign ? '<button class="btn primary" data-act="dem-add">+ Demande</button>' : ''}</div>
       <div class="sub">L'appli assigne seule les projecteurs disponibles (PAR déjà bien équipés en priorité) et se met à jour au fil des pannes, SAV et changements de lampe.</div>
-      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">${x.qty - x.missing} / ${x.qty} assigné${x.qty - x.missing > 1 ? 's' : ''}</div></div>
+      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">${own(x.id)} assigné${own(x.id) > 1 ? 's' : ''}${extQty(x.id) ? ` + ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''} sur ${x.qty}</div></div>
         ${x.missing > 0 ? `<span class="tag late">manque ${x.missing}</span>` : '<span class="tag ok">complet</span>'}
-        ${canAssign ? `<button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>`).join('') || '<div class="empty">Aucune demande : ajoute-en une, ou assigne des projecteurs à la main plus bas.</div>'}</div>`;
+        ${canAssign && x.missing > 0 ? `<button class="btn primary" data-act="ext-add" data-v="${x.id}">Gérer</button>` : ''}
+        ${canAssign ? `<button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
+        ${d.showExternals.filter((e) => e.demand_id === x.id).map((e) => `<div class="extline"><span class="tag ext">${e.kind === 'pret' ? 'prêt' : 'location'}</span><div class="grow">${esc(externalLabel(d, e))}<br><span class="muted">livraison ${esc(fmtDay(e.delivery_date))} · reprise ${esc(fmtDay(e.return_date))}</span></div>${canAssign ? `<button class="btn" data-act="ext-del" data-v="${e.id}" aria-label="Retirer ce prêt ou cette location">Suppr.</button>` : ''}</div>`).join('')}`).join('') || '<div class="empty">Aucune demande : ajoute-en une, ou assigne des projecteurs à la main plus bas.</div>'}</div>`;
 
     let picker = '';
     if (mode !== 'view' && canAssign) {
@@ -315,6 +319,25 @@ export const showView: ViewFactory = ([id]) => {
             { submit: 'Enregistrer', validate: (w) => !/^\d+$/.test(w.qty.trim()) || Number(w.qty) < 1 || Number(w.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : null });
           if (!f) return;
           await sendDemand(x.model_id, x.lamp_id ?? '', Number(f.qty));
+        }
+        else if (act === 'ext-add') {
+          const dd = view(); const x = dd.showDemands.find((r) => r.id === v); const cs = dd.shows.find((r) => r.id === id); if (!x || !cs) return;
+          const m = dd.models.find((r) => r.id === x.model_id);
+          const f = await openForm(`Gérer le manque : ${m?.name ?? ''}`, [
+            { name: 'kind', label: 'Comment le récupérer ?', type: 'select', required: true, value: 'location', options: [['pret', 'Prêté par…'], ['location', 'Loué chez…']] },
+            { name: 'who', label: 'Nom du prêteur / loueur', required: true },
+            { name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: String(x.missing) },
+            { name: 'from', label: 'Date de livraison', type: 'date', required: true, value: cs.start_date },
+            { name: 'to', label: 'Date de reprise', type: 'date', required: true, value: cs.end_date }
+          ], { submit: 'Enregistrer', validate: (w) => !w.who ? 'Indique le nom du prêteur / loueur.' : !/^\d+$/.test(w.qty) || Number(w.qty) < 1 ? 'Quantité invalide.' : !w.from || !w.to || w.to < w.from ? 'La reprise doit être le même jour ou après la livraison.' : null });
+          if (!f) return;
+          const r = await rpcCall('add_external', { p_show: id, p_demand: v, p_kind: f.kind, p_provider: f.who, p_qty: Number(f.qty), p_from: f.from, p_to: f.to, p_note: null });
+          if (r.error) err(r.error); else toast(`${f.kind === 'pret' ? 'Prêt' : 'Location'} enregistré${(r.data as { missing?: number } | null)?.missing ? ' : il manque encore du matériel.' : ' : manque comblé.'}`, 'ok');
+        }
+        else if (act === 'ext-del') {
+          if (!window.confirm('Retirer ce prêt / cette location ? Le manque réapparaîtra.')) return;
+          const r = await rpcCall('delete_external', { p_id: v });
+          if (r.error) err(r.error);
         }
         else if (act === 'dem-del') {
           const x = view().showDemands.find((r) => r.id === v); if (!x) return;

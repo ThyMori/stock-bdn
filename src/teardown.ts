@@ -1,5 +1,6 @@
 import type { Data } from './types';
 import { describe } from './ref';
+import { externalLabel } from './alerts';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
@@ -88,6 +89,19 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   section('À préparer', 'prévus pour la suite, absents du spectacle en cours', td.prepare, 'LAMPE REQUISE');
   section('À conserver', 'dans les deux spectacles', td.keep, 'LAMPE');
   section('À ranger', 'présents sur ce spectacle, absents du suivant', td.store, '');
+  const exts = data.showExternals.filter((e) => e.show_id === curId).sort((a, b) => a.return_date.localeCompare(b.return_date));
+  if (exts.length) {
+    ensure(30); y += 8;
+    doc.setFillColor(29, 107, 255); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`À rendre (${exts.reduce((n, e) => n + e.qty, 0)})`, M + 2, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('prêts et locations de ce spectacle', W - M - 2, y, { align: 'right' }); doc.setTextColor(0); y += 8;
+    for (const e of exts) {
+      ensure(9); doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(externalLabel(data, e), M + 14, y, { maxWidth: 110 });
+      doc.setFont('helvetica', 'normal'); doc.text(`reprise le ${DAY(e.return_date)}`, W - M - 2, y, { align: 'right' });
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2); y += 7;
+    }
+  }
   footer();
   const safe = show.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'spectacle';
   return { blob: doc.output('blob'), filename: `demontage-${safe}-${show.end_date}.pdf` };

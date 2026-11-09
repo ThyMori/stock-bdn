@@ -7,7 +7,7 @@ import { esc, todayStr, uuid } from '../logic';
 import { openForm } from '../ui/dialog';
 import { fmtDay } from './agenda';
 import { showColor } from '../types';
-import { showAlerts } from '../alerts';
+import { calendarExternals, showAlerts } from '../alerts';
 
 const cal = { mode: 'month' as 'list' | CalMode, ref: todayStr() };
 
@@ -44,7 +44,7 @@ export const showsView: ViewFactory = () => ({
 function paint(root: HTMLElement) {
   const { shows, showItems, showPosts } = view();
   root.querySelectorAll<HTMLElement>('[data-act="vmode"]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === cal.mode)));
-  if (cal.mode !== 'list') { root.querySelector('#list')!.innerHTML = calendarHtml(shows, cal.ref, cal.mode, canActShow); return; }
+  if (cal.mode !== 'list') { root.querySelector('#list')!.innerHTML = calendarHtml(shows, cal.ref, cal.mode, canActShow, calendarExternals(view())); return; }
   const today = todayStr();
   const alerted = new Set(showAlerts(view(), today).map((a) => a.show.id));
   const n = (id: string) => showItems.filter((s) => s.show_id === id).length;

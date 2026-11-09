@@ -970,6 +970,25 @@ do $$ begin
     alter table show_items add constraint show_items_demand_fk foreign key (demand_id) references show_demands(id) on delete set null;
   end if;
 end $$;
+-- Matériel prêté / loué pour combler un manque : une fiche par prêt ou location (quantité, prêteur / loueur, livraison, reprise).
+create table if not exists show_externals (
+  id             uuid primary key default gen_random_uuid(),
+  show_id        uuid not null references shows(id) on delete cascade,
+  demand_id      uuid not null references show_demands(id) on delete cascade,
+  kind           text not null check (kind in ('pret', 'location')),
+  provider       text not null check (length(trim(provider)) between 1 and 80),
+  qty            int  not null check (qty between 1 and 500),
+  delivery_date  date not null,
+  return_date    date not null,
+  note           text,
+  added_by_label text,
+  added_at       timestamptz not null default now(),
+  constraint show_externals_dates check (return_date >= delivery_date)
+);
+create index if not exists show_externals_show_idx on show_externals(show_id);
+alter table show_externals enable row level security;
+drop policy if exists show_externals_select on show_externals;
+create policy show_externals_select on show_externals for select using (has_role('technicien'));
 alter table show_demands enable row level security;
 drop policy if exists show_demands_select on show_demands;
 create policy show_demands_select on show_demands for select using (has_role('technicien'));
@@ -1035,7 +1054,9 @@ begin
   end loop;
   -- problèmes (projecteur assigné mais indisponible) et manques
   update show_items si set problem = item_blocked(si.item_id, p_show, s.start_date, s.end_date, true) where si.show_id = p_show;
-  update show_demands dd set missing = greatest(0, dd.qty - (select count(*) from show_items si where si.show_id = p_show and si.demand_id = dd.id and si.problem is null))
+  update show_demands dd set missing = greatest(0, dd.qty
+      - (select count(*) from show_items si where si.show_id = p_show and si.demand_id = dd.id and si.problem is null)
+      - coalesce((select sum(e.qty) from show_externals e where e.demand_id = dd.id), 0))
    where dd.show_id = p_show;
 end $$;
 
@@ -1127,6 +1148,43 @@ begin
   perform reallocate_all();
 end $$;
 
+create or replace function add_external(p_show uuid, p_demand uuid, p_kind text, p_provider text, p_qty int, p_from date, p_to date, p_note text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare nm text; mn text; lbl text; miss int;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  select s.name, m.name into nm, mn from show_demands d join shows s on s.id = d.show_id join models m on m.id = d.model_id where d.id = p_demand and d.show_id = p_show;
+  if nm is null then raise exception 'Demande introuvable' using errcode = '22023'; end if;
+  if p_kind not in ('pret', 'location') then raise exception 'Type inconnu' using errcode = '22023'; end if;
+  if nullif(trim(p_provider), '') is null or length(trim(p_provider)) > 80 then raise exception 'Nom du prêteur / loueur obligatoire' using errcode = '22023'; end if;
+  if p_qty is null or p_qty < 1 or p_qty > 500 then raise exception 'Quantité invalide' using errcode = '22023'; end if;
+  if p_from is null or p_to is null or p_to < p_from then raise exception 'Dates invalides : la reprise ne peut pas précéder la livraison' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_externals (show_id, demand_id, kind, provider, qty, delivery_date, return_date, note, added_by_label)
+  values (p_show, p_demand, p_kind, trim(p_provider), p_qty, p_from, p_to, nullif(trim(p_note), ''), lbl);
+  perform log_event('SPECTACLE', format('« %s » : %s × %s %s %s (%s → %s)', nm, p_qty, mn, case p_kind when 'pret' then 'prêtés par' else 'loués chez' end, trim(p_provider), to_char(p_from, 'DD/MM'), to_char(p_to, 'DD/MM')));
+  perform reallocate_all();
+  select coalesce(sum(missing), 0)::int into miss from show_demands where show_id = p_show;
+  return jsonb_build_object('missing', miss);
+end $$;
+
+create or replace function delete_external(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare e show_externals; nm text;
+begin
+  select * into e from show_externals where id = p_id;
+  if not found then return; end if;
+  if not can_act_show(e.show_id) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  delete from show_externals where id = p_id;
+  select name into nm from shows where id = e.show_id;
+  perform log_event('SPECTACLE', format('« %s » : %s × %s (%s) retiré', nm, e.qty, case e.kind when 'pret' then 'prêt' else 'location' end, e.provider));
+  perform reallocate_all();
+end $$;
+
+revoke all on function add_external(uuid,uuid,text,text,int,date,date,text) from public;
+revoke all on function delete_external(uuid) from public;
+grant execute on function add_external(uuid,uuid,text,text,int,date,date,text) to authenticated;
+grant execute on function delete_external(uuid) to authenticated;
 revoke all on function reallocate_show(uuid) from public;
 revoke all on function reallocate_all() from public;
 revoke all on function item_blocked(int,uuid,date,date,boolean) from public;

@@ -318,3 +318,7 @@ nav.tabs a { font-size: .68rem; }
 .stepper .btn { min-width: 52px; padding: 0; font-size: 1.5rem; line-height: 1; }
 .item > .grow { min-width: 0; }
 .selsearch { width: 100%; margin-bottom: 6px; }
+.cbar.ext { background: repeating-linear-gradient(135deg, #0a63ff 0 9px, #3f8bff 9px 18px); color: #fff; outline: 2px dashed #fff; outline-offset: -3px; }
+.tag.ext { background: #1d6bff; border-color: #1d6bff; color: #fff; }
+.extline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0 6px 10px; border-left: 6px solid #1d6bff; margin: 2px 0 2px 4px; font-size: .88rem; }
+.extline .grow { min-width: 140px; }

@@ -28,3 +28,16 @@ export function blockedReason(data: Data, itemId: number, show: Show): string | 
   if (data.faults.some((f) => f.item_id === itemId && !f.resolved_at)) return 'en panne';
   return null;
 }
+
+const dm = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+/** Texte court d'une location / d'un prêt : « 4 × PAR64 CP62 loués chez X ». */
+export function externalLabel(data: Data, e: Data['showExternals'][number]): string {
+  const d = data.showDemands.find((x) => x.id === e.demand_id);
+  const m = data.models.find((x) => x.id === d?.model_id)?.name ?? '?', l = data.lamps.find((x) => x.id === d?.lamp_id)?.name;
+  const plural = e.qty > 1 ? 's' : '';
+  return `${e.qty} × ${m}${l ? ' ' + l : ''} ${e.kind === 'pret' ? 'prêté' : 'loué'}${plural} ${e.kind === 'pret' ? 'par' : 'chez'} ${e.provider}`;
+}
+/** Rappels bleus de l'agenda : « 4 × PAR64 loués chez X · jusqu'au 20/11 ». */
+export function calendarExternals(data: Data): { show_id: string; start: string; end: string; label: string }[] {
+  return data.showExternals.map((e) => ({ show_id: e.show_id, start: e.delivery_date, end: e.return_date, label: `${externalLabel(data, e)} · jusqu'au ${dm(e.return_date)}` }));
+}

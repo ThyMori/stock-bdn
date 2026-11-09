@@ -2,6 +2,9 @@ import { addDays, dayNum, esc, todayStr } from '../logic';
 import { showColor } from '../types';
 import type { Show } from '../types';
 
+/** Rappel bleu : matériel prêté / loué (de la livraison à la reprise). */
+export interface CalExt { show_id: string; start: string; end: string; label: string }
+
 export type CalMode = 'month' | 'week';
 
 /** Lundi de la semaine contenant d (AAAA-MM-JJ). */
@@ -20,15 +23,24 @@ const title = (ref: string, mode: CalMode): string => {
 };
 
 /** Une semaine : cases des jours + barres des spectacles (placées sur des lignes libres). */
-function weekHtml(first: string, shows: Show[], mine: (id: string) => boolean, today: string, curMonth: string | null, tall: boolean): string {
+function weekHtml(first: string, shows: Show[], mine: (id: string) => boolean, today: string, curMonth: string | null, tall: boolean, exts: CalExt[]): string {
   const last = addDays(first, 6);
   const inWeek = shows.filter((s) => s.start_date <= last && s.end_date >= first).sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name));
   const lanes: number[] = [];                                  // dernier jour (numéro) occupé par ligne
+  const extIn = exts.filter((x) => x.start <= last && x.end >= first).sort((a, b) => a.start.localeCompare(b.start));
+  const place = (start: string, end: string) => {
+    const c0 = Math.max(dayNum(start), dayNum(first)) - dayNum(first), c1 = Math.min(dayNum(end), dayNum(last)) - dayNum(first);
+    let l = lanes.findIndex((e) => e < c0); if (l < 0) { l = lanes.length; lanes.push(-1); } lanes[l] = c1;
+    return { c0, c1, l, cut: (start < first ? ' cut-l' : '') + (end > last ? ' cut-r' : '') };
+  };
   const bars = inWeek.map((s) => {
     const c0 = Math.max(dayNum(s.start_date), dayNum(first)) - dayNum(first), c1 = Math.min(dayNum(s.end_date), dayNum(last)) - dayNum(first);
     let l = lanes.findIndex((end) => end < c0); if (l < 0) { l = lanes.length; lanes.push(-1); } lanes[l] = c1;
     const cut = (s.start_date < first ? ' cut-l' : '') + (s.end_date > last ? ' cut-r' : '');
     return `<a class="cbar ${mine(s.id) ? 'mine' : 'grey'}${cut}" style="--c:${showColor(s)};grid-column:${c0 + 1} / ${c1 + 2};grid-row:${l + 2}" href="#/show/${s.id}" title="${esc(s.name)}${mine(s.id) ? '' : ' (non assigné)'}">${esc(s.name)}</a>`;
+  }).join('') + extIn.map((x) => {
+    const { c0, c1, l, cut } = place(x.start, x.end);
+    return `<a class="cbar ext${cut}" style="grid-column:${c0 + 1} / ${c1 + 2};grid-row:${l + 2}" href="#/show/${x.show_id}" title="${esc(x.label)}">${esc(x.label)}</a>`;
   }).join('');
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(first, i), n = Number(d.slice(8));
@@ -38,7 +50,7 @@ function weekHtml(first: string, shows: Show[], mine: (id: string) => boolean, t
   return `<div class="cweek${tall ? ' tall' : ''}">${days}${bars}</div>`;
 }
 
-export function calendarHtml(shows: Show[], ref: string, mode: CalMode, mine: (id: string) => boolean): string {
+export function calendarHtml(shows: Show[], ref: string, mode: CalMode, mine: (id: string) => boolean, exts: CalExt[] = []): string {
   const today = todayStr();
   const nav = `<div class="row"><button class="btn" data-act="cal-prev" aria-label="Période précédente">‹</button>
     <div class="grow ctitle">${esc(title(ref, mode))}</div>
@@ -48,7 +60,7 @@ export function calendarHtml(shows: Show[], ref: string, mode: CalMode, mine: (i
   if (mode === 'month') {
     const first = mondayOf(monthStart(ref)); const cur = ref.slice(0, 7);
     const weeks = Math.ceil((dayNum(addDays(monthStart(addMonths(ref, 1)), -1)) - dayNum(first) + 1) / 7);
-    for (let w = 0; w < weeks; w++) body += weekHtml(addDays(first, w * 7), shows, mine, today, cur, false);
-  } else body = weekHtml(mondayOf(ref), shows, mine, today, null, true);
-  return `<div class="cal">${nav}${head}${body}<div class="sub clegend"><i class="cbar mine"></i> assigné <i class="cbar grey"></i> non assigné</div></div>`;
+    for (let w = 0; w < weeks; w++) body += weekHtml(addDays(first, w * 7), shows, mine, today, cur, false, exts);
+  } else body = weekHtml(mondayOf(ref), shows, mine, today, null, true, exts);
+  return `<div class="cal">${nav}${head}${body}<div class="sub clegend"><i class="cbar mine"></i> assigné <i class="cbar grey"></i> non assigné <i class="cbar ext"></i> prêté / loué</div></div>`;
 }
