@@ -80,10 +80,10 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr, shp, sgl] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr, shp, sgl, sdm] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs'), q('show_posts').order('created_at', { ascending: false }), q('show_gels')
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs'), q('show_posts').order('created_at', { ascending: false }), q('show_gels'), q('show_demands')
   ]);
   for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
   // agenda : si la table n'existe pas encore (base pas à jour), l'appli reste utilisable sans lui
@@ -95,7 +95,8 @@ export async function pull() {
     shows: (shw.error ? [] : shw.data) as Data['shows'], showItems: (shi.error ? [] : shi.data) as Data['showItems'],
     showRegisseurs: (shr.error ? [] : shr.data) as Data['showRegisseurs'],
     showPosts: (shp.error ? [] : shp.data) as Data['showPosts'],
-    showGels: (sgl.error ? [] : sgl.data) as Data['showGels']
+    showGels: (sgl.error ? [] : sgl.data) as Data['showGels'],
+    showDemands: (sdm.error ? [] : sdm.data) as Data['showDemands']
   };
   state.lastPull = new Date().toISOString();
   await persist();

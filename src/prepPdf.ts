@@ -69,6 +69,12 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
   if (regs) { doc.text(`Régie : ${regs}`, M, y); y += 5; }
   doc.setTextColor(110); doc.text(`Générée le ${DAY(now.toISOString())} - ${rows.length} projecteur${rows.length > 1 ? 's' : ''}`, M, y); doc.setTextColor(0); y += 4;
 
+  const miss = data.showDemands.filter((x) => x.show_id === showId && x.missing > 0);
+  if (miss.length) {
+    y += 3; doc.setTextColor(200, 0, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    const txt = 'ATTENTION - matériel manquant : ' + miss.map((x) => `${x.missing} x ${data.models.find((m) => m.id === x.model_id)?.name ?? '?'}${x.lamp_id ? ' ' + (data.lamps.find((l) => l.id === x.lamp_id)?.name ?? '') : ''}`).join(', ');
+    doc.text(txt, M, y, { maxWidth: W - 2 * M }); y += 5 * Math.ceil(doc.getTextWidth(txt) / (W - 2 * M)); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+  }
   // récapitulatif par type
   const types = [...new Set(rows.map((r) => r.type))];
   if (types.length) {

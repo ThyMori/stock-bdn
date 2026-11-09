@@ -46,6 +46,16 @@ b, strong { font-weight: 700; }
 @keyframes blink { 50% { opacity: .15; } }
 .banner { background: var(--ink); color: var(--paper); padding: 10px 12px; font-size: .92rem; margin-bottom: 12px; }
 .banner.err { background: var(--red); color: #fff; }
+.banner.alarm { display: block; background: #e30613; color: #fff; text-decoration: none; border: 3px solid #fff; outline: 3px solid #e30613; font-weight: 700; animation: alarm 1.4s steps(2, jump-none) infinite; }
+@keyframes alarm { 0% { background: #e30613; } 100% { background: #a8000a; } }
+@media (prefers-reduced-motion: reduce) { .banner.alarm { animation: none; } }
+.alert-card { background: #e30613; color: #fff; padding: 12px; border: 3px solid var(--ink); font-weight: 700; }
+.alert-card ul { margin: 6px 0 0; padding-left: 18px; font-weight: 500; }
+.dem { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 2px solid var(--ink); }
+.dem .grow { min-width: 140px; }
+.dem .t { font-weight: 700; }
+.tag.ok { background: var(--green); border-color: var(--green); color: #000; }
+.tag.auto { background: transparent; }
 .banner a, .banner button { color: inherit; }
 
 /* contrôles */
@@ -290,7 +300,7 @@ nav.tabs a { font-size: .68rem; }
 [data-act="prep"] { gap: 0; border-width: 3px; }
 
 /* gélatines */
-.item .btns { display: flex; gap: 6px; flex: none; }
+.item .btns { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; max-width: 46%; }
 .item .btns .btn { padding: 6px 10px 4px; min-height: 38px; font-size: .85rem; }
 .gels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .gel { display: inline-flex; align-items: center; gap: 5px; border: 2px solid var(--ink); padding: 0 0 0 5px; font-size: .78rem; font-weight: 700; }

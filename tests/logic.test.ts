@@ -3,6 +3,7 @@ import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, per
 import { prepRows, gelGroups } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
 import { compareShows } from '../src/teardown';
+import { showAlerts, alertText } from '../src/alerts';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import type { Data, Immo, Op } from '../src/types';
@@ -209,5 +210,15 @@ t('démontage : à préparer / conserver / ranger, changement de lampe des PAR',
   assert.deepEqual(r.prepare.map((x) => x.id), [5]);
   assert.deepEqual(r.keep.map((x) => [x.id, x.from, x.to, x.change, x.toUnknown]), [[1, 'CP60', 'CP62', true, false], [2, 'CP60', 'CP60', false, false], [3, 'CP60', '', false, true]]);
   assert.deepEqual(r.store.map((x) => x.id), [4]);
+});
+t('alertes matériel : demandes non satisfaites et projecteurs indisponibles, spectacles à venir seulement', () => {
+  const d = { ...EMPTY_DATA, models: [{ id: 'm', name: 'PAR64' }], lamps: [{ id: 'l', name: 'CP62' }],
+    shows: [{ id: 'a', name: 'A', start_date: '2026-11-10', end_date: '2026-11-12' }, { id: 'b', name: 'B', start_date: '2026-01-01', end_date: '2026-01-02' }, { id: 'c', name: 'C', start_date: '2026-11-20', end_date: '2026-11-22' }],
+    showDemands: [{ id: '1', show_id: 'a', model_id: 'm', lamp_id: 'l', qty: 4, missing: 2 }, { id: '2', show_id: 'b', model_id: 'm', lamp_id: null, qty: 1, missing: 1 }, { id: '3', show_id: 'c', model_id: 'm', lamp_id: null, qty: 1, missing: 0 }],
+    showItems: [{ show_id: 'c', item_id: 7, lamp_id: null, problem: 'SAV' }] } as unknown as Data;
+  const a = showAlerts(d, '2026-11-09');
+  assert.deepEqual(a.map((x) => x.show.id), ['a', 'c']);
+  assert.equal(alertText(a[0]), 'il manque 2 × PAR64 CP62');
+  assert.equal(alertText(a[1]), '1 projecteur indisponible');
 });
 console.log(`\n${n} tests OK`);

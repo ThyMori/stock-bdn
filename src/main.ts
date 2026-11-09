@@ -15,6 +15,8 @@ import { murView } from './views/mur';
 import { showView } from './views/show';
 import { logView } from './views/log';
 import { UPDATE_PENDING } from './flags';
+import { alertText, showAlerts } from './alerts';
+import { esc, todayStr } from './logic';
 import { moreView } from './views/more';
 import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
@@ -60,6 +62,7 @@ function paintStatus() {
   const label = state.syncing ? 'Synchronisation…' : !navigator.onLine ? `Hors ligne${wait ? ` · ${wait} en attente` : ''}` : wait ? `${wait} en attente` : 'À jour';
   el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span>
       <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></div>
+    ${showAlerts(view(), todayStr()).slice(0, 3).map((a) => `<a class="banner alarm" href="#/show/${a.show.id}" role="alert"><b>⚠ ALERTE MATÉRIEL · ${esc(a.show.name)}</b><br>${esc(alertText(a))} — à réparer, louer ou emprunter</a>`).join('')}
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
     ${state.error && navigator.onLine ? `<div class="banner">Synchro en échec : ${state.error}</div>` : ''}`;
   el.querySelector('#syncBtn')?.addEventListener('click', () => void sync());

@@ -535,6 +535,7 @@ begin
     col := pick_show_color(p_id, p_start, p_end);
   end if;
   update shows set name = trim(p_name), start_date = p_start, end_date = p_end, note = nullif(trim(p_note), ''), color = col where id = p_id;
+  perform reallocate_all();
   perform log_event('SPECTACLE', format('« %s » modifié (%s → %s)', trim(p_name), to_char(p_start, 'DD/MM/YYYY'), to_char(p_end, 'DD/MM/YYYY')));
 end $$;
 
@@ -545,6 +546,7 @@ begin
   if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   delete from shows where id = p_id returning name into nm;
   if found then perform log_event('SPECTACLE', format('« %s » supprimé', nm)); end if;
+  perform reallocate_all();
 end $$;
 
 -- Gélatines : plusieurs gels possibles par projecteur d'un spectacle (le format vient du porte-filtre du modèle).
@@ -723,12 +725,13 @@ begin
     if c is not null then skipped := skipped || jsonb_build_object('item', it, 'reason', c); continue; end if;
     insert into show_items (show_id, item_id, lamp_id, added_by_label)
     values (p_show, it, case when ispar then p_lamp end, lbl)
-    on conflict (show_id, item_id) do update set lamp_id = coalesce(case when ispar then excluded.lamp_id end, show_items.lamp_id);
+    on conflict (show_id, item_id) do update set lamp_id = coalesce(case when ispar then excluded.lamp_id end, show_items.lamp_id), pinned = (show_items.demand_id is not null);
     added := added || it;
   end loop;
   if cardinality(added) > 0 then
     perform log_event('SPECTACLE', format('« %s » : %s projecteur(s) assigné(s) (%s)', s.name, cardinality(added), array_to_string(added, ', ')));
   end if;
+  perform reallocate_all();
   return jsonb_build_object('added', to_jsonb(added), 'skipped', skipped);
 end $$;
 
@@ -741,6 +744,7 @@ begin
   get diagnostics n = row_count;
   select name into nm from shows where id = p_show;
   if n > 0 then perform log_event('SPECTACLE', format('« %s » : %s projecteur(s) retiré(s) (%s)', nm, n, array_to_string(p_items, ', '))); end if;
+  perform reallocate_all();
   return n;
 end $$;
 
@@ -942,3 +946,193 @@ revoke all on function add_fault_note(uuid,uuid,text,timestamptz) from public;
 revoke all on function edit_fault(uuid,uuid,text,timestamptz) from public;
 grant execute on function add_fault_note(uuid,uuid,text,timestamptz) to authenticated;
 grant execute on function edit_fault(uuid,uuid,text,timestamptz) to authenticated;
+
+-- ======================= Assignation automatique (v1.9) =======================
+-- Un spectacle exprime des DEMANDES (modèle + lampe pour les PAR + quantité) ; l'appli choisit les projecteurs.
+-- Elle préfère les PAR déjà montés avec la bonne lampe, évite les projecteurs indisponibles (SAV, prêt, panne ouverte,
+-- autre spectacle aux mêmes dates) et se remet à jour à chaque changement. Les choix manuels (« épinglés ») sont conservés.
+alter table show_items add column if not exists demand_id uuid;
+alter table show_items add column if not exists pinned boolean not null default false;   -- choisi à la main (jamais réassigné)
+alter table show_items add column if not exists problem text;                              -- raison d'indisponibilité, sinon null
+create table if not exists show_demands (
+  id             uuid primary key default gen_random_uuid(),
+  show_id        uuid not null references shows(id) on delete cascade,
+  model_id       text not null references models(id),
+  lamp_id        text references lamps(id) on delete set null,   -- PAR : lampe demandée
+  qty            int  not null check (qty between 1 and 500),
+  missing        int  not null default 0,                         -- nombre de projecteurs que l'on n'arrive pas à fournir
+  added_by_label text,
+  added_at       timestamptz not null default now()
+);
+create unique index if not exists show_demands_uq on show_demands (show_id, model_id, (coalesce(lamp_id, '')));
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'show_items_demand_fk') then
+    alter table show_items add constraint show_items_demand_fk foreign key (demand_id) references show_demands(id) on delete set null;
+  end if;
+end $$;
+alter table show_demands enable row level security;
+drop policy if exists show_demands_select on show_demands;
+create policy show_demands_select on show_demands for select using (has_role('technicien'));
+
+-- Raison pour laquelle un projecteur ne peut pas être utilisé par un spectacle (null = utilisable).
+-- p_auto : pour l'allocation automatique, les lignes automatiques des spectacles moins prioritaires (début plus tardif) ne comptent pas.
+create or replace function item_blocked(p_item int, p_show uuid, p_start date, p_end date, p_auto boolean default false) returns text
+language plpgsql stable security definer set search_path = public as $$
+declare r text; me shows;
+begin
+  select * into me from shows where id = p_show;
+  select 'déjà dans « ' || s.name || ' » (' || to_char(s.start_date, 'DD/MM') || ' → ' || to_char(s.end_date, 'DD/MM') || ')' into r
+    from show_items si join shows s on s.id = si.show_id
+   where si.item_id = p_item and s.id is distinct from p_show and s.start_date <= p_end and s.end_date >= p_start
+     and (not p_auto or si.pinned or si.demand_id is null or (s.start_date, s.id) < (me.start_date, me.id)) limit 1;
+  if r is not null then return r; end if;
+  select (case m.kind when 'pret' then 'prêt' else 'SAV' end) || coalesce(' (' || m.who || ')', '') || ' du ' || to_char(m.start_date, 'DD/MM')
+         || coalesce(' au ' || to_char(coalesce(m.closed_date, m.end_date), 'DD/MM'), ' (fin non connue)') into r
+    from immos m
+   where m.item_id = p_item and m.start_date <= p_end and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p_start limit 1;
+  if r is not null then return r; end if;
+  if exists (select 1 from faults f where f.item_id = p_item and f.resolved_at is null) then return 'en panne'; end if;
+  return null;
+end $$;
+
+-- Recalcule les projecteurs automatiques d'un spectacle.
+create or replace function reallocate_show(p_show uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare s shows; d show_demands; ispar boolean; prev int[]; ch_item int[] := '{}'; ch_dem uuid[] := '{}'; k int;
+  pv int; need int; pick int[]; chosen_for int; passn int;
+begin
+  select * into s from shows where id = p_show;
+  if not found then return; end if;
+  select coalesce(array_agg(item_id), '{}') into prev from show_items where show_id = p_show and demand_id is not null and not pinned;
+  -- passe 1 : uniquement les projecteurs déjà bien équipés ; passe 2 : on complète avec n'importe quel projecteur disponible
+  for passn in 1..2 loop
+    for d in select * from show_demands where show_id = p_show order by added_at, id loop
+      select exists (select 1 from models m join item_types t on t.id = m.type_id where m.id = d.model_id and t.name ilike 'PAR%') into ispar;
+      if passn = 2 and not (ispar and d.lamp_id is not null) then continue; end if;
+      select count(*) into pv from show_items si where si.show_id = p_show and si.demand_id = d.id and si.pinned
+         and item_blocked(si.item_id, p_show, s.start_date, s.end_date, true) is null;
+      select count(*) into chosen_for from unnest(ch_dem) x where x = d.id;
+      need := d.qty - pv - chosen_for;
+      if need <= 0 then continue; end if;
+      select coalesce(array_agg(i.id), '{}') into pick from (
+        select i.id from items i
+         where i.model_id = d.model_id
+           and not (i.id = any (ch_item))
+           and (passn = 2 or not (ispar and d.lamp_id is not null) or i.lamp_id = d.lamp_id)
+           and not exists (select 1 from show_items x where x.show_id = p_show and x.item_id = i.id and (x.demand_id is null or x.pinned))
+           and item_blocked(i.id, p_show, s.start_date, s.end_date, true) is null
+         order by (case when i.id = any (prev) then 0 else 1 end), i.id
+         limit need) i;
+      foreach k in array pick loop ch_item := ch_item || k; ch_dem := ch_dem || d.id; end loop;
+    end loop;
+  end loop;
+  delete from show_items where show_id = p_show and demand_id is not null and not pinned and not (item_id = any (ch_item));
+  for k in 1 .. coalesce(cardinality(ch_item), 0) loop
+    select * into d from show_demands where id = ch_dem[k];
+    insert into show_items (show_id, item_id, lamp_id, demand_id, pinned, added_by_label)
+    values (p_show, ch_item[k], d.lamp_id, d.id, false, 'auto')
+    on conflict (show_id, item_id) do update set lamp_id = excluded.lamp_id, demand_id = excluded.demand_id where not show_items.pinned and show_items.demand_id is not null;
+  end loop;
+  -- problèmes (projecteur assigné mais indisponible) et manques
+  update show_items si set problem = item_blocked(si.item_id, p_show, s.start_date, s.end_date, true) where si.show_id = p_show;
+  update show_demands dd set missing = greatest(0, dd.qty - (select count(*) from show_items si where si.show_id = p_show and si.demand_id = dd.id and si.problem is null))
+   where dd.show_id = p_show;
+end $$;
+
+-- Tous les spectacles à venir ou en cours, dans l'ordre de priorité (début le plus proche d'abord).
+create or replace function reallocate_all() returns void
+language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  for r in select id from shows where end_date >= current_date order by start_date, id loop perform reallocate_show(r.id); end loop;
+end $$;
+
+create or replace function reallocate_trg() returns trigger language plpgsql security definer set search_path = public as $$
+begin perform reallocate_all(); return null; end $$;
+drop trigger if exists items_realloc on items;
+create trigger items_realloc after insert or delete on items for each statement execute function reallocate_trg();
+drop trigger if exists items_realloc_u on items;
+create trigger items_realloc_u after update of status, lamp_id, model_id on items for each statement execute function reallocate_trg();
+drop trigger if exists immos_realloc on immos;
+create trigger immos_realloc after insert or update or delete on immos for each statement execute function reallocate_trg();
+drop trigger if exists faults_realloc on faults;
+create trigger faults_realloc after insert or update or delete on faults for each statement execute function reallocate_trg();
+
+-- Demande de matériel : crée, modifie la quantité (0 = supprime) ou remplace la demande identique.
+create or replace function set_demand(p_show uuid, p_model text, p_lamp text, p_qty int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare ispar boolean; lbl text; nm text; mn text; id_ uuid; miss int; lp text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  select name into nm from shows where id = p_show;
+  if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  select m.name, exists (select 1 from item_types t where t.id = m.type_id and t.name ilike 'PAR%') into mn, ispar from models m where m.id = p_model;
+  if mn is null then raise exception 'Modèle inconnu' using errcode = '22023'; end if;
+  if ispar then
+    if p_lamp is null or not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe requise pour un PAR' using errcode = '22023'; end if;
+  else p_lamp := null; end if;
+  if p_qty is null or p_qty < 0 or p_qty > 500 then raise exception 'Quantité invalide' using errcode = '22023'; end if;
+  select id into id_ from show_demands where show_id = p_show and model_id = p_model and coalesce(lamp_id, '') = coalesce(p_lamp, '');
+  select name into lp from lamps where id = p_lamp;
+  if p_qty = 0 then
+    if id_ is not null then
+      delete from show_items where show_id = p_show and demand_id = id_ and not pinned;
+      delete from show_demands where id = id_;
+    end if;
+    perform log_event('SPECTACLE', format('« %s » : demande %s%s supprimée', nm, mn, coalesce(' ' || lp, '')));
+  else
+    select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+    if id_ is null then
+      insert into show_demands (show_id, model_id, lamp_id, qty, added_by_label) values (p_show, p_model, p_lamp, p_qty, lbl) returning id into id_;
+    else update show_demands set qty = p_qty where id = id_; end if;
+    perform log_event('SPECTACLE', format('« %s » : demande %s × %s%s', nm, p_qty, mn, coalesce(' ' || lp, '')));
+  end if;
+  perform reallocate_all();
+  select coalesce(sum(missing), 0)::int into miss from show_demands where show_id = p_show;
+  return jsonb_build_object('missing', miss);
+end $$;
+
+-- Remplace un projecteur choisi automatiquement par un autre du même modèle ; ce choix est « épinglé » (plus jamais réassigné).
+create or replace function swap_show_item(p_show uuid, p_old int, p_new int) returns void
+language plpgsql security definer set search_path = public as $$
+declare o show_items; s shows; c text; m1 text; m2 text; lbl text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  select * into s from shows where id = p_show;
+  select * into o from show_items where show_id = p_show and item_id = p_old;
+  if not found or o.demand_id is null then raise exception 'Ce projecteur n''est pas issu d''une demande' using errcode = '22023'; end if;
+  select model_id into m1 from items where id = p_old;
+  select model_id into m2 from items where id = p_new;
+  if m2 is null then raise exception 'Projecteur introuvable' using errcode = '22023'; end if;
+  if m1 is distinct from m2 then raise exception 'Il faut choisir un projecteur du même modèle' using errcode = '22023'; end if;
+  if p_new = p_old then return; end if;
+  if exists (select 1 from show_items where show_id = p_show and item_id = p_new) then raise exception 'Déjà dans ce spectacle' using errcode = '22023'; end if;
+  c := item_conflict(p_new, p_show, s.start_date, s.end_date);
+  if c is not null then raise exception '%', c using errcode = '22023'; end if;
+  if exists (select 1 from faults where item_id = p_new and resolved_at is null) then raise exception 'En panne' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_items (show_id, item_id, lamp_id, demand_id, pinned, added_by_label) values (p_show, p_new, o.lamp_id, o.demand_id, true, lbl);
+  update show_gels set item_id = p_new where show_id = p_show and item_id = p_old;
+  delete from show_items where show_id = p_show and item_id = p_old;
+  perform log_event('SPECTACLE', format('« %s » : #%s remplacé par #%s', s.name, p_old, p_new));
+  perform reallocate_all();
+end $$;
+
+-- Rend un projecteur épinglé à l'assignation automatique.
+create or replace function release_show_item(p_show uuid, p_item int) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  update show_items set pinned = false where show_id = p_show and item_id = p_item and demand_id is not null;
+  perform reallocate_all();
+end $$;
+
+revoke all on function reallocate_show(uuid) from public;
+revoke all on function reallocate_all() from public;
+revoke all on function item_blocked(int,uuid,date,date,boolean) from public;
+revoke all on function set_demand(uuid,text,text,int) from public;
+revoke all on function swap_show_item(uuid,int,int) from public;
+revoke all on function release_show_item(uuid,int) from public;
+grant execute on function set_demand(uuid,text,text,int) to authenticated;
+grant execute on function swap_show_item(uuid,int,int) to authenticated;
+grant execute on function release_show_item(uuid,int) to authenticated;

@@ -38,7 +38,9 @@ export const GEL_COLORS: [string, string][] = [['Rouge', '#d62828'], ['Orange', 
   ['Violet', '#7e22ce'], ['Rose', '#e75a9b'], ['Correction (CTO/CTB)', '#9aa5b1'], ['Diffusion', '#d8d8d8'], ['Neutre (ND)', '#6b6b6b'], ['Autre', '#8d6e63']];
 export const gelCss = (c: string): string => GEL_COLORS.find(([n]) => n === c)?.[1] ?? '#8d6e63';
 export interface ShowGel { id: string; show_id: string; item_id: number; ref: string; color: string }
-export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null }
+export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null; demand_id?: string | null; pinned?: boolean; problem?: string | null }
+/** Demande de matériel d'un spectacle (modèle + lampe pour les PAR + quantité) ; `missing` = projecteurs que l'on n'arrive pas à fournir. */
+export interface ShowDemand { id: string; show_id: string; model_id: string; lamp_id: string | null; qty: number; missing: number }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;
@@ -65,10 +67,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */
