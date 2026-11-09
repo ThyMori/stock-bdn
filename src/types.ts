@@ -32,7 +32,7 @@ export const SHOW_COLORS: [string, string][] = [['#1d4ed8', 'Bleu'], ['#0f766e',
 export const showColor = (s: { color?: string | null }): string => s.color ?? '#475569';
 export interface Show { id: string; name: string; color?: string | null; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
 export interface ShowRegisseur { show_id: string; user_id: string; label: string | null }
-export interface ShowPost { id: string; show_id: string; author_id: string | null; author_label: string | null; body: string; created_at: string; edited_at: string | null }
+export interface ShowPost { id: string; show_id: string | null; kind?: 'show' | 'admin' | 'general'; author_id: string | null; author_label: string | null; body: string; created_at: string; edited_at: string | null }
 /** Gélatines : couleurs proposées (ordre = ordre de tri dans la liste de prépa) et teinte d'aperçu. Identique à gel_colors() en base. */
 export const GEL_COLORS: [string, string][] = [['Rouge', '#d62828'], ['Orange', '#f77f00'], ['Ambre', '#f2a900'], ['Jaune', '#f4d400'], ['Vert', '#2a9d3f'], ['Bleu', '#1d4ed8'],
   ['Violet', '#7e22ce'], ['Rose', '#e75a9b'], ['Correction (CTO/CTB)', '#9aa5b1'], ['Diffusion', '#d8d8d8'], ['Neutre (ND)', '#6b6b6b'], ['Autre', '#8d6e63']];

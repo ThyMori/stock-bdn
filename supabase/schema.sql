@@ -637,6 +637,27 @@ begin
   update show_posts set body = trim(p_body), edited_at = now() where id = p_id;
 end $$;
 
+-- Messages généraux (v1.11) : sans spectacle. Un administrateur poste une « annonce admin » (notes de mise à jour…),
+-- un régisseur général une « info générale » (vie du théâtre, usage du matériel…). Le bandeau est fixé par le rôle de l'auteur.
+alter table show_posts alter column show_id drop not null;
+alter table show_posts add column if not exists kind text not null default 'show';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'show_posts_kind_ck') then
+    alter table show_posts add constraint show_posts_kind_ck check ((kind = 'show' and show_id is not null) or (kind in ('admin', 'general') and show_id is null));
+  end if;
+end $$;
+create or replace function post_general_message(p_id uuid, p_body text) returns void
+language plpgsql security definer set search_path = public as $$
+declare lbl text; k text;
+begin
+  if not has_role('regisseur_general') then raise exception 'Réservé aux régisseurs généraux et aux administrateurs' using errcode = '42501'; end if;
+  if nullif(trim(p_body), '') is null then raise exception 'Message vide' using errcode = '22023'; end if;
+  if length(p_body) > 2000 then raise exception 'Message trop long (2000 caractères maximum)' using errcode = '22023'; end if;
+  k := case when has_role('admin') then 'admin' else 'general' end;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_posts (id, show_id, kind, author_id, author_label, body) values (p_id, null, k, auth.uid(), lbl, trim(p_body)) on conflict (id) do nothing;
+end $$;
+
 -- Effacer : l'auteur, ou un administrateur (modération).
 create or replace function delete_show_message(p_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
@@ -910,6 +931,7 @@ revoke all on function unassign_items(uuid,int[]) from public;
 revoke all on function can_act_show(uuid) from public;
 revoke all on function add_gels(uuid,int[],text,text) from public;
 revoke all on function delete_gel(uuid) from public;
+revoke all on function post_general_message(uuid,text) from public;
 revoke all on function post_show_message(uuid,uuid,text) from public;
 revoke all on function edit_show_message(uuid,text) from public;
 revoke all on function delete_show_message(uuid) from public;
@@ -932,6 +954,7 @@ grant execute on function unassign_items(uuid,int[]) to authenticated;
 grant execute on function can_act_show(uuid) to authenticated;
 grant execute on function add_gels(uuid,int[],text,text) to authenticated;
 grant execute on function delete_gel(uuid) to authenticated;
+grant execute on function post_general_message(uuid,text) to authenticated;
 grant execute on function post_show_message(uuid,uuid,text) to authenticated;
 grant execute on function edit_show_message(uuid,text) to authenticated;
 grant execute on function delete_show_message(uuid) to authenticated;

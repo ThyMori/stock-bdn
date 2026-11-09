@@ -322,3 +322,11 @@ nav.tabs a { font-size: .68rem; }
 .tag.ext { background: #1d6bff; border-color: #1d6bff; color: #fff; }
 .extline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0 6px 10px; border-left: 6px solid #1d6bff; margin: 2px 0 2px 4px; font-size: .88rem; }
 .extline .grow { min-width: 140px; }
+
+.gpost .margin.adm { background: repeating-linear-gradient(135deg, #ffd400 0 8px, #111 8px 16px); color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.gpost .margin.gen { background: #0a7f73; color: #fff; }
+.gpost.general.adm .post { border-left-color: #ffd400; background: color-mix(in srgb, #ffd400 14%, transparent); }
+.gpost.general.gen .post { border-left-color: #0a7f73; background: color-mix(in srgb, #0a7f73 10%, transparent); }
+.bandeau { display: inline-block; align-self: flex-start; padding: 3px 10px; font-weight: 800; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: #fff; }
+.bandeau.adm { background: repeating-linear-gradient(135deg, #ffd400 0 8px, #111 8px 16px); text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.bandeau.gen { background: #0a7f73; }
