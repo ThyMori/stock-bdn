@@ -3,9 +3,8 @@
 //   { action: "post", post_id }   -> prévient les personnes concernées par un message du mur (appelé par l'appli juste après la publication)
 //   { action: "test" }            -> envoie une notification d'essai aux appareils de l'appelant
 //
-// Qui est prévenu est décidé en base (fonction SQL push_targets) :
-//   annonce admin / info générale -> tout le monde sauf l'auteur ;
-//   message de spectacle          -> les personnes citées (@), les régisseurs assignés et celles qui ont déjà écrit sur ce mur.
+// Qui est prévenu est décidé en base (fonction SQL push_targets) : uniquement les personnes citées (@Nom).
+// « @all » prévient tous les comptes, mais seulement s'il est écrit par un régisseur général ou un administrateur.
 //
 // Sécurité : l'identité de l'appelant est vérifiée ici (jeton de connexion). Pour « post », seul l'auteur du message peut déclencher
 // l'envoi, et chaque message n'est notifié qu'une seule fois (colonne show_posts.push_sent_at). La clé « service_role » et la clé
@@ -28,7 +27,7 @@ export interface PushSub { endpoint: string; keys: { p256dh: string; auth: strin
 /** Envoie un message à un appareil ; lève une erreur portant `statusCode` en cas d'échec (404 / 410 = abonnement mort). */
 export type Sender = (sub: PushSub, payload: string) => Promise<unknown>;
 
-export interface Target { user_id: string; endpoint: string; p256dh: string; auth_key: string; mentioned: boolean; kind: string; show_id: string | null; show_name: string | null; author_label: string | null; body: string }
+export interface Target { user_id: string; endpoint: string; p256dh: string; auth_key: string; everyone: boolean; kind: string; show_id: string | null; show_name: string | null; author_label: string | null; body: string }
 export interface Payload { title: string; body: string; url: string; tag: string }
 
 /** Texte lisible d'un message : les citations « @[Nom](u:uuid) » deviennent « @Nom », espaces compactés, tronqué. */
@@ -46,8 +45,8 @@ export function buildPayload(t: Target, postId: string): Payload {
   if (t.kind === 'general') return { title: `Info générale · ${who}`, body: text, url: '#/mur', tag };
   const show = t.show_name || 'Spectacle';
   return {
-    title: t.mentioned ? `${who} t’a cité · ${show}` : show,
-    body: t.mentioned ? text : `${who} : ${text}`,
+    title: t.everyone ? `${who} à tous · ${show}` : `${who} t’a cité · ${show}`,
+    body: text,
     url: t.show_id ? `#/show/${t.show_id}` : '#/mur',
     tag
   };

@@ -12,7 +12,7 @@ import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from 
 import { knownPeople, loadPeople } from '../people';
 import { describe, norm } from '../ref';
 import { openForm } from '../ui/dialog';
-import { notifyPost } from '../push';
+import { ALL_OPT, notifyPost } from '../push';
 import { fmtDay } from './agenda';
 
 const PAR_LAMPS = ['CP60', 'CP61', 'CP62', 'CP95'];
@@ -446,8 +446,8 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'wall-person') {
           const ppl = (await loadPeople()).filter((p) => p.id !== state.profile?.id);
           if (!ppl.length) { wallErr('Annuaire indisponible (connexion requise).'); return; }
-          const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', search: true, options: ppl.map((p): [string, string] => [p.id, p.label]), required: true }], { submit: 'Citer' });
-          if (f) insertAtCursor('@' + (ppl.find((p) => p.id === f.p)?.label ?? '') + ' ');
+          const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', search: true, options: ALL_OPT().concat(ppl.map((p): [string, string] => [p.id, p.label])), required: true }], { submit: 'Citer' });
+          if (f) insertAtCursor(f.p === '@all' ? '@all ' : '@' + (ppl.find((p) => p.id === f.p)?.label ?? '') + ' ');
         }
         else if (act === 'wall-item') {
           const assigned = view().showItems.filter((s) => s.show_id === id).map((s) => s.item_id).sort((a, b) => a - b);

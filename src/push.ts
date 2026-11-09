@@ -1,6 +1,7 @@
 // Notifications push (Web Push) : abonnement de cet appareil, essai, et déclenchement à la publication d'un message.
 // La clé publique VAPID peut être publique ; la clé privée n'existe que dans la fonction serveur « push-notify ».
 import { supabase } from './supabase';
+import { can } from './store';
 
 export const VAPID_PUBLIC_KEY = 'BCD_wF5cDyfY5fKoV9Jg3zWFyEy9hQ-ddz6HEcyIgXHtdl66LixKLBWfhS5fN1BgZ79B1YX4s1tpx-CgtzMScBE';
 
@@ -107,6 +108,9 @@ export async function testPush(): Promise<string> {
   const d = r.data ?? {};
   return Number(d.sent) > 0 ? `Notification envoyée (${d.sent} appareil${Number(d.sent) > 1 ? 's' : ''}).` : 'Envoi échoué : l’appareil n’a pas accepté la notification.';
 }
+
+/** Choix « @all » du sélecteur de citation : réservé aux régisseurs généraux et aux administrateurs (le serveur le vérifie aussi). */
+export const ALL_OPT = (): [string, string][] => (can('regisseur_general') ? [['@all', '@all · tout le monde (notifie tous les comptes)']] : []);
 
 /** Après la publication d'un message : prévient les personnes concernées (sans bloquer ni signaler d'erreur à l'auteur). */
 export function notifyPost(postId: string): void {

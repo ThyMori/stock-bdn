@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { buildPayload, handle, plainText, type Target } from '../supabase/functions/push-notify/index';
 
-const T = (o: Partial<Target> = {}): Target => ({ user_id: 'U', endpoint: 'https://p/1', p256dh: 'k', auth_key: 'a', mentioned: false, kind: 'show', show_id: 'S1', show_name: 'Pasolini', author_label: 'Marie D', body: 'Bonjour', ...o });
+const T = (o: Partial<Target> = {}): Target => ({ user_id: 'U', endpoint: 'https://p/1', p256dh: 'k', auth_key: 'a', everyone: false, kind: 'show', show_id: 'S1', show_name: 'Pasolini', author_label: 'Marie D', body: 'Bonjour', ...o });
 
 // ---- contenu des notifications ----
 assert.equal(plainText('Merci @[Jean Dupont](u:aaaaaaaa-0000-0000-0000-000000000001)   pour\nle prêt'), 'Merci @Jean Dupont pour le prêt');
 assert.ok(plainText('x'.repeat(300)).length <= 140 && plainText('x'.repeat(300)).endsWith('…'));
-assert.deepEqual(buildPayload(T(), 'P'), { title: 'Pasolini', body: 'Marie D : Bonjour', url: '#/show/S1', tag: 'post-P' });
-assert.equal(buildPayload(T({ mentioned: true }), 'P').title, 'Marie D t’a cité · Pasolini');
+assert.deepEqual(buildPayload(T(), 'P'), { title: 'Marie D t’a cité · Pasolini', body: 'Bonjour', url: '#/show/S1', tag: 'post-P' });
+assert.equal(buildPayload(T({ everyone: true }), 'P').title, 'Marie D à tous · Pasolini');
 assert.equal(buildPayload(T({ kind: 'admin', show_id: null, show_name: null }), 'P').title, 'Annonce admin · Marie D');
 assert.equal(buildPayload(T({ kind: 'general', show_id: null, show_name: null }), 'P').url, '#/mur');
 
@@ -65,10 +65,10 @@ const run = async (f: ReturnType<typeof fake>, body: unknown, opts: { token?: st
   assert.equal(r.status, 200); assert.equal(r.body.already, true); assert.equal(r.sent.length, 0); assert.ok(!f.calls.some((c) => c[0] === 'rpc:push_targets'));
 }
 { // envoi nominal, une notification par appareil, citation personnalisée, abonnements morts supprimés
-  const f = fake({ targets: [T({ endpoint: 'https://p/ok' }), T({ endpoint: 'https://p/cite', mentioned: true }), T({ endpoint: 'https://p/mort' }), T({ endpoint: 'https://p/panne' })] });
+  const f = fake({ targets: [T({ endpoint: 'https://p/ok' }), T({ endpoint: 'https://p/cite', everyone: true }), T({ endpoint: 'https://p/mort' }), T({ endpoint: 'https://p/panne' })] });
   const r = await run(f, { action: 'post', post_id: POST_ID }, { fail: { 'https://p/mort': 410, 'https://p/panne': 500 } });
   assert.equal(r.status, 200); assert.deepEqual([r.body.devices, r.body.sent, r.body.failed, r.body.removed], [4, 2, 1, 1]);
-  assert.equal(r.sent.find((x) => x.endpoint === 'https://p/cite')!.payload.title, 'Marie D t’a cité · Pasolini');
+  assert.equal(r.sent.find((x) => x.endpoint === 'https://p/cite')!.payload.title, 'Marie D à tous · Pasolini');
   assert.deepEqual(f.calls.find((c) => c[0] === 'delete:push_subscriptions')![1], ['https://p/mort']);
   assert.deepEqual(f.calls.find((c) => c[0] === 'rpc:push_targets')![1], { p_post: POST_ID });
 }

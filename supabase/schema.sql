@@ -1252,25 +1252,28 @@ begin
   delete from push_subscriptions where endpoint = p_endpoint and user_id = auth.uid();
 end $$;
 
--- Qui prévenir pour un message ? (auteur exclu, comptes actifs, un abonnement par appareil)
---   annonce admin / info générale : tout le monde ;
---   message de spectacle : les personnes citées (@), les régisseurs assignés au spectacle et celles qui ont déjà écrit sur son mur.
+-- Qui prévenir pour un message ? Uniquement les personnes citées (@), auteur exclu, comptes actifs, un envoi par appareil.
+-- « @all » prévient tous les comptes actifs, mais seulement s'il est écrit par un régisseur général ou un administrateur.
+drop function if exists push_targets(uuid);
 create or replace function push_targets(p_post uuid)
-returns table(user_id uuid, endpoint text, p256dh text, auth_key text, mentioned boolean, kind text, show_id uuid, show_name text, author_label text, body text)
+returns table(user_id uuid, endpoint text, p256dh text, auth_key text, everyone boolean, kind text, show_id uuid, show_name text, author_label text, body text)
 language sql stable security definer set search_path = public as $$
   with p as (select * from show_posts where id = p_post),
   ment as (
     select distinct case when m[1] ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then m[1]::uuid end as uid
       from p, regexp_matches(p.body, '@\[[^\]]+\]\(u:([0-9a-f-]{36})\)', 'g') as m
   ),
-  who as (
-    select pr.id as uid from profiles pr, p where pr.active and p.kind in ('admin', 'general')
-    union select ment.uid from ment, p where p.kind = 'show' and ment.uid is not null
-    union select r.user_id from show_regisseurs r, p where p.kind = 'show' and r.show_id = p.show_id
-    union select sp.author_id from show_posts sp, p where p.kind = 'show' and sp.show_id = p.show_id and sp.author_id is not null
+  all_ok as (
+    select p.id from p join profiles a on a.id = p.author_id and a.active and a.role in ('regisseur_general', 'admin')
+     where p.body ~* '(^|[^[:alnum:]_@])@all([^[:alnum:]_]|$)'
+  ),
+  who as (   -- ev = reçu uniquement grâce à @all (pas cité nommément)
+    select x.uid, bool_and(x.ev) as ev from (
+      select ment.uid, false as ev from ment where ment.uid is not null
+      union all select pr.id, true from profiles pr, all_ok where pr.active
+    ) x group by x.uid
   )
-  select s.user_id, s.endpoint, s.p256dh, s.auth_key,
-         exists (select 1 from ment where ment.uid = s.user_id),
+  select s.user_id, s.endpoint, s.p256dh, s.auth_key, who.ev,
          p.kind, p.show_id, sh.name, p.author_label, p.body
     from p
     join who on who.uid is distinct from p.author_id

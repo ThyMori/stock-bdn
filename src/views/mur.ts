@@ -4,7 +4,7 @@ import { esc, fmtDateTime, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
 import { openForm } from '../ui/dialog';
-import { notifyPost } from '../push';
+import { ALL_OPT, notifyPost } from '../push';
 import { showColor } from '../types';
 
 let filter = '';   // '' = tout ; '__general' = infos générales ; sinon id d'un spectacle
@@ -32,8 +32,8 @@ export const murView: ViewFactory = () => ({
       if (act === 'm-person') {
         const ppl = (await loadPeople()).filter((p) => p.id !== state.profile?.id);
         if (!ppl.length) { err('Annuaire indisponible (connexion requise).'); return; }
-        const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', search: true, options: ppl.map((p): [string, string] => [p.id, p.label]), required: true }], { submit: 'Citer' });
-        if (f) insert('@' + (ppl.find((p) => p.id === f.p)?.label ?? '') + ' ');
+        const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', search: true, options: ALL_OPT().concat(ppl.map((p): [string, string] => [p.id, p.label])), required: true }], { submit: 'Citer' });
+        if (f) insert(f.p === '@all' ? '@all ' : '@' + (ppl.find((p) => p.id === f.p)?.label ?? '') + ' ');
       } else if (act === 'm-item') {
         const f = await openForm('Citer un projecteur', [{ name: 'n', label: 'N° du projecteur', required: true }], { submit: 'Citer', validate: (x) => (view().items.some((i) => String(i.id) === x.n.trim()) ? null : 'Projecteur inconnu.') });
         if (f) insert('#' + f.n.trim() + ' ');

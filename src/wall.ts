@@ -33,5 +33,6 @@ export function renderBody(body: string): string {
   return esc(body)
     .replace(/@\[([^\]]+)\]\(u:([0-9a-f-]{36})\)/g, (_m, label: string, id: string) => `<span class="mention" style="--pc:${personColor(id)}">@${label}</span>`)
     .replace(/(?<![&\w])#(\d{1,4})\b/g, '<a class="pitem" href="#/item/$1">#$1</a>')
+    .replace(/(?<![\w@&])@all\b/gi, '<span class="mention" style="--pc:#b91c1c">@all</span>')
     .replace(/\n/g, '<br>');
 }
