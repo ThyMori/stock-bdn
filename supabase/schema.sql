@@ -1252,11 +1252,14 @@ begin
   delete from push_subscriptions where endpoint = p_endpoint and user_id = auth.uid();
 end $$;
 
--- Qui prévenir pour un message ? Uniquement les personnes citées (@), auteur exclu, comptes actifs, un envoi par appareil.
+-- Qui prévenir pour un message ? (auteur exclu, comptes actifs, un envoi par appareil)
+--   message d'un spectacle : toutes les personnes concernées (régisseurs assignés, créateur du spectacle, personnes qui ont déjà écrit
+--                            sur son mur, quel que soit leur rôle) + les personnes citées (@) ;
+--   annonce admin / info générale : silencieuses, sauf pour les personnes citées.
 -- « @all » prévient tous les comptes actifs, mais seulement s'il est écrit par un régisseur général ou un administrateur.
 drop function if exists push_targets(uuid);
 create or replace function push_targets(p_post uuid)
-returns table(user_id uuid, endpoint text, p256dh text, auth_key text, everyone boolean, kind text, show_id uuid, show_name text, author_label text, body text)
+returns table(user_id uuid, endpoint text, p256dh text, auth_key text, mentioned boolean, everyone boolean, kind text, show_id uuid, show_name text, author_label text, body text)
 language sql stable security definer set search_path = public as $$
   with p as (select * from show_posts where id = p_post),
   ment as (
@@ -1267,13 +1270,17 @@ language sql stable security definer set search_path = public as $$
     select p.id from p join profiles a on a.id = p.author_id and a.active and a.role in ('regisseur_general', 'admin')
      where p.body ~* '(^|[^[:alnum:]_@])@all([^[:alnum:]_]|$)'
   ),
-  who as (   -- ev = reçu uniquement grâce à @all (pas cité nommément)
-    select x.uid, bool_and(x.ev) as ev from (
-      select ment.uid, false as ev from ment where ment.uid is not null
-      union all select pr.id, true from profiles pr, all_ok where pr.active
-    ) x group by x.uid
+  src as (   -- m = cité, a = @all, c = concerné par le spectacle
+    select ment.uid, 'm' as t from ment where ment.uid is not null
+    union all select pr.id, 'a' from profiles pr, all_ok where pr.active
+    union all select r.user_id, 'c' from show_regisseurs r, p where p.kind = 'show' and r.show_id = p.show_id
+    union all select sh.created_by, 'c' from shows sh, p where p.kind = 'show' and sh.id = p.show_id and sh.created_by is not null
+    union all select sp.author_id, 'c' from show_posts sp, p where p.kind = 'show' and sp.show_id = p.show_id and sp.author_id is not null
+  ),
+  who as (
+    select uid, bool_or(t = 'm') as mentioned, bool_or(t = 'a') and not bool_or(t = 'm') as everyone from src group by uid
   )
-  select s.user_id, s.endpoint, s.p256dh, s.auth_key, who.ev,
+  select s.user_id, s.endpoint, s.p256dh, s.auth_key, who.mentioned, who.everyone,
          p.kind, p.show_id, sh.name, p.author_label, p.body
     from p
     join who on who.uid is distinct from p.author_id

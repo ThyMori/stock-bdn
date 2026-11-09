@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { buildPayload, handle, plainText, type Target } from '../supabase/functions/push-notify/index';
 
-const T = (o: Partial<Target> = {}): Target => ({ user_id: 'U', endpoint: 'https://p/1', p256dh: 'k', auth_key: 'a', everyone: false, kind: 'show', show_id: 'S1', show_name: 'Pasolini', author_label: 'Marie D', body: 'Bonjour', ...o });
+const T = (o: Partial<Target> = {}): Target => ({ user_id: 'U', endpoint: 'https://p/1', p256dh: 'k', auth_key: 'a', mentioned: false, everyone: false, kind: 'show', show_id: 'S1', show_name: 'Pasolini', author_label: 'Marie D', body: 'Bonjour', ...o });
 
 // ---- contenu des notifications ----
 assert.equal(plainText('Merci @[Jean Dupont](u:aaaaaaaa-0000-0000-0000-000000000001)   pour\nle prêt'), 'Merci @Jean Dupont pour le prêt');
 assert.ok(plainText('x'.repeat(300)).length <= 140 && plainText('x'.repeat(300)).endsWith('…'));
-assert.deepEqual(buildPayload(T(), 'P'), { title: 'Marie D t’a cité · Pasolini', body: 'Bonjour', url: '#/show/S1', tag: 'post-P' });
+assert.deepEqual(buildPayload(T(), 'P'), { title: 'Pasolini', body: 'Marie D : Bonjour', url: '#/show/S1', tag: 'post-P' });
+assert.equal(buildPayload(T({ mentioned: true }), 'P').title, 'Marie D t’a cité · Pasolini');
 assert.equal(buildPayload(T({ everyone: true }), 'P').title, 'Marie D à tous · Pasolini');
 assert.equal(buildPayload(T({ kind: 'admin', show_id: null, show_name: null }), 'P').title, 'Annonce admin · Marie D');
 assert.equal(buildPayload(T({ kind: 'general', show_id: null, show_name: null }), 'P').url, '#/mur');
