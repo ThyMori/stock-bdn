@@ -1,7 +1,7 @@
 import { esc } from '../logic';
 
 export interface Field {
-  name: string; label: string; type?: 'text' | 'date' | 'textarea' | 'select' | 'swatch';
+  name: string; label: string; type?: 'text' | 'date' | 'textarea' | 'select' | 'swatch' | 'number';
   required?: boolean; value?: string; min?: string; max?: string; hint?: string; options?: [string, string][];
 }
 
@@ -11,6 +11,7 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
     const dlg = document.createElement('dialog'); dlg.className = 'dlg';
     const input = (f: Field) => f.type === 'swatch'
       ? `<span class="swatches" role="radiogroup">${(f.options ?? []).map(([v, l]) => `<label class="swatch" title="${esc(l)}"><input type="radio" name="${f.name}" value="${esc(v)}" ${v === f.value ? 'checked' : ''}><i style="background:${esc(v)}"></i><span class="sr">${esc(l)}</span></label>`).join('')}</span>`
+      : f.type === 'number' ? `<span class="stepper"><button type="button" class="btn" data-step="-1" aria-label="Moins">−</button><input name="${f.name}" inputmode="numeric" pattern="[0-9]*" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} autocomplete="off"><button type="button" class="btn" data-step="1" aria-label="Plus">+</button></span>`
       : f.type === 'textarea' ? `<textarea name="${f.name}" ${f.required ? 'required' : ''}>${esc(f.value ?? '')}</textarea>`
       : f.type === 'select' ? `<select name="${f.name}">${(f.options ?? []).map(([v, l]) => `<option value="${esc(v)}" ${v === f.value ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`
       : `<input name="${f.name}" type="${f.type ?? 'text'}" value="${esc(f.value ?? '')}" ${f.required ? 'required' : ''} ${f.min ? `min="${f.min}"` : ''} ${f.max ? `max="${f.max}"` : ''} autocomplete="off">`;
@@ -33,6 +34,11 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
       if (err) { dlg.querySelector('#dlgErr')!.textContent = err; return; }
       finish(v);
     });
+    dlg.querySelectorAll<HTMLButtonElement>('[data-step]').forEach((b) => b.addEventListener('click', () => {
+      const inp = b.parentElement!.querySelector('input')!; const f = fields.find((x) => x.name === inp.name);
+      const lo = Number(f?.min ?? 0), hi = Number(f?.max ?? 9999), cur = parseInt(inp.value, 10);
+      inp.value = String(Math.min(hi, Math.max(lo, (Number.isFinite(cur) ? cur : lo) + Number(b.dataset.step))));
+    }));
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
     dlg.showModal();
     dlg.querySelector<HTMLElement>('input, textarea, select')?.focus();

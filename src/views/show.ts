@@ -298,14 +298,14 @@ export const showView: ViewFactory = ([id]) => {
           const f = await openForm('Demander du matériel', [
             { name: 'model', label: 'Modèle', type: 'select', required: true, options: models.map((m): [string, string] => [m.id, `${tname(m) ? tname(m) + ' · ' : ''}${m.name}`]) },
             { name: 'lamp', label: 'Lampe (obligatoire pour un PAR)', type: 'select', options: [['', '—'], ...lampOptions().map((l): [string, string] => [l.id, l.name])] },
-            { name: 'qty', label: 'Quantité', required: true, value: '1' }
+            { name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: '1' }
           ], { submit: 'Demander', validate: (v) => !/^\d+$/.test(v.qty.trim()) || Number(v.qty) < 1 || Number(v.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : parModel(v.model) && !v.lamp ? 'Choisis la lampe pour un PAR.' : null });
           if (!f) return;
           await sendDemand(f.model, parModel(f.model) ? f.lamp : '', Number(f.qty));
         }
         else if (act === 'dem-edit') {
           const x = view().showDemands.find((r) => r.id === v); if (!x) return;
-          const f = await openForm('Quantité demandée', [{ name: 'qty', label: 'Quantité', required: true, value: String(x.qty) }],
+          const f = await openForm('Quantité demandée', [{ name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: String(x.qty) }],
             { submit: 'Enregistrer', validate: (w) => !/^\d+$/.test(w.qty.trim()) || Number(w.qty) < 1 || Number(w.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : null });
           if (!f) return;
           await sendDemand(x.model_id, x.lamp_id ?? '', Number(f.qty));
