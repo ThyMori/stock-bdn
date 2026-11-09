@@ -72,14 +72,17 @@ export const showView: ViewFactory = ([id]) => {
       const gs = d.showGels.filter((g) => g.show_id === id && g.item_id === itemId).sort((a, b) => a.ref.localeCompare(b.ref));
       return gs.length ? `<div class="gels">${gs.map((g) => `<span class="gel"><i style="background:${gelCss(g.color)}"></i>${esc(g.ref)}${canAssign ? `<button class="gx" data-act="gel-del" data-v="${g.id}" aria-label="Retirer le gel ${esc(g.ref)}">×</button>` : ''}</span>`).join('')}</div>` : '';
     };
-    const manual = canAssign ? mine.filter((s) => !s.demand_id) : [];
-    for (const n of [...rsel]) if (!manual.some((s) => s.item_id === n)) rsel.delete(n);
+    const sels = canAssign ? mine : [];
+    for (const n of [...rsel]) if (!sels.some((s) => s.item_id === n)) rsel.delete(n);
+    const modelOf = (n: number) => d.items.find((i) => i.id === n)?.model_id ?? '';
+    const selModels = [...new Set(sels.map((s) => modelOf(s.item_id)))].map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', ids: sels.filter((s) => modelOf(s.item_id) === m).map((s) => s.item_id) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     const origin = (s: (typeof mine)[number]) => (s.demand_id ? ` <span class="tag auto">${s.pinned ? 'choisi' : 'auto'}</span>` : '')
       + (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
     const assigned = mine.map((s) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
-      return `<div class="item">${canAssign && !s.demand_id ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
+      return `<div class="item">${canAssign ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
         <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${origin(s)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
         ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button>${s.demand_id
           ? `<button class="btn" data-act="swap" data-v="${s.item_id}" aria-label="Changer le projecteur ${s.item_id}">Changer</button>${s.pinned ? `<button class="btn" data-act="release" data-v="${s.item_id}" aria-label="Remettre le projecteur ${s.item_id} en automatique">Auto</button>` : ''}`
@@ -141,7 +144,9 @@ export const showView: ViewFactory = ([id]) => {
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       ${demandCard}
       <div class="card"><div class="row"><h2 class="grow">Projecteurs (${mine.length})</h2>${canAssign && mode === 'view' ? '<button class="btn" data-act="mode" data-v="pick">+ Choisir à la main</button>' : ''}</div>
-        ${manual.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${rsel.size === manual.length ? 'Tout décocher' : 'Tout cocher (manuels)'}</button>${rsel.size ? `<button class="btn primary" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
+        ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${rsel.size === sels.length ? 'Tout décocher' : 'Tout cocher'}</button>
+          ${selModels.length > 1 ? selModels.map((m) => `<button class="chip" data-act="rmodel" data-v="${esc(m.id)}" aria-pressed="${m.ids.every((n) => rsel.has(n))}">${esc(m.name)} (${m.ids.length})</button>`).join('') : ''}
+          ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}`;
     if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
     const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
@@ -340,13 +345,30 @@ export const showView: ViewFactory = ([id]) => {
         }
         else if (act === 'rtoggle') { const n = Number(v); if (rsel.has(n)) rsel.delete(n); else rsel.add(n); paint(root); }
         else if (act === 'rall') {
-          const man = view().showItems.filter((r) => r.show_id === id && !r.demand_id).map((r) => r.item_id);
-          if (rsel.size === man.length) rsel.clear(); else man.forEach((n) => rsel.add(n));
+          const all = view().showItems.filter((r) => r.show_id === id).map((r) => r.item_id);
+          if (rsel.size === all.length) rsel.clear(); else all.forEach((n) => rsel.add(n));
           paint(root);
         }
-        else if (act === 'remove-sel') {
+        else if (act === 'rmodel') {
+          const dd = view();
+          const ids = dd.showItems.filter((r) => r.show_id === id && dd.items.find((i) => i.id === r.item_id)?.model_id === v).map((r) => r.item_id);
+          if (ids.every((n) => rsel.has(n))) ids.forEach((n) => rsel.delete(n)); else ids.forEach((n) => rsel.add(n));
+          paint(root);
+        }
+        else if (act === 'gel-sel') {
           const list = [...rsel].sort((a, b) => a - b); if (!list.length) return;
-          if (!window.confirm(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?`)) return;
+          const used = [...new Set(view().showGels.filter((g) => g.show_id === id).map((g) => g.ref))].sort();
+          const f = await openForm(`Gel sur ${list.length} projecteur${list.length > 1 ? 's' : ''}`, [
+            { name: 'ref', label: 'Référence du gel', required: true, hint: used.length ? `Déjà utilisés ici : ${used.join(', ')}` : 'Ex. L201 (Lee), R80 ou #80 (Rosco)' }], { submit: 'Ajouter le gel' });
+          if (!f) return;
+          const r = await rpcCall('add_gels', { p_show: id, p_items: list, p_ref: f.ref.trim(), p_color: gelColorOf(f.ref) });
+          if (r.error) err(r.error); else { rsel.clear(); toast(`Gel ${f.ref.trim()} ajouté sur ${list.length} projecteur${list.length > 1 ? 's' : ''}.`, 'ok'); }
+        }
+        else if (act === 'remove-sel') {
+          const rows = view().showItems.filter((r) => r.show_id === id && rsel.has(r.item_id));
+          const list = rows.filter((r) => !r.demand_id).map((r) => r.item_id).sort((a, b) => a - b), auto = rows.length - list.length;
+          if (!list.length) { err('Ces projecteurs viennent d\'une demande : change la quantité de la demande, ou utilise « Changer ».'); return; }
+          if (!window.confirm(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?${auto ? `\n${auto} projecteur${auto > 1 ? 's' : ''} issu${auto > 1 ? 's' : ''} d'une demande ne seront pas retirés.` : ''}`)) return;
           const r = await rpcCall('unassign_items', { p_show: id, p_items: list });
           if (r.error) err(r.error); else { rsel.clear(); toast(`${list.length} projecteur${list.length > 1 ? 's' : ''} retiré${list.length > 1 ? 's' : ''}.`, 'ok'); }
         }

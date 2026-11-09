@@ -316,3 +316,4 @@ nav.tabs a { font-size: .68rem; }
 .stepper { display: flex; gap: 8px; align-items: stretch; }
 .stepper input { flex: 1; text-align: center; min-width: 0; }
 .stepper .btn { min-width: 52px; padding: 0; font-size: 1.5rem; line-height: 1; }
+.item > .grow { min-width: 0; }
