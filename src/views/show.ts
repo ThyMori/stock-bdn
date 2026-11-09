@@ -302,7 +302,7 @@ export const showView: ViewFactory = ([id]) => {
           if (!models.length) { err('Aucun modèle dans le catalogue.'); return; }
           const parModel = (mid: string) => /^PAR/i.test(tname(dd.models.find((m) => m.id === mid) ?? { type_id: null }));
           const f = await openForm('Demander du matériel', [
-            { name: 'model', label: 'Modèle', type: 'select', required: true, options: models.map((m): [string, string] => [m.id, `${tname(m) ? tname(m) + ' · ' : ''}${m.name}${stock(m.id) ? '' : ' (0 en stock : à louer / emprunter)'}`]) },
+            { name: 'model', label: 'Modèle', type: 'select', search: true, required: true, options: models.map((m): [string, string] => [m.id, `${tname(m) ? tname(m) + ' · ' : ''}${m.name}${stock(m.id) ? '' : ' (0 en stock : à louer / emprunter)'}`]) },
             { name: 'lamp', label: 'Lampe (obligatoire pour un PAR)', type: 'select', options: [['', '—'], ...lampOptions().map((l): [string, string] => [l.id, l.name])] },
             { name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: '1' }
           ], { submit: 'Demander', validate: (v) => !/^\d+$/.test(v.qty.trim()) || Number(v.qty) < 1 || Number(v.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : parModel(v.model) && !v.lamp ? 'Choisis la lampe pour un PAR.' : null });
@@ -330,7 +330,7 @@ export const showView: ViewFactory = ([id]) => {
             .sort((a, b) => Number(b.lamp_id === row.lamp_id) - Number(a.lamp_id === row.lamp_id) || a.id - b.id);
           if (!cands.length) { err('Aucun autre projecteur de ce modèle n\'est disponible pendant ce spectacle (déjà pris, SAV, prêt ou en panne).'); return; }
           const st = (i: (typeof cands)[number]) => ({ dispo: 'disponible', utilise: 'utilisé', sav: 'SAV', en_pret: 'en prêt' }[i.eff ?? i.status]);
-          const f = await openForm(`Remplacer le projecteur ${v}`, [{ name: 'to', label: 'Par le projecteur', type: 'select', required: true,
+          const f = await openForm(`Remplacer le projecteur ${v}`, [{ name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true,
             options: cands.map((i): [string, string] => [String(i.id), `n° ${i.id} · ${lampName(i.lamp_id) ?? 'sans lampe'} · ${st(i)}`]) }], { submit: 'Remplacer' });
           if (!f) return;
           const r = await rpcCall('swap_show_item', { p_show: id, p_old: Number(v), p_new: Number(f.to) });
@@ -422,7 +422,7 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'wall-person') {
           const ppl = (await loadPeople()).filter((p) => p.id !== state.profile?.id);
           if (!ppl.length) { wallErr('Annuaire indisponible (connexion requise).'); return; }
-          const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', options: ppl.map((p): [string, string] => [p.id, p.label]), required: true }], { submit: 'Citer' });
+          const f = await openForm('Citer une personne', [{ name: 'p', label: 'Personne', type: 'select', search: true, options: ppl.map((p): [string, string] => [p.id, p.label]), required: true }], { submit: 'Citer' });
           if (f) insertAtCursor('@' + (ppl.find((p) => p.id === f.p)?.label ?? '') + ' ');
         }
         else if (act === 'wall-item') {
