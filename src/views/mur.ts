@@ -4,6 +4,7 @@ import { esc, fmtDateTime, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
 import { openForm } from '../ui/dialog';
+import { notifyPost } from '../push';
 import { showColor } from '../types';
 
 let filter = '';   // '' = tout ; '__general' = infos générales ; sinon id d'un spectacle
@@ -39,8 +40,9 @@ export const murView: ViewFactory = () => ({
       } else if (act === 'm-post') {
         if (!ta) return; const text = ta.value.trim(); if (!text) { err('Écris un message avant de publier.'); return; }
         const ppl = knownPeople().length ? knownPeople() : await loadPeople();
-        const r = await rpcCall('post_general_message', { p_id: uuid(), p_body: fromEditable(text, ppl) });
-        if (r.error) err(r.error); else { ta.value = ''; err(''); }
+        const pid = uuid();
+        const r = await rpcCall('post_general_message', { p_id: pid, p_body: fromEditable(text, ppl) });
+        if (r.error) err(r.error); else { ta.value = ''; err(''); notifyPost(pid); }
       } else if (act === 'post-edit') {
         const p = view().showPosts.find((x) => x.id === v); if (!p) return;
         const f = await openForm('Modifier le message', [{ name: 'b', label: 'Message', type: 'textarea', required: true, value: toEditable(p.body) }]);

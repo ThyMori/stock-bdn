@@ -1,13 +1,13 @@
 {
   "name": "stock-bdn",
   "private": true,
-  "version": "1.11.0",
+  "version": "1.12.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "tsx tests/logic.test.ts && tsx tests/admin-users.test.ts"
+    "test": "tsx tests/logic.test.ts && tsx tests/admin-users.test.ts && tsx tests/push-notify.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",

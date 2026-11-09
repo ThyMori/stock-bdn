@@ -1217,3 +1217,75 @@ revoke all on function release_show_item(uuid,int) from public;
 grant execute on function set_demand(uuid,text,text,int) to authenticated;
 grant execute on function swap_show_item(uuid,int,int) to authenticated;
 grant execute on function release_show_item(uuid,int) to authenticated;
+
+-- ---------- v1.12 : notifications push du mur ----------
+-- Un abonnement = un appareil (navigateur / appli installée) d'une personne. Aucun accès direct à la table :
+-- tout passe par les fonctions ci-dessous, et la fonction serveur « push-notify » lit avec la clé service.
+create table if not exists push_subscriptions (
+  endpoint   text primary key,
+  user_id    uuid not null references auth.users on delete cascade,
+  p256dh     text not null,
+  auth_key   text not null,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user_idx on push_subscriptions(user_id);
+alter table push_subscriptions enable row level security;
+alter table show_posts add column if not exists push_sent_at timestamptz;   -- un message n'est notifié qu'une seule fois
+
+create or replace function save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_ua text default null) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or coalesce(length(p_p256dh), 0) = 0 or coalesce(length(p_auth), 0) = 0 then
+    raise exception 'Abonnement invalide' using errcode = '22023';
+  end if;
+  -- sur un téléphone partagé, l'abonnement passe à la personne connectée
+  insert into push_subscriptions (endpoint, user_id, p256dh, auth_key, user_agent)
+  values (p_endpoint, auth.uid(), p_p256dh, p_auth, left(p_ua, 200))
+  on conflict (endpoint) do update set user_id = auth.uid(), p256dh = excluded.p256dh, auth_key = excluded.auth_key, user_agent = excluded.user_agent;
+end $$;
+
+create or replace function delete_push_subscription(p_endpoint text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from push_subscriptions where endpoint = p_endpoint and user_id = auth.uid();
+end $$;
+
+-- Qui prévenir pour un message ? (auteur exclu, comptes actifs, un abonnement par appareil)
+--   annonce admin / info générale : tout le monde ;
+--   message de spectacle : les personnes citées (@), les régisseurs assignés au spectacle et celles qui ont déjà écrit sur son mur.
+create or replace function push_targets(p_post uuid)
+returns table(user_id uuid, endpoint text, p256dh text, auth_key text, mentioned boolean, kind text, show_id uuid, show_name text, author_label text, body text)
+language sql stable security definer set search_path = public as $$
+  with p as (select * from show_posts where id = p_post),
+  ment as (
+    select distinct case when m[1] ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then m[1]::uuid end as uid
+      from p, regexp_matches(p.body, '@\[[^\]]+\]\(u:([0-9a-f-]{36})\)', 'g') as m
+  ),
+  who as (
+    select pr.id as uid from profiles pr, p where pr.active and p.kind in ('admin', 'general')
+    union select ment.uid from ment, p where p.kind = 'show' and ment.uid is not null
+    union select r.user_id from show_regisseurs r, p where p.kind = 'show' and r.show_id = p.show_id
+    union select sp.author_id from show_posts sp, p where p.kind = 'show' and sp.show_id = p.show_id and sp.author_id is not null
+  )
+  select s.user_id, s.endpoint, s.p256dh, s.auth_key,
+         exists (select 1 from ment where ment.uid = s.user_id),
+         p.kind, p.show_id, sh.name, p.author_label, p.body
+    from p
+    join who on who.uid is distinct from p.author_id
+    join profiles pr on pr.id = who.uid and pr.active
+    join push_subscriptions s on s.user_id = pr.id
+    left join shows sh on sh.id = p.show_id;
+$$;
+
+revoke all on function save_push_subscription(text,text,text,text) from public;
+revoke all on function delete_push_subscription(text) from public;
+grant execute on function save_push_subscription(text,text,text,text) to authenticated;
+grant execute on function delete_push_subscription(text) to authenticated;
+revoke all on function push_targets(uuid) from public, anon, authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function push_targets(uuid) to service_role;
+  end if;
+end $$;

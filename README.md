@@ -112,6 +112,20 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### Notifications push du mur (v1.12)
+Un appareil qui a activé les notifications (**Plus → Notifications → Activer**) reçoit une notification à la publication d'un message du mur :
+- **annonce admin / info générale** : tout le monde (sauf l'auteur) ;
+- **message d'un spectacle** : les personnes citées (@), les régisseurs assignés au spectacle et celles qui ont déjà écrit sur son mur (sauf l'auteur). Une citation est signalée « X t'a cité ».
+
+Un clic sur la notification ouvre le mur ou le spectacle. Chaque message n'est notifié qu'une fois ; modifier un message ne renotifie pas. Le bouton *Envoyer un essai* vérifie toute la chaîne. Sur **iPhone**, il faut d'abord ajouter l'appli à l'écran d'accueil (iOS 16.4 minimum). À la déconnexion, l'appareil n'est plus abonné à ce compte.
+
+Mise en place (une seule fois) :
+1. Rejouer `supabase/schema.sql` (table `push_subscriptions`, fonctions `save_push_subscription`, `delete_push_subscription`, `push_targets`).
+2. **Edge Functions → Deploy a new function → Via Editor** : nom **`push-notify`**, contenu de `supabase/functions/push-notify/index.ts`, puis désactiver *Verify JWT* (la fonction vérifie elle-même l'identité, comme `admin-users`).
+3. **Edge Functions → Secrets** : créer `VAPID_PUBLIC_KEY` et `VAPID_PRIVATE_KEY` (paire de clés VAPID ; la clé publique est aussi dans `src/push.ts`, les deux doivent correspondre). `VAPID_SUBJECT` est facultatif.
+
+Pour générer une nouvelle paire : `npx web-push generate-vapid-keys`, puis remplacer `VAPID_PUBLIC_KEY` dans `src/push.ts` et les deux secrets (les appareils doivent alors réactiver les notifications).
+
 ### Messages généraux sur le mur (v1.11)
 Depuis l'onglet **Mur**, un administrateur poste une **annonce admin** (bandeau jaune rayé : notes de mise à jour, consignes) et un régisseur général une **info générale** (bandeau vert : vie du théâtre, utilisation du matériel). Le bandeau est fixé par le rôle de l'auteur ; ces messages n'appartiennent à aucun spectacle (`show_posts.show_id` nul, `kind` = admin / general), se filtrent via « Infos générales », se modifient et s'effacent par leur auteur (l'admin peut tout effacer). RPC `post_general_message`.
 

@@ -4,9 +4,19 @@ import { openForm } from '../ui/dialog';
 import { esc, fmtDateTime } from '../logic';
 import { ROLE_LABEL, fullName } from '../types';
 import { supabase } from '../supabase';
+import { disablePush, enablePush, forgetPushOnLogout, pushStatus, testPush } from '../push';
+import type { PushStatus } from '../push';
+
+let pushSt: PushStatus | null = null;
+const refreshPush = async (root: HTMLElement) => {
+  const uid = state.session?.user.id;
+  pushSt = uid ? await pushStatus(uid) : null;
+  if (root.isConnected) paint(root);
+};
 
 export const moreView: ViewFactory = () => ({
   mount(root) {
+    void refreshPush(root);
     root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
@@ -23,9 +33,18 @@ export const moreView: ViewFactory = () => ({
         await loadProfile(p.id).catch(() => {});
         paint(root);
       }
+      const uid = state.session?.user.id;
+      if (uid && (el.dataset.act === 'push-on' || el.dataset.act === 'push-off' || el.dataset.act === 'push-test')) {
+        const msg = (t: string) => { const m = root.querySelector('#pushMsg'); if (m) m.textContent = t; };
+        (el as HTMLButtonElement).disabled = true;
+        if (el.dataset.act === 'push-on') { const err = await enablePush(uid); await refreshPush(root); if (err) msg(err); }
+        else if (el.dataset.act === 'push-off') { const err = await disablePush(uid); await refreshPush(root); if (err) msg(err); }
+        else { msg('Envoi…'); const t = await testPush(); (el as HTMLButtonElement).disabled = false; msg(t); }
+      }
       if (el.dataset.act === 'dismiss') void dismissRejected(Number(el.dataset.v));
       if (el.dataset.act === 'logout') {
         if (state.pending.length && !window.confirm(`${state.pending.length} action(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return;
+        await forgetPushOnLogout();
         await supabase.auth.signOut();
         await clearLocal();
         location.hash = '#/';
@@ -48,6 +67,7 @@ function paint(root: HTMLElement) {
     </div>
     ${state.rejected.length ? `<div class="card stack"><h2 class="warn">Actions refusées par le serveur</h2>
       ${state.rejected.map((r, i) => `<div class="row"><div class="grow sub">${esc(r.op.kind)} — ${esc(r.message)}</div><button class="btn small" data-act="dismiss" data-v="${i}">OK</button></div>`).join('')}</div>` : ''}
+    ${pushCard()}
     <div class="list">
       ${can('regisseur_general') ? '<a class="item" href="#/labels"><div class="grow"><div class="t">Étiquettes QR</div><div class="s">Imprimer les stickers des projecteurs</div></div>›</a>' : ''}
       ${can('regisseur_general') ? `
@@ -60,5 +80,19 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.11.0</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.12.0</div></div>`;
+}
+
+function pushCard(): string {
+  if (pushSt === null) return '';
+  const off = state.online ? '' : 'disabled';
+  const info = '<div class="sub">Tu es prévenu des annonces et infos générales du mur, et des messages des spectacles où tu es assigné, cité (@) ou où tu as déjà écrit.</div>';
+  const body: Record<PushStatus, string> = {
+    unsupported: '<div class="sub">Ce navigateur ne gère pas les notifications.</div>',
+    'ios-install': '<div class="sub">Sur iPhone, ajoute d’abord l’appli à l’écran d’accueil (Partager → Sur l’écran d’accueil), puis ouvre-la depuis son icône : les notifications y seront disponibles.</div>',
+    denied: '<div class="sub warn" style="display:block">Les notifications sont bloquées pour cette appli. Autorise-les dans les réglages du navigateur ou du téléphone, puis reviens ici.</div>',
+    off: `${info}<div class="row"><button class="btn grow" data-act="push-on" ${off}>Activer les notifications</button></div>`,
+    on: `${info}<div class="sub"><b>Activées sur cet appareil.</b></div><div class="row wrap"><button class="btn grow" data-act="push-test" ${off}>Envoyer un essai</button><button class="btn grow" data-act="push-off" ${off}>Désactiver</button></div>`
+  };
+  return `<div class="card stack"><h2>Notifications</h2>${body[pushSt]}<div id="pushMsg" class="sub" role="status"></div></div>`;
 }

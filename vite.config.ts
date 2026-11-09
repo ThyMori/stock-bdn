@@ -33,6 +33,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         globIgnores: ['**/*latin-ext*', '**/*vietnamese*'], // le sous-ensemble « latin » couvre le français
         navigateFallback: 'index.html',
+        importScripts: ['push-sw.js'], // réception des notifications push (public/push-sw.js)
         // les appels Supabase ne sont jamais mis en cache par le service worker :
         // la donnée hors ligne est gérée par l'appli (IndexedDB).
         runtimeCaching: []

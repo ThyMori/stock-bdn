@@ -26,6 +26,7 @@ import { playArc, reducedMotion } from './arc';
 import { playPinball } from './pinball';
 import type { Role } from './types';
 import { fmtDateTime } from './logic';
+import { listenPushNavigation, syncPush } from './push';
 
 registerSW({ immediate: true });
 const app = document.getElementById('app')!;
@@ -110,6 +111,8 @@ function startApp() {
   paintStatus();
   route();
   void sync();
+  listenPushNavigation();
+  if (state.session) void syncPush(state.session.user.id);
 }
 
 window.addEventListener('online', () => { setOnline(true); void sync(); });

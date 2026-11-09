@@ -12,6 +12,7 @@ import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from 
 import { knownPeople, loadPeople } from '../people';
 import { describe, norm } from '../ref';
 import { openForm } from '../ui/dialog';
+import { notifyPost } from '../push';
 import { fmtDay } from './agenda';
 
 const PAR_LAMPS = ['CP60', 'CP61', 'CP62', 'CP95'];
@@ -458,8 +459,9 @@ export const showView: ViewFactory = ([id]) => {
           const ta = root.querySelector<HTMLTextAreaElement>('#wallText'); if (!ta) return;
           const text = ta.value.trim(); if (!text) { wallErr('Écris un message avant de publier.'); return; }
           const ppl = knownPeople().length ? knownPeople() : await loadPeople();
-          const r = await rpcCall('post_show_message', { p_id: uuid(), p_show: id, p_body: fromEditable(text, ppl) });
-          if (r.error) wallErr(r.error); else { ta.value = ''; wallErr(''); }
+          const pid = uuid();
+          const r = await rpcCall('post_show_message', { p_id: pid, p_show: id, p_body: fromEditable(text, ppl) });
+          if (r.error) wallErr(r.error); else { ta.value = ''; wallErr(''); notifyPost(pid); }
         }
         else if (act === 'post-edit') {
           const p = view().showPosts.find((x) => x.id === v); if (!p) return;
