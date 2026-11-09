@@ -296,12 +296,13 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'dem-add') {
           const dd = view();
           const tname = (m: { type_id: string | null }) => dd.types.find((t) => t.id === m.type_id)?.name ?? '';
-          const models = dd.models.filter((m) => dd.items.some((i) => i.model_id === m.id))
+          const stock = (mid: string) => dd.items.filter((i) => i.model_id === mid).length;
+          const models = [...dd.models]
             .sort((a, b) => tname(a).localeCompare(tname(b), 'fr') || a.name.localeCompare(b.name, 'fr', { numeric: true }));
-          if (!models.length) { err('Aucun modèle en stock.'); return; }
+          if (!models.length) { err('Aucun modèle dans le catalogue.'); return; }
           const parModel = (mid: string) => /^PAR/i.test(tname(dd.models.find((m) => m.id === mid) ?? { type_id: null }));
           const f = await openForm('Demander du matériel', [
-            { name: 'model', label: 'Modèle', type: 'select', required: true, options: models.map((m): [string, string] => [m.id, `${tname(m) ? tname(m) + ' · ' : ''}${m.name}`]) },
+            { name: 'model', label: 'Modèle', type: 'select', required: true, options: models.map((m): [string, string] => [m.id, `${tname(m) ? tname(m) + ' · ' : ''}${m.name}${stock(m.id) ? '' : ' (0 en stock : à louer / emprunter)'}`]) },
             { name: 'lamp', label: 'Lampe (obligatoire pour un PAR)', type: 'select', options: [['', '—'], ...lampOptions().map((l): [string, string] => [l.id, l.name])] },
             { name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: '1' }
           ], { submit: 'Demander', validate: (v) => !/^\d+$/.test(v.qty.trim()) || Number(v.qty) < 1 || Number(v.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : parModel(v.model) && !v.lamp ? 'Choisis la lampe pour un PAR.' : null });
