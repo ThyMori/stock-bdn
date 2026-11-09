@@ -80,13 +80,13 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.12.2</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.12.3</div></div>`;
 }
 
 function pushCard(): string {
   if (pushSt === null) return '';
   const off = state.online ? '' : 'disabled';
-  const info = '<div class="sub">Tu es prévenu des messages des spectacles qui te concernent (assigné, créateur, déjà intervenu sur leur mur), quand quelqu’un te cite (@), et quand un régisseur général / un administrateur écrit @all. Les annonces admin et infos générales restent silencieuses, sauf si tu es cité.</div>';
+  const info = '<div class="sub">Tu es prévenu des messages de tous les spectacles si tu es régisseur général ou admin, sinon de ceux qui te concernent (assigné, créateur, déjà intervenu sur leur mur), quand quelqu’un te cite (@), et quand un régisseur général / un administrateur écrit @all. Les annonces admin et infos générales restent silencieuses, sauf si tu es cité.</div>';
   const body: Record<PushStatus, string> = {
     unsupported: '<div class="sub">Ce navigateur ne gère pas les notifications.</div>',
     'ios-install': '<div class="sub">Sur iPhone, ajoute d’abord l’appli à l’écran d’accueil (Partager → Sur l’écran d’accueil), puis ouvre-la depuis son icône : les notifications y seront disponibles.</div>',

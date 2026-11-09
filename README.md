@@ -114,7 +114,7 @@ Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité)
 
 ### Notifications push du mur (v1.12)
 Un appareil qui a activé les notifications (**Plus → Notifications → Activer**) est prévenu :
-- d'un **message posté sur le mur d'un spectacle**, si la personne est concernée par ce spectacle : régisseur assigné, créateur du spectacle ou personne déjà intervenue sur son mur (quel que soit son rôle, RG compris) ;
+- d'un **message posté sur le mur d'un spectacle** : tous les régisseurs généraux et administrateurs, pour tous les spectacles ; les autres seulement si elles sont concernées : régisseur assigné, créateur du spectacle ou personne déjà intervenue sur son mur (quel que soit son rôle, RG compris) ;
 - quand elle est **citée** (@Nom) dans n'importe quel message ;
 - quand un régisseur général ou un administrateur écrit **@all** (proposé en tête de « @ Citer une personne ») : tous les comptes sont prévenus ; écrit par quelqu'un d'autre, @all n'a aucun effet.
 

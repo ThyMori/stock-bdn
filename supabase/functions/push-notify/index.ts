@@ -4,7 +4,7 @@
 //   { action: "test" }            -> envoie une notification d'essai aux appareils de l'appelant
 //
 // Qui est prévenu est décidé en base (fonction SQL push_targets) :
-//   message d'un spectacle        -> les personnes concernées (régisseurs assignés, créateur, personnes déjà intervenues sur son mur) et les personnes citées ;
+//   message d'un spectacle        -> tous les régisseurs généraux et administrateurs, les personnes concernées (régisseurs assignés, créateur, personnes déjà intervenues sur son mur) et les personnes citées ;
 //   annonce admin / info générale -> silencieuses, sauf pour les personnes citées.
 // « @all » prévient tous les comptes, mais seulement s'il est écrit par un régisseur général ou un administrateur.
 //
