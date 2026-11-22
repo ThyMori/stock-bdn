@@ -357,7 +357,7 @@ t('PDF patch : zones, gélatines à couper, accessoires par modèle', () => {
   assert.deepEqual(g[0].rows.map((r) => r.position), ['P0', 'P3'], 'P0 avant P3');
   const gl = gelList(rows);
   assert.deepEqual(gl.map((x) => [x.ref, x.qty]), [['L201', 2], ['R80', 1]], 'classées par référence, quantités');
-  assert.equal(gl[0].circuits, '2, 10'); assert.equal(gl[0].models, 'Découpe, PC');
+  assert.equal(gl[0].circuits, '2, 10'); assert.equal(gl[0].models, 'Découpe ×1, PC ×1');
   const al = accessoryList(rows);
   assert.deepEqual(al.map((x) => [x.model, x.accessory, x.qty]), [['Découpe', 'Iris', 1], ['Découpe', 'Gobo', 1], ['PC', 'Iris', 1]], 'classés par modèle');
 });

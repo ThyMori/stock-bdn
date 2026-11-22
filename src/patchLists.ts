@@ -17,7 +17,7 @@ export function positionGroups(rows: PatchRow[]): { label: string; rows: PatchRo
 }
 
 /** Texte « PAR64 ×3, Découpe ×2 » : combien de projecteurs de chaque modèle. */
-const countText = (m: Map<string, number>): string => [...m.entries()].sort((a, b) => nat(a[0], b[0])).map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(', ');
+const countText = (m: Map<string, number>): string => [...m.entries()].sort((a, b) => nat(a[0], b[0])).map(([k, n]) => `${k} ×${n}`).join(', ');
 /** Circuits renseignés, triés, séparés par des virgules (« - » si aucun). */
 const circuitsText = (cs: string[]): string => cs.filter(Boolean).sort(nat).join(', ') || '-';
 
