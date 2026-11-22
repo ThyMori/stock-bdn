@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
-import { prepRows, gelGroups, externalRows } from '../src/prepPdf';
+import { prepRows, gelGroups, externalRows, prepSections } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
 import { compareShows, teardownPlan } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
@@ -413,6 +413,10 @@ t('liste de prépa : provenance, position et accessoires ; prêts et locations s
   const r = prepRows(d, 'b');
   assert.deepEqual(r.map((x) => [x.id, x.origin]), [[1, 'dessous'], [2, 'stock3'], [3, 'monte']]);
   assert.deepEqual([r[0].position, r[0].accessories, r[2].from], ['P1', ['Volets'], 'P2 (a)']);
+  const sec = prepSections(r);
+  assert.deepEqual(sec.map((x) => x.title), ['À préparer', 'Présents sur le spectacle précédent'], 'les projecteurs du spectacle précédent sont à part');
+  assert.deepEqual(sec[0].groups.flatMap((g) => g.rows.map((x) => [x.id, x.storage])), [[1, 'dessous'], [2, 'stock3']], 'à préparer : dessous avant stock 3e');
+  assert.equal(sec[1].groups[0].rows[0].id, 3); assert.ok(['dessous', 'stock3'].includes(sec[1].groups[0].rows[0].storage), 'le stockage normal est précisé');
   const e = externalRows(d, 'b');
   assert.deepEqual([e[0].kind, e[0].text, e[0].accessories], ['location', '2 × 614 CP62 — loué chez X', ['2 × Iris']]);
 });

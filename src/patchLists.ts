@@ -33,16 +33,18 @@ export function gelList(rows: PatchRow[]): GelItem[] {
   return [...m.entries()].sort((a, b) => nat(a[0], b[0])).map(([ref, e]) => ({ ref, qty: e.qty, models: countText(e.models), circuits: circuitsText(e.circuits) }));
 }
 
-export interface AccItem { model: string; accessory: string; qty: number; circuits: string }
+export interface AccItem { model: string; accessory: string; qty: number; circuits: string; ids: string }
+/** Numéros des projecteurs triés, puis « N/C » pour les lignes sans projecteur (« 12, 15, 2 N/C »). */
+const idsText = (ids: (number | null)[]): string => { const n = ids.filter((x): x is number => x !== null).sort((a, b) => a - b).map(String); const nc = ids.length - n.length; return [...n, ...(nc ? [`${nc} N/C`] : [])].join(', ') || '-'; };
 /** Accessoires : une ligne par couple (modèle, accessoire), classées par modèle puis dans l'ordre des accessoires. */
 export function accessoryList(rows: PatchRow[]): AccItem[] {
-  const m = new Map<string, { model: string; k: string; qty: number; circuits: string[] }>();
+  const m = new Map<string, { model: string; k: string; qty: number; circuits: string[]; ids: (number | null)[] }>();
   for (const r of rows) for (const k of r.accessories) {
     const model = r.model || 'Sans modèle', id = model + '\u0000' + k;
-    const e = m.get(id) ?? { model, k, qty: 0, circuits: [] };
-    e.qty++; e.circuits.push(r.circuit); m.set(id, e);
+    const e = m.get(id) ?? { model, k, qty: 0, circuits: [], ids: [] };
+    e.qty++; e.circuits.push(r.circuit); e.ids.push(r.itemId); m.set(id, e);
   }
   const order = (k: string) => ACCESSORIES.findIndex((a) => a.k === k);
   return [...m.values()].sort((a, b) => nat(a.model, b.model) || order(a.k) - order(b.k))
-    .map((e) => ({ model: e.model, accessory: ACCESSORIES.find((a) => a.k === e.k)?.label ?? e.k, qty: e.qty, circuits: circuitsText(e.circuits) }));
+    .map((e) => ({ model: e.model, accessory: ACCESSORIES.find((a) => a.k === e.k)?.label ?? e.k, qty: e.qty, circuits: circuitsText(e.circuits), ids: idsText(e.ids) }));
 }

@@ -4,14 +4,18 @@ import { describe } from './ref';
 import { appReference } from './pdfHeader';
 import { patchPosition, positionBefore } from './position';
 import type { Show } from './types';
+import { ACCESSORIES, buildRows, labelsOf } from './patch';
+import { accessoryList } from './patchLists';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
 /** Provenance d'un projecteur à préparer : stock des dessous, stock du 3e (pastille bleue) ou déjà monté dans le spectacle d'avant. */
 export type Origin = 'dessous' | 'stock3' | 'monte';
+/** Titres des deux parties de la liste : à sortir du stock, et déjà en place sur le spectacle précédent. */
+export const PREP_TITLE = { prep: 'À préparer', monte: 'Présents sur le spectacle précédent' };
 export const ORIGIN_TITLE: Record<Origin, string> = { dessous: 'Stock dessous', stock3: 'Stock 3e (pastille bleue)', monte: 'Déjà monté (spectacle précédent)' };
 export interface PrepRow { id: number; model: string; type: string; lamp: string; current: string; sav: boolean; gels: string[];
-  origin: Origin; /** d'où il vient (« P2 (Avant) », « stock 3e »…) */ from: string; /** position prévue sur la feuille de patch */ position: string; accessories: string[] }
+  origin: Origin; /** stockage normal : dessous, ou 3e (pastille bleue) */ storage: 'dessous' | 'stock3'; /** d'où il vient (« P2 (Avant) », « stock 3e »…) */ from: string; /** position prévue sur la feuille de patch */ position: string; accessories: string[] }
 export interface GelGroup { title: string; size: string; color: string; ref: string; qty: number; items: number[] }
 
 /** Gélatines du spectacle : une section par « format de projecteur » (PAR64, 613 SX / 614 SX…).
@@ -25,6 +29,11 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
     const size = d?.filter?.label ?? '';
     return { g, model, size, key: size || 'm:' + model };
   });
+  // lignes de la feuille de patch sans projecteur (location, prêt, à louer) : leurs gélatines comptent aussi (modèle indiqué, pas de numéro)
+  for (const l of data.patchLines.filter((x) => x.show_id === showId && x.item_id === null)) {
+    const model = data.models.find((m) => m.id === l.model_id)?.name ?? (l.model_text || 'Sans modèle');
+    for (const g of l.gels ?? []) rows.push({ g: { show_id: showId, item_id: 0, ref: g.ref, color: g.color } as (typeof rows)[number]['g'], model, size: '', key: 'm:' + model });
+  }
   const models = new Map<string, Set<string>>();
   for (const r of rows) { const m = models.get(r.key) ?? new Set<string>(); m.add(r.model); models.set(r.key, m); }
   const titleOf = (k: string) => [...(models.get(k) ?? [])].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true })).join(' / ');
@@ -32,7 +41,7 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
   for (const r of rows) {
     const key = [r.key, r.g.color, r.g.ref.trim().toLowerCase()].join('|');
     const cur = map.get(key) ?? { title: titleOf(r.key), size: r.size, color: r.g.color, ref: r.g.ref.trim(), qty: 0, items: [] };
-    cur.qty++; cur.items.push(r.g.item_id); map.set(key, cur);
+    cur.qty++; if (r.g.item_id) cur.items.push(r.g.item_id); map.set(key, cur);
   }
   const rank = (c: string) => { const i = GEL_COLORS.findIndex(([n]) => n === c); return i < 0 ? 99 : i; };
   return [...map.values()].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
@@ -40,12 +49,13 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
 }
 
 /** Provenance, position prévue et accessoires (feuille de patch) d'un projecteur du spectacle. */
-function originOf(data: Data, show: Show | undefined, itemId: number): Pick<PrepRow, 'origin' | 'from' | 'position' | 'accessories'> {
-  if (!show) return { origin: 'dessous', from: 'stock dessous', position: '', accessories: [] };
+function originOf(data: Data, show: Show | undefined, itemId: number): Pick<PrepRow, 'origin' | 'storage' | 'from' | 'position' | 'accessories'> {
+  if (!show) return { origin: 'dessous', storage: 'dessous', from: 'stock dessous', position: '', accessories: [] };
   const p = positionBefore(data, itemId, show);
   const line = data.patchLines.find((l) => l.show_id === show.id && l.item_id === itemId);
   const origin: Origin = p.kind === 'show' ? 'monte' : p.kind === 'stock3' ? 'stock3' : 'dessous';
-  return { origin, from: p.kind === 'show' ? `${p.position || '?'} (${p.show})` : p.kind === 'stock3' ? 'stock 3e' : 'stock dessous', position: patchPosition(data, show.id, itemId), accessories: line?.accessories ?? [] };
+  const storage: PrepRow['storage'] = origin === 'stock3' || (origin === 'monte' && data.items.find((i) => i.id === itemId)?.blue_dot) ? 'stock3' : 'dessous';   // stockage normal : 3e si pastille bleue
+  return { origin, storage, from: p.kind === 'show' ? `${p.position || '?'} (${p.show})` : p.kind === 'stock3' ? 'stock 3e' : 'stock dessous', position: patchPosition(data, show.id, itemId), accessories: line?.accessories ?? [] };
 }
 
 /** Prêts / locations du spectacle : « 4 × PAR64 CP62 prêtés par X », dates, et accessoires cumulés des lignes de patch rattachées. */
@@ -73,6 +83,15 @@ export function prepRows(data: Data, showId: string): PrepRow[] {
       gels: data.showGels.filter((g) => g.show_id === showId && g.item_id === s.item_id).map((g) => g.ref).sort(),
       ...originOf(data, show, s.item_id) };
   }).sort((a, b) => a.type.localeCompare(b.type, 'fr') || a.model.localeCompare(b.model, 'fr', { numeric: true }) || a.id - b.id);
+}
+
+/** Les deux parties de la liste : « À préparer » (à sortir du stock) et « Présents sur le spectacle précédent » (déjà en place).
+ *  Dans chaque partie : un groupe par modèle, et dans le groupe le stock dessous avant le stock 3e, puis par numéro. */
+export function prepSections(rows: PrepRow[]): { key: 'prep' | 'monte'; title: string; groups: { model: string; rows: PrepRow[] }[] }[] {
+  const group = (list: PrepRow[]) => [...new Set(list.map((r) => r.model))].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }))
+    .map((model) => ({ model, rows: list.filter((r) => r.model === model).sort((a, b) => Number(a.storage === 'stock3') - Number(b.storage === 'stock3') || a.id - b.id) }));
+  const prep = rows.filter((r) => r.origin !== 'monte'), monte = rows.filter((r) => r.origin === 'monte');
+  return [{ key: 'prep' as const, title: PREP_TITLE.prep, groups: group(prep) }, { key: 'monte' as const, title: PREP_TITLE.monte, groups: group(monte) }].filter((x) => x.groups.length);
 }
 
 /** Génère le PDF (jsPDF chargé à la demande pour ne pas alourdir l'appli). */
@@ -121,26 +140,24 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
     if (blue) doc.setFillColor(29, 107, 255); else doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
     doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`${title}  (${n})`, M + 2, y); doc.setTextColor(0); y += 6;
   };
-  for (const o of ['dessous', 'stock3', 'monte'] as Origin[]) {
-    const part = rows.filter((r) => r.origin === o);
-    if (!part.length) continue;
-    bar(ORIGIN_TITLE[o], part.length);
-    for (const t of [...new Set(part.map((r) => r.type))]) {
-      const list = part.filter((r) => r.type === t);
+  for (const sec of prepSections(rows)) {
+    bar(sec.title, sec.groups.reduce((n, g) => n + g.rows.length, 0));
+    for (const g of sec.groups) {
       ensure(20); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(90);
-      doc.text(`${t.toUpperCase()}  (${list.length})`, M + 2, y); doc.setFont('helvetica', 'normal');
-      doc.text('N°', M + 24, y); doc.text('MODÈLE', M + 40, y); doc.text('LAMPE REQUISE', M + 105, y); doc.text('REMARQUE', M + 140, y);
+      doc.text(`${g.model.toUpperCase()}  (${g.rows.length})`, M + 2, y); doc.setFont('helvetica', 'normal');
+      doc.text('N°', M + 24, y); doc.text('STOCK', M + 40, y); doc.text('LAMPE REQUISE', M + 75, y); doc.text('REMARQUE', M + 118, y);
       doc.setTextColor(0); doc.setLineWidth(0.2); doc.setDrawColor(0); doc.line(M, y + 1.5, W - M, y + 1.5); y += 6;
-      for (const r of list) {
+      for (const r of g.rows) {
         ensure(11);
         doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);       // case à cocher
         doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(String(r.id), M + 24, y);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(r.model, M + 40, y, { maxWidth: 62 });
-        if (r.lamp) { doc.setFont('helvetica', 'bold'); doc.text(r.lamp, M + 105, y); doc.setFont('helvetica', 'normal'); }
+        doc.setFontSize(10); if (r.storage === 'stock3') doc.setTextColor(29, 107, 255);   // stock 3e en bleu (comme la pastille)
+        doc.text(r.storage === 'stock3' ? 'stock 3e' : 'dessous', M + 40, y); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
+        if (r.lamp) { doc.setFont('helvetica', 'bold'); doc.text(r.lamp, M + 75, y, { maxWidth: 40 }); doc.setFont('helvetica', 'normal'); }
         const rem = [r.sav ? 'EN SAV' : '', r.lamp && r.current && r.current !== r.lamp ? `montée : ${r.current}` : '', r.gels.length ? `gel : ${r.gels.join(', ')}` : ''].filter(Boolean).join(' - ');
-        if (rem) { doc.setFontSize(8); doc.text(rem, M + 140, y - 0.8, { maxWidth: W - M - (M + 140) }); }
-        // 2e ligne : provenance > position prévue, et accessoires de la feuille de patch
-        const l2 = [o === 'monte' ? `de ${r.from}` : '', r.position ? `à monter : ${r.position}` : '', r.accessories.length ? `accessoires : ${r.accessories.join(', ')}` : ''].filter(Boolean).join('  |  ');
+        if (rem) { doc.setFontSize(8); doc.text(rem, M + 118, y - 0.8, { maxWidth: W - M - (M + 118) }); }
+        // 2e ligne : où il est monté en ce moment (spectacle précédent), position prévue, accessoires de la feuille de patch
+        const l2 = [sec.key === 'monte' ? `en place : ${r.from}` : '', r.position ? `à monter : ${r.position}` : '', r.accessories.length ? `accessoires : ${labelsOf(ACCESSORIES, r.accessories).split(' · ').join(', ')}` : ''].filter(Boolean).join('  |  ');
         let h = 7;
         if (l2) { doc.setFontSize(8); doc.setTextColor(90); doc.text(l2, M + 40, y + 3.6, { maxWidth: W - 2 * M - 40 }); doc.setTextColor(0); h = 10; }
         doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y - 4.8 + h, W - M, y - 4.8 + h);
@@ -163,7 +180,7 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
   if (gels.length) {
     ensure(30); y += 8;
     doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); doc.setTextColor(0);
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines à couper  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); doc.setTextColor(0);
     y += 7; let lastTitle = '';
     for (const g of gels) {
       if (g.title !== lastTitle) {
@@ -176,6 +193,26 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
       doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setLineWidth(0.2); doc.rect(M + 13, y - 3.4, 4, 4, 'FD');
       doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.ref, M + 24, y, { maxWidth: 62 });
       doc.text(`x ${g.qty}`, M + 90, y);
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
+      y += 7;
+    }
+  }
+  // accessoires à préparer : par modèle, avec les numéros des projecteurs concernés (feuille de patch, lignes sans projecteur comprises)
+  const acc = accessoryList(buildRows(data, showId, data.patchLines));
+  if (acc.length) {
+    ensure(30); y += 8;
+    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Accessoires à préparer  (${acc.reduce((n, a) => n + a.qty, 0)})`, M + 2, y); doc.setTextColor(0);
+    y += 7; let lastModel = '';
+    for (const a of acc) {
+      if (a.model !== lastModel) {
+        ensure(18); if (lastModel) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(a.model, M + 2, y);
+        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastModel = a.model;
+      }
+      ensure(9);
+      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`${a.accessory}`, M + 14, y); doc.text(`x ${a.qty}`, M + 50, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90); doc.text(`n° ${a.ids}`, M + 66, y, { maxWidth: W - M - (M + 66) }); doc.setTextColor(0);
       doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
       y += 7;
     }
