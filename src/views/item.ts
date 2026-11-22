@@ -10,13 +10,14 @@ import { STATUS_LABEL, STATUSES, showColor } from '../types';
 import type { ItemEvent } from '../types';
 import { supabase } from '../supabase';
 
-export const itemView: ViewFactory = ([idStr]) => {
+export const itemView: ViewFactory = ([idStr], query) => {
   const id = Number(idStr);
+  const fromPatch = /^patch-[0-9a-f-]{36}$/.test(query.get('from') ?? '') ? query.get('from')!.slice(6) : null;   // arrivé depuis une feuille de patch : le retour y ramène
   let offset = 0;                       // décalage de la frise de l'agenda, en jours
   return {
     mount(root) {
       root.innerHTML = `<div class="page">
-        <div class="row"><a href="#/" class="sub">‹ Parc</a></div>
+        <div class="row">${fromPatch ? `<a href="#/patch/${fromPatch}" class="btn" aria-label="Retour à la feuille de patch">‹ Patch / Focus</a>` : '<a href="#/" class="sub">‹ Parc</a>'}</div>
         <div id="dyn" class="stack"></div>
         <div id="agenda" class="card stack"></div>
         <div id="shows" class="card stack"></div>

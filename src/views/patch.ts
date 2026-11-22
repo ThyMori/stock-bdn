@@ -38,7 +38,7 @@ export const patchView: ViewFactory = ([showId]) => {
     const opts = ids.map((n) => `<option value="${n}" ${n === r.itemId ? 'selected' : ''}>${n === r.itemId ? n : `${n} · ${esc(modelOf(n))}`}</option>`).join('');
     return `<span class="idcell"><select class="pin idsel" data-k="id" aria-label="ID du projecteur (ou noID, newID)">
       <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option>${opts}<option value="new">newID…</option></select>
-      ${r.itemId !== null ? `<a class="idlink" href="#/item/${r.itemId}" aria-label="Voir la fiche du projecteur ${r.itemId}">↗</a><button class="btn mini swapbtn" data-act="swap" title="Remplacer ce projecteur par un autre du stock" aria-label="Remplacer le projecteur ${r.itemId} par un autre">⇄</button>` : ''}</span>`;
+      ${r.itemId !== null ? `<a class="idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}" aria-label="Voir la fiche du projecteur ${r.itemId}">↗</a><button class="btn mini swapbtn" data-act="swap" title="Remplacer ce projecteur par un autre du stock" aria-label="Remplacer le projecteur ${r.itemId} par un autre">⇄</button>` : ''}</span>`;
   };
   /** Projecteurs qu'on peut ajouter : pas déjà dans ce spectacle, disponibles à ses dates (ni prêt, SAV ou panne). Même modèle en premier. */
   const candidates = (sameModelAs: number | null): [string, string][] => {
@@ -139,7 +139,7 @@ export const patchView: ViewFactory = ([showId]) => {
       }
       case 'dmx': return can_ && r.curve.includes('direct') ? `<input class="pin num" data-k="dmx" value="${esc(r.dmx)}" placeholder="1-120" maxlength="7" inputmode="numeric" autocomplete="off" aria-label="Adresse DMX, univers-adresse">`
         : r.curve.includes('direct') ? `<span class="num">${esc(r.dmx) || '<i class="muted">—</i>'}</span>` : '<i class="muted">—</i>';
-      case 'id': return can_ ? idCell(r) : r.itemId === null ? '<span class="muted">N/C</span>' : `<a class="num idlink" href="#/item/${r.itemId}">${r.itemId}</a>`;
+      case 'id': return can_ ? idCell(r) : r.itemId === null ? '<span class="muted">N/C</span>' : `<a class="num idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}">${r.itemId}</a>`;
       case 'model': return r.itemId === null && can_ ? `<input class="pin" data-k="model_text" value="${esc(r.model)}" maxlength="80" autocomplete="off" aria-label="Modèle">` : `<span>${esc(r.model) || '<i class="muted">—</i>'}</span>`;
       case 'gels': {
         const chips = r.gels.map((g, i) => `<span class="gel"><i style="background:${gelCss(gelColorOf(g))}"></i>${esc(g)}${can_ && r.gelIds[i] ? `<button class="gx" data-act="gel-del" data-v="${esc(r.gelIds[i])}" aria-label="Retirer le gel ${esc(g)}">✕</button>` : ''}</span>`).join(' ');
