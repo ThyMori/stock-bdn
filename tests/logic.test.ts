@@ -6,6 +6,7 @@ import { compareShows } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan, sortShows, isShowOver } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
+import { rollingStart } from '../src/views/calendar';
 import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
 
@@ -260,5 +261,10 @@ t('sortShows : à venir chronologique, terminés grisés en bas (le plus ancien 
   const r = sortShows([S('vieux', '2026-01-01', '2026-01-10'), S('loin', '2027-01-01', '2027-01-05'), S('récent', '2026-10-01', '2026-10-31'), S('prochain', '2026-12-01', '2026-12-05'), S('en cours', '2026-11-10', '2026-11-30')], '2026-11-22').map((x) => x.name);
   assert.deepEqual(r, ['en cours', 'prochain', 'loin', 'récent', 'vieux']);
   assert.ok(isShowOver(S('x', '2026-11-01', '2026-11-21'), '2026-11-22') && !isShowOver(S('x', '2026-11-01', '2026-11-22'), '2026-11-22'));
+});
+t('calendrier glissant : commence le lundi de la semaine passée', () => {
+  assert.equal(rollingStart('2026-11-22'), '2026-11-09');   // dimanche 22/11 -> lundi 16/11 -> 1 semaine avant
+  assert.equal(rollingStart('2026-11-16'), '2026-11-09');   // un lundi
+  assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
 });
 console.log(`\n${n} tests OK`);

@@ -9,19 +9,19 @@ import { fmtDay } from './agenda';
 import { showColor } from '../types';
 import { calendarExternals, showAlerts } from '../alerts';
 
-const cal = { mode: 'month' as 'list' | CalMode, ref: todayStr() };
+const cal = { mode: 'rolling' as 'list' | CalMode, ref: todayStr() };
 
 /** Catalogue des spectacles : à venir d'abord (le prochain en premier), terminés grisés et rayés en bas. */
 export const showsView: ViewFactory = () => ({
   mount(root) {
     root.innerHTML = `<div class="page"><div class="row shows-head"><h1 class="grow">Spectacles</h1>
       ${can('regisseur_general') ? '<button class="btn primary" data-act="new">+ Nouveau</button>' : ''}</div><div class="chips" role="group" aria-label="Affichage">
-        <button class="chip" data-act="vmode" data-v="list">Liste</button><button class="chip" data-act="vmode" data-v="month">Mois</button><button class="chip" data-act="vmode" data-v="week">Semaine</button></div>
+        <button class="chip" data-act="vmode" data-v="list">Liste</button><button class="chip" data-act="vmode" data-v="rolling">4 semaines</button><button class="chip" data-act="vmode" data-v="week">Semaine</button></div>
       <div id="err" class="sub warn" role="alert"></div><div id="list" class="list"></div></div>`;
     root.addEventListener('click', async (e) => {
       const a = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset;
       if (a?.act === 'vmode') { cal.mode = a.v as typeof cal.mode; paint(root); return; }
-      if (a?.act === 'cal-prev' || a?.act === 'cal-next') { cal.ref = shiftRef(cal.ref, cal.mode === 'week' ? 'week' : 'month', a.act === 'cal-next' ? 1 : -1); paint(root); return; }
+      if (a?.act === 'cal-prev' || a?.act === 'cal-next') { cal.ref = shiftRef(cal.ref, a.act === 'cal-next' ? 1 : -1); paint(root); return; }
       if (a?.act === 'cal-ext') { toggleCalExt(a.v ?? ''); paint(root); return; }   // plie / déplie les prêts de la semaine
       if (a?.act === 'cal-today') { cal.ref = todayStr(); paint(root); return; }
       if (a?.act !== 'new') return;
