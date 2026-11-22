@@ -201,6 +201,7 @@ export const patchView: ViewFactory = ([showId]) => {
   }
 
   /** Cellule modèle d'une ligne sans projecteur : modèle du catalogue (groupé par type), texte libre, ajout au catalogue (régisseur général / admin) et lampe pour un PAR. */
+  let skipChange: HTMLElement | null = null;   // champ déjà enregistré par Entrée : son prochain « change » est ignoré
   const extMode = new Set<string>();   // lignes dont on a choisi « Location / prêt » sans avoir encore désigné laquelle
   const modelCell = (r: PatchRow): string => {
     const d = view(), exts = externalStatus(d, showId, lines);   // locations / prêts du spectacle
@@ -381,8 +382,26 @@ export const patchView: ViewFactory = ([showId]) => {
         e.preventDefault(); e.stopImmediatePropagation(); sel.blur();
         const key = sel.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (key) void act(root, key, 'id', 'scan');
       }, true);
+      // Entrée dans un champ de saisie : on enregistre, la ligne se range à sa place (tri), puis on la remontre et on remet le curseur dans le même champ
+      root.addEventListener('keydown', (e) => {
+        const t = e.target as HTMLInputElement;
+        if (e.key !== 'Enter' || e.isComposing || !(t instanceof HTMLInputElement) || t.type === 'checkbox' || !t.classList.contains('pin')) return;
+        const tr = t.closest<HTMLElement>('tr[data-key]'), k = t.dataset.k; if (!tr || !k) return;
+        e.preventDefault();
+        const key = tr.dataset.key!, pos = t.selectionStart;
+        skipChange = t;                                                           // évite un 2e enregistrement quand le champ perdra le curseur au redessin
+        save(root, key, k, t.value.trim());
+        queue = queue.then(() => {
+          resort(); paint(root);                                                  // la ligne prend sa place dans l'ordre choisi
+          const row = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === key);
+          row?.scrollIntoView({ block: 'center' });                              // on la remontre, même si elle a changé de place
+          const inp = row?.querySelector<HTMLInputElement>(`input.pin[data-k="${k}"]`);
+          inp?.focus({ preventScroll: true }); if (inp && pos !== null) inp.setSelectionRange(inp.value.length, inp.value.length);
+        });
+      });
       root.addEventListener('change', (e) => {
         const t = e.target as HTMLInputElement | HTMLSelectElement;
+        if (t === skipChange) { skipChange = null; return; }              // déjà enregistré par la touche Entrée
         if (t.id === 'psort') { sortCol = t.value as Col; dir = 1; resort(); paint(root); return; }
         const tr = t.closest<HTMLElement>('tr[data-key]'); if (!tr) return;
         const key = tr.dataset.key!;
