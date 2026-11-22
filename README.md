@@ -167,6 +167,13 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
+## Projecteur du patch = matériel demandé (v1.36.0)
+- Un projecteur mis dans la feuille de patch (ID du stock, « nouvel ID », remplacement) est **compté dans le matériel demandé** : la demande « modèle + lampe » monte de 1 (créée si absente), ou, si elle avait un manque, le projecteur le comble sans changer la quantité. Il y est épinglé.
+- Remplacé par un autre modèle : l'ancienne demande baisse de 1, la nouvelle monte de 1. Même modèle : rien ne change.
+- Retiré du spectacle depuis la feuille : la demande baisse de 1 (jamais sous les prêts / locations déjà saisis ; supprimée à 0).
+- Reprise de l'existant : les projecteurs déjà affectés à la main aux spectacles en cours ou à venir rejoignent le matériel demandé (au rejeu du SQL).
+- Droits et notifications inchangés (assignés au spectacle) ; le journal garde une ligne. L'alarme « manque » est celle du matériel demandé, recalculée tout de suite.
+
 ## Feuille de patch : clavier (v1.35.5)
 **Tab** = colonne suivante (ordre normal du navigateur) ; **Entrée** = enregistre et descend au même champ de la ligne suivante (contenu sélectionné) ; sur la dernière ligne, Entrée valide et ferme le clavier. L'ordre des lignes ne bouge pas pendant la saisie. Le curseur n'est plus perdu quand une ligne est redessinée (courbe, modèle).
 
@@ -216,6 +223,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.36.0) | `demand_attach`, `demand_detach`, `patch_set_item` et `patch_delete_line` modifiées, reprise de l'existant | v1.36.0 |
 | `schema.sql` (v1.35.2) | position « pont coupole » acceptée par `set_patch_field` (liste des positions) | v1.35.2 |
 | `schema.sql` fin de fichier (v1.34.0) | pastille bleue `items.blue_dot`, `shows.mounted` / `mounted_at`, `set_blue_dot`, `set_show_mounted` | v1.34.0 |
 | `schema.sql` fin de fichier (v1.32.0) | lignes noID rattachées à une location / un prêt : colonne `patch_lines.external_id`, `set_patch_field` (champ `external_id`), `patch_set_item` (détache la ligne) | v1.32.0 |

@@ -1657,9 +1657,6 @@ begin
   if p_mode = 'replace' then
     select * into oldsi from show_items where show_id = p_show and item_id = p_item;
     select model_id into m1 from items where id = p_item; select model_id into m2 from items where id = p_target;
-    if oldsi.demand_id is not null and m1 is distinct from m2 then
-      raise exception 'Ce projecteur vient d''une demande de matériel : remplace-le par un projecteur du même modèle, ou change la demande sur la fiche du spectacle' using errcode = '22023';
-    end if;
   end if;
   res := assign_items(p_show, array[p_target], p_lamp);   -- mêmes vérifications que partout (dates, prêt / SAV, lampe d'un PAR)
   if jsonb_array_length(res -> 'skipped') > 0 then raise exception 'Projecteur % : %', p_target, res -> 'skipped' -> 0 ->> 'reason' using errcode = '22023'; end if;
@@ -1671,8 +1668,11 @@ begin
     elsif cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     if p_item is not null then update show_gels set item_id = p_target where show_id = p_show and item_id = p_item; end if;   -- les gélatines suivent la ligne
     perform log_event('SPECTACLE', format('« %s » : patch, projecteur %s ajouté au spectacle sur une ligne', s.name, p_target));
+    perform demand_attach(p_show, p_target);   -- il apparaît aussi dans le matériel demandé
+    perform reallocate_all();
   else
-    if oldsi.demand_id is not null then update show_items set demand_id = oldsi.demand_id, pinned = true where show_id = p_show and item_id = p_target; end if;
+    if oldsi.demand_id is not null and m1 is not distinct from m2 then update show_items set demand_id = oldsi.demand_id, pinned = true where show_id = p_show and item_id = p_target;   -- même modèle : il prend la place dans la même demande
+    else perform demand_detach(p_show, p_item); perform demand_attach(p_show, p_target); end if;   -- autre modèle : l'ancienne demande baisse de 1, la nouvelle monte de 1
     update show_gels set item_id = p_target where show_id = p_show and item_id = p_item;   -- les gélatines restent sur la ligne
     if cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     delete from show_items where show_id = p_show and item_id = p_item;
@@ -1698,7 +1698,7 @@ revoke all on function patch_add_line(uuid) from public, anon;
 grant execute on function patch_add_line(uuid) to authenticated;
 
 -- Supprime une ligne. Ligne d'un projecteur : on vide sa saisie ; avec p_remove, le projecteur est aussi retiré du spectacle
--- (refusé s'il vient d'une demande de matériel). Ligne N/C : elle disparaît.
+-- (la demande de matériel dont il vient baisse de 1). Ligne N/C : elle disparaît.
 create or replace function patch_delete_line(p_show uuid, p_item int, p_line uuid, p_remove boolean default false) returns void
 language plpgsql security definer set search_path = public as $$
 declare oldsi show_items;
@@ -1707,11 +1707,8 @@ begin
   if p_item is not null then
     select * into oldsi from show_items where show_id = p_show and item_id = p_item;
     if not found then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
-    if p_remove and oldsi.demand_id is not null then
-      raise exception 'Ce projecteur vient d''une demande de matériel : change la demande sur la fiche du spectacle pour le retirer' using errcode = '22023';
-    end if;
     delete from patch_lines where show_id = p_show and item_id = p_item;
-    if p_remove then perform unassign_items(p_show, array[p_item]); end if;
+    if p_remove then perform demand_detach(p_show, p_item); perform unassign_items(p_show, array[p_item]); end if;   -- la demande baisse de 1 avec lui
   else
     delete from patch_lines where id = p_line and show_id = p_show and item_id is null;
     if not found then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
@@ -1843,3 +1840,52 @@ begin
 end $$;
 revoke all on function set_show_mounted(uuid, boolean) from public, anon;
 grant execute on function set_show_mounted(uuid, boolean) to authenticated;
+
+-- v1.36.0 : un projecteur mis dans la feuille de patch apparaît aussi dans le matériel demandé.
+-- Rattache un projecteur affecté « à la main » à la demande « modèle + lampe » de son spectacle : si la demande a un manque, il le comble ;
+-- sinon la demande monte de 1 (créée si elle n'existe pas). Le projecteur y est épinglé (l'assignation automatique n'y touche plus).
+create or replace function demand_attach(p_show uuid, p_item int) returns void
+language plpgsql security definer set search_path = public as $$
+declare si show_items; mid text; ispar boolean; lp text; d show_demands; nm text; mn text;
+begin
+  select * into si from show_items where show_id = p_show and item_id = p_item;
+  if not found or si.demand_id is not null then return; end if;
+  select i.model_id into mid from items i where i.id = p_item;
+  select exists (select 1 from models m join item_types t on t.id = m.type_id where m.id = mid and t.name ilike 'PAR%') into ispar;
+  lp := case when ispar then coalesce(si.lamp_id, (select lamp_id from items where id = p_item)) end;
+  if ispar and lp is null then return; end if;   -- PAR sans lampe connue : il reste affecté à la main
+  select * into d from show_demands where show_id = p_show and model_id = mid and coalesce(lamp_id, '') = coalesce(lp, '');
+  if not found then
+    insert into show_demands (show_id, model_id, lamp_id, qty, added_by_label) values (p_show, mid, lp, 1, patch_label()) returning * into d;
+  elsif d.missing <= 0 then update show_demands set qty = qty + 1 where id = d.id; end if;
+  update show_items set demand_id = d.id, pinned = true, lamp_id = coalesce(lp, lamp_id) where show_id = p_show and item_id = p_item;
+  if auth.uid() is not null then
+    select name into nm from shows where id = p_show; select name into mn from models where id = mid;
+    perform log_event('SPECTACLE', format('« %s » : le projecteur %s (%s) est compté dans le matériel demandé', nm, p_item, mn));
+  end if;
+end $$;
+revoke all on function demand_attach(uuid, int) from public, anon, authenticated;
+
+-- Inverse : un projecteur issu d'une demande quitte le spectacle, la demande baisse de 1 (jamais sous les prêts / locations déjà saisis ; supprimée à 0).
+create or replace function demand_detach(p_show uuid, p_item int) returns void
+language plpgsql security definer set search_path = public as $$
+declare did uuid; ext int; nq int;
+begin
+  select demand_id into did from show_items where show_id = p_show and item_id = p_item;
+  if did is null then return; end if;
+  select coalesce(sum(qty), 0)::int into ext from show_externals where demand_id = did;
+  update show_items set demand_id = null, pinned = false where show_id = p_show and item_id = p_item;   -- il n'appartient plus à la demande (il va être retiré ou remplacé)
+  select greatest(qty - 1, ext) into nq from show_demands where id = did;
+  if nq <= 0 then delete from show_demands where id = did;   -- plus rien demandé : la demande disparaît (la quantité 0 n'existe pas)
+  else update show_demands set qty = nq where id = did; end if;
+end $$;
+revoke all on function demand_detach(uuid, int) from public, anon, authenticated;
+
+-- Reprise de l'existant : les projecteurs déjà affectés à la main aux spectacles en cours ou à venir rejoignent le matériel demandé.
+do $$ declare r record;
+begin
+  for r in select si.show_id, si.item_id from show_items si join shows s on s.id = si.show_id where si.demand_id is null and s.end_date >= current_date order by si.show_id, si.item_id loop
+    perform demand_attach(r.show_id, r.item_id);
+  end loop;
+  perform reallocate_all();
+end $$;

@@ -180,8 +180,8 @@ export const patchView: ViewFactory = ([showId]) => {
     if (what === 'line-del') {
       if (r.itemId === null) { if (window.confirm('Supprimer cette ligne ?')) await structural(root, 'patch_delete_line', { p_item: null, p_line: r.lineId, p_remove: false }, 'Ligne supprimée'); return; }
       const buttons: [string, string, boolean?][] = [['keep', 'Garder le projecteur affecté (vider la ligne)', true]];
-      if (!r.auto) buttons.push(['remove', 'Retirer aussi le projecteur des projecteurs affectés']);
-      const c = await ask(`Supprimer la ligne du projecteur ${r.itemId} ?`, r.auto ? 'Ce projecteur vient d\'une demande de matériel : il reste affecté.' : 'Retirer aussi le projecteur des projecteurs affectés ?', buttons);
+      buttons.push(['remove', 'Retirer aussi le projecteur du spectacle (la demande de matériel baisse de 1)']);
+      const c = await ask(`Supprimer la ligne du projecteur ${r.itemId} ?`, 'Il peut rester affecté au spectacle, ou être retiré : dans ce cas le matériel demandé baisse de 1.', buttons);
       if (c) await structural(root, 'patch_delete_line', { p_item: r.itemId, p_line: null, p_remove: c === 'remove' }, c === 'remove' ? 'Projecteur retiré' : 'Ligne vidée');
       return;
     }
