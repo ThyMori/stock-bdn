@@ -7,6 +7,8 @@ import { supabase } from '../supabase';
 import { canInstall, promptInstall } from '../install';
 import { shareApp } from '../share';
 import { leavePresence } from '../presence';
+import { checkUpdateNow } from '../updates';
+import { toast } from '../ui/toast';
 import { disablePush, enablePush, forgetPushOnLogout, pushStatus, testPush } from '../push';
 import type { PushStatus } from '../push';
 
@@ -35,6 +37,15 @@ export const moreView: ViewFactory = () => ({
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
       if (el.dataset.act === 'sync') void sync();
+      else if (el.dataset.act === 'check-update') {   // force la recherche d'une nouvelle version de l'appli
+        const b = el as HTMLButtonElement; b.disabled = true;
+        void checkUpdateNow().then((r) => {
+          b.disabled = !state.online;
+          if (r === 'new') toast('Nouvelle version prête : touche « Mettre à jour » dans le bandeau.', 'ok');
+          else if (r === 'none') toast('Tu as déjà la dernière version.', 'ok');
+          else toast(r === 'offline' ? 'Pas de connexion : impossible de vérifier.' : 'Vérification impossible, réessaie dans un instant.');
+        });
+      }
       if (el.dataset.act === 'share') void shareApp();
       if (el.dataset.act === 'install') void promptInstall();
       if (el.dataset.act === 'chmail' && state.profile) {
@@ -96,7 +107,8 @@ function paint(root: HTMLElement) {
       <div class="row wrap"><button class="btn" data-act="rename" ${state.online ? '' : 'disabled'}>Modifier mon nom</button><button class="btn" data-act="chmail" ${state.online ? '' : 'disabled'}>Changer mon e-mail</button></div><div id="profErr" class="sub warn" role="alert"></div>
       ${newEmail ? `<div class="sub">Changement d’e-mail en attente de confirmation : <b>${esc(newEmail)}</b>. Tant que tu n’as pas cliqué sur le lien reçu, tu te connectes avec ton adresse actuelle.</div>` : ''}<div id="mailMsg" class="sub" role="status"></div>
       <div class="sub">${state.lastPull ? 'Dernière mise à jour : ' + fmtDateTime(state.lastPull) : 'Jamais synchronisé'} · ${state.pending.length} action(s) en attente</div>
-      <div class="row"><button class="btn grow" data-act="sync" ${state.online ? '' : 'disabled'}>${state.syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}</button></div>
+      <div class="row wrap"><button class="btn grow" data-act="sync" ${state.online ? '' : 'disabled'}>${state.syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}</button>
+        <button class="btn grow" data-act="check-update" ${state.online ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/></svg>Vérifier les mises à jour</button></div>
     </div>
     ${state.rejected.length ? `<div class="card stack"><h2 class="warn">Actions refusées par le serveur</h2>
       ${state.rejected.map((r, i) => `<div class="row"><div class="grow sub">${esc(r.op.kind)} — ${esc(r.message)}</div><button class="btn small" data-act="dismiss" data-v="${i}">OK</button></div>`).join('')}</div>` : ''}
@@ -114,7 +126,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.24.4</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.25.0</div></div>`;
 }
 
 function pushCard(): string {

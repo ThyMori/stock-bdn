@@ -212,6 +212,8 @@ Dans la fenêtre « Remplacer le projecteur N » (bouton *Changer*), un bouton *
 ### Bandeau de mise à jour et plus de rechargement en tirant l'écran (v1.14.0)
 Quand une nouvelle version est publiée, l'appli la détecte toute seule (au retour sur l'appli, quand le réseau revient, puis toutes les 30 minutes) et affiche en haut un bandeau **« Nouvelle version disponible — Mettre à jour »**. Rien ne se recharge sans toi ; « × » masque le bandeau jusqu'à la prochaine vérification. Le service worker est passé de `autoUpdate` à `prompt` (`vite.config.ts`, `src/updates.ts`). Tirer l'écran vers le bas ne recharge plus l'appli (`overscroll-behavior-y: none`) : le bouton « À jour » de l'en-tête et le bandeau s'en chargent.
 
+**Vérifier les mises à jour (v1.25.0)** : bouton à double flèche dans l'onglet « Plus » (carte du profil). Il interroge le serveur tout de suite et répond par un message : « Tu as déjà la dernière version », ou le bandeau « Nouvelle version disponible » apparaît. Désactivé hors ligne.
+
 ### Filtre par type dans la liste des projecteurs (v1.13.2)
 Sur la page d'un spectacle, un appui sur un type (« 614 SX (4) ») filtre la liste des projecteurs assignés ; un second appui retire le filtre. Rien n'est coché par ce geste : « Tout cocher » agit ensuite sur les lignes affichées (donc sur le type filtré), et les cases déjà cochées restent cochées quand on change de filtre.
 
