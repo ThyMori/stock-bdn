@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import type { ViewFactory } from '../router';
 import { view } from '../store';
+import { APP_URL } from '../pdfHeader';
 
 export const labelsView: ViewFactory = (_p, query) => ({
   mount(root) {
@@ -8,6 +9,7 @@ export const labelsView: ViewFactory = (_p, query) => ({
     const from = query.get('from') ?? String(Math.min(...ids, 1));
     const to = query.get('to') ?? String(Math.max(...ids, 1));
     root.innerHTML = `<div class="page">
+      <div class="print-ref"><a href="${APP_URL}">Stock BdN - stock-bdn.thierry-morin.com</a></div>
       <div class="noprint stack"><a href="#/more" class="sub">‹ Plus</a><h1>Étiquettes QR</h1>
         <form id="f" class="row"><label class="f grow">De<input name="from" type="number" min="0" value="${from}"></label>
           <label class="f grow">À<input name="to" type="number" min="0" value="${to}"></label>

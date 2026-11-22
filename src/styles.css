@@ -21,6 +21,7 @@ dialog, .pick-list { overscroll-behavior: contain; }
 a { color: inherit; text-underline-offset: 3px; }
 h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-stretch: 125%; line-height: 1.05; }
 h1 { font-size: 1.4rem; } h2 { font-size: 1rem; } h3 { font-size: .95rem; }
+html { touch-action: pan-x pan-y; }   /* pas de zoom au pincement ni au double toucher */
 button, input, select, textarea { font: inherit; color: inherit; border-radius: 0; }
 b, strong { font-weight: 700; }
 
@@ -154,6 +155,7 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .login .card { width: 100%; max-width: 400px; }
 
 /* étiquettes (toujours noir sur blanc pour l'impression) */
+.print-ref { display: none; text-align: right; font-size: 8pt; margin-bottom: 4mm; } .print-ref a { color: #1d6bff; text-decoration: none; }   /* lien de l'appli : visible seulement à l'impression */
 .labels { display: grid; grid-template-columns: repeat(auto-fill, 38mm); gap: 3mm; }
 .label { width: 38mm; height: 44mm; background: #fff; color: #000; border: 1px dashed #999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1mm; page-break-inside: avoid; }
 .label img { width: 32mm; height: 32mm; }
@@ -161,7 +163,8 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 @media print {
   html, body { background: #fff; color: #000; }
   #app { max-width: none; padding: 0; }
-  nav.tabs, .noprint, .topbar { display: none !important; }
+  nav.tabs, .noprint, .topbar, #status, .update-note { display: none !important; }   /* à l'impression : aucun bandeau (spectacle en cours, installation, mise à jour…) */
+  .print-ref { display: block; }
   .label { border: 1px dotted #999; }
 }
 

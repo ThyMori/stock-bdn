@@ -34,6 +34,7 @@ import { startWatchdog } from './watchdog';
 import { onlineNames, startPresence } from './presence';
 
 initUpdates();
+document.addEventListener('gesturestart', (e) => e.preventDefault());   // iOS : pas de zoom au pincement
 const app = document.getElementById('app')!;
 startWatchdog(app);   // si l'écran reste vide 8 s : erreur + « Réinitialiser et recharger »
 
