@@ -464,6 +464,9 @@ table.patch td[data-c="dimmer"] .pin, table.patch td[data-c="dmx"] .pin { width:
 table.patch td[data-c="curve"] .pin { width: auto; }                         /* courbe : jamais coupée */
 .idcell .idsel { width: calc(var(--w, 5ch) + 1.8em + 12px); min-width: 0; }   /* la liste déroulante garde sa largeur, seule la valeur affichée est étroite */
 table.patch td[data-c="model"] .pin { min-width: 8em; }
+/* largeur automatique : elle suit les valeurs des cellules, pas le titre (le titre est tronqué s'il est plus large, avec 3,2 em au minimum) */
+table.patch th { max-width: 0; min-width: 3.2em; }
+table.patch th button { overflow: hidden; text-overflow: ellipsis; }
 /* en-tête de la feuille sur une ou deux lignes : retour, titre, état, boutons, puis le détail */
 .phead { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; }
 .phead > .row.wrap:not(.noprint) { display: contents; }

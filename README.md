@@ -176,6 +176,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 
 ## Colonnes redimensionnables et PDF « cahier » (v1.38.0)
 - **Largeur des colonnes** (ordinateur seulement, écran > 1000 px avec souris) : poignée au bord droit de chaque titre ; tirer change la largeur, **double-clic** = largeur automatique pour cette colonne. Mémorisé sur l'ordinateur (localStorage `stockbdn.patchcols`). Sur téléphone, rien ne change (circuit + modèle = 1/3 de l'écran). Code : `src/patchCols.ts`.
+- **Largeur automatique selon les valeurs** (v1.38.2) : le titre d'une colonne ne l'élargit plus (il est tronqué s'il est trop long). Titres abrégés : c° (circuit), grad. (grada), acc. (accessoires) ; le nom complet reste en infobulle et pour les lecteurs d'écran.
 - **PDF de la feuille de patch** : look feuille de cahier griffonnée (papier crème, lignes bleues = une ligne du tableau, double marge rouge, écriture manuscrite **Caveat** en bleu stylo, traits et cases tremblés, focus fait = coup de surligneur). Police libre SIL OFL (`src/assets/fonts/`), téléchargée seulement à la génération ; **hors ligne ou en cas d'échec, le PDF garde le même look avec la police normale**. Code : `src/patchPdf.ts`, `src/pdfFonts.ts`, `src/handwriting.ts`. Les autres PDF (prépa, démontage, étiquettes QR) restent sobres.
 
 ## Ligne « à louer / à emprunter » (v1.37.0)
