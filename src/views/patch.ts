@@ -11,7 +11,7 @@ import { openForm } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { blockedReason } from '../alerts';
 import { describe } from '../ref';
-import { rankStock } from '../patchSuggest';
+import { rankStock, similarNames } from '../patchSuggest';
 import type { Suggestion } from '../patchSuggest';
 
 /** Feuille de patch / focus d'un spectacle : une ligne par projecteur affecté, saisie directe, tri par colonne. */
@@ -62,11 +62,15 @@ export const patchView: ViewFactory = ([showId]) => {
     const list = r ? suggest(r) : rankStock(d, show, { modelId: null, lampId: null, par: false, position: '' });
     return list.map((x): [string, string] => [String(x.id), sugLabel(x, true)]);
   };
-  /** Avertissement si l'ID choisi n'a pas le modèle voulu par la ligne (ni un modèle similaire) : accepté quand même. */
-  const warnModel = (r: PatchRow, n: number) => {
-    if (!r.modelId) return;
-    const g = suggest(r).find((x) => x.id === n)?.group;
-    if (g === 'other') toast(`Attention : le projecteur ${n} n'est pas du modèle prévu sur cette ligne (${r.model}).`);
+  /** Avertissement bien visible si le projecteur choisi n'est pas du modèle de la ligne (même « similaire »). Renvoie true si on continue : c'est autorisé, mais il faut le confirmer. */
+  const warnModel = async (r: PatchRow, n: number): Promise<boolean> => {
+    const d = view(), it = d.items.find((i) => i.id === n);
+    if (!r.modelId || !it || it.model_id === r.modelId) return true;       // pas de modèle prévu, ou même modèle : rien à signaler
+    const have = d.models.find((m) => m.id === it.model_id)?.name ?? '?', want = d.models.find((m) => m.id === r.modelId)?.name ?? r.model;
+    const sim = similarNames(want, have);
+    navigator.vibrate?.([120, 60, 120]);                                    // petit signal sur téléphone
+    const c = await ask('⚠ MODÈLE DIFFÉRENT', `La ligne prévoit un ${want}, mais le projecteur ${n} est un ${have}${sim ? ' (modèle similaire)' : ''}.`, [['ok', 'Utiliser quand même', true]], true);
+    return c === 'ok';
   };
   /** Réponse à un QR code lu dans une fenêtre de choix : accepte un projecteur de la liste, sinon explique pourquoi pas. */
   const scanReply = (opts: [string, string][]) => (text: string): { value: string } | { error: string } => {
@@ -79,8 +83,8 @@ export const patchView: ViewFactory = ([showId]) => {
   /** Lampe à demander pour un PAR : celle voulue par la ligne si elle en a une, sinon celle qui est montée sur le projecteur choisi. */
   const lampFor = (n: number, r?: PatchRow): string | null => { const d = view(), it = d.items.find((i) => i.id === n); return it && /^PAR/i.test(describe(d, it).type?.name ?? '') ? (r?.itemId === null && r.lampId ? r.lampId : it.lamp_id) : null; };
   /** Petite fenêtre à plusieurs boutons : renvoie la valeur du bouton touché, ou null. */
-  const ask = (title: string, text: string, buttons: [string, string, boolean?][]): Promise<string | null> => new Promise((resolve) => {
-    const dlg = document.createElement('dialog'); dlg.className = 'dlg';
+  const ask = (title: string, text: string, buttons: [string, string, boolean?][], danger = false): Promise<string | null> => new Promise((resolve) => {
+    const dlg = document.createElement('dialog'); dlg.className = 'dlg' + (danger ? ' danger' : '');   // danger : cadre rouge, bien visible
     dlg.innerHTML = `<form method="dialog" class="stack"><h2>${esc(title)}</h2><div>${esc(text)}</div>
       <div class="stack">${buttons.map(([v, l, primary]) => `<button class="btn${primary ? ' primary' : ''}" value="${esc(v)}">${esc(l)}</button>`).join('')}<button class="btn" value="">Annuler</button></div></form>`;
     document.body.appendChild(dlg);
@@ -115,22 +119,26 @@ export const patchView: ViewFactory = ([showId]) => {
         setTimeout(() => document.querySelector<HTMLElement>('dialog.dlg [data-scan]')?.click(), 150);   // la caméra démarre tout de suite
         const f = await p;
         if (!f) { paintRow(root, key); return; }
-        const n = Number(f.to); if (!inShow.has(n)) warnModel(r, n);
+        const n = Number(f.to);
+        if (!(await warnModel(r, n))) { paintRow(root, key); return; }          // modèle différent : on demande confirmation
         if (inShow.has(n)) await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`);
         else await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`);
         return;
       }
       if (v?.startsWith('stock:')) {   // ID choisi directement dans la liste du stock disponible
-        const n = Number(v.slice(6)); warnModel(r, n);
+        const n = Number(v.slice(6));
+        if (!(await warnModel(r, n))) { paintRow(root, key); return; }
         await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`); return;
       }
       if (v === 'new') {
         const f = await openForm('Ajouter un projecteur au spectacle', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: candidates(r), hint: 'Seuls les projecteurs disponibles à ces dates sont proposés.' }], { submit: 'Ajouter' });
         if (!f) { paintRow(root, key); return; }
-        const n = Number(f.to); warnModel(r, n);
+        const n = Number(f.to);
+        if (!(await warnModel(r, n))) { paintRow(root, key); return; }
         await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`); return;
       }
       const n = Number(v);
+      if (!(await warnModel(r, n))) { paintRow(root, key); return; }
       await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`); return;
     }
     if (what === 'swap' && r.itemId !== null) {
@@ -141,7 +149,8 @@ export const patchView: ViewFactory = ([showId]) => {
         { name: 'fault', label: `Déclarer une panne sur le projecteur ${old} ?`, type: 'select', options: [['', 'Non'], ['oui', 'Oui, en même temps']], value: '' },
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea' }], { submit: 'Remplacer' });
       if (!f) return;
-      const n = Number(f.to); warnModel(r, n);
+      const n = Number(f.to);
+      if (!(await warnModel(r, n))) { paintRow(root, key); return; }
       const ok = await structural(root, 'patch_set_item', { ...who, p_mode: 'replace', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${old} remplacé par ${n}`);
       if (ok && f.fault === 'oui') {
         await reportFault(old, f.desc || `Remplacé dans la feuille de patch (${view().shows.find((s) => s.id === showId)?.name ?? ''})`);
