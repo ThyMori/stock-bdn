@@ -1454,3 +1454,78 @@ begin
 end $$;
 revoke all on function log_login() from public;
 grant execute on function log_login() to authenticated;
+
+-- ---------- v1.23 : feuille de patch / focus d'un spectacle ----------
+-- Une ligne par projecteur affecté (créée à la première saisie) + des lignes « N/C » (sans ID, libres).
+-- Les gélatines ne sont pas ici : elles restent dans show_gels (une seule source).
+create table if not exists patch_lines (
+  id               uuid primary key default gen_random_uuid(),
+  show_id          uuid not null references shows(id) on delete cascade,
+  item_id          integer references items(id) on delete set null,   -- null = N/C
+  circuit          text not null default '' check (length(circuit) <= 30),
+  dimmer           text not null default '' check (length(dimmer) <= 30),          -- grada
+  curve            text[] not null default '{lineaire}',                            -- lineaire, onoff, autre, direct
+  dmx              text not null default '' check (dmx = '' or dmx ~ '^[0-9]{1,3}-[0-9]{1,3}$'),   -- univers-adresse
+  model_text       text not null default '' check (length(model_text) <= 80),      -- modèle d'une ligne N/C
+  accessories      text[] not null default '{}',                                    -- iris, gobo, volets, autre
+  position         text not null default '',
+  focus            boolean not null default false,
+  notes            text not null default '' check (length(notes) <= 500),
+  updated_at       timestamptz not null default now(),
+  updated_by_label text
+);
+create unique index if not exists patch_lines_item_uniq on patch_lines (show_id, item_id) where item_id is not null;
+create index if not exists patch_lines_show_idx on patch_lines (show_id);
+alter table patch_lines enable row level security;
+revoke all on patch_lines from anon, authenticated;
+grant select on patch_lines to authenticated;
+drop policy if exists patch_lines_select on patch_lines;
+create policy patch_lines_select on patch_lines for select using (has_role('technicien'));
+
+-- Modifie UN champ d'une ligne (la crée si besoin). Renvoie la ligne complète.
+--   technicien : grada et courbe seulement (sur les projecteurs affectés) ;
+--   régisseur assigné, régisseur général, admin : tous les champs.
+create or replace function set_patch_field(p_show uuid, p_item int, p_line uuid, p_field text, p_value jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare r patch_lines; lbl text; txt text; arr text[]; ok text[];
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'accessories', 'position', 'focus', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
+  if p_field not in ('dimmer', 'curve') and not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  -- ligne existante, ou création pour un projecteur affecté
+  if p_line is not null then select * into r from patch_lines where id = p_line and show_id = p_show;
+  elsif p_item is not null then select * into r from patch_lines where show_id = p_show and item_id = p_item; end if;
+  if r.id is null then
+    if p_item is null or not exists (select 1 from show_items where show_id = p_show and item_id = p_item) then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+    insert into patch_lines (show_id, item_id) values (p_show, p_item) returning * into r;
+  end if;
+  if p_field = 'model_text' and r.item_id is not null then raise exception 'Le modèle d''un projecteur vient de sa fiche' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  if p_field in ('circuit', 'dimmer', 'dmx', 'model_text', 'position', 'notes') then
+    txt := trim(coalesce(p_value #>> '{}', ''));
+    if p_field = 'dmx' then
+      if txt <> '' then
+        if txt !~ '^[0-9]{1,3}-[0-9]{1,3}$' or split_part(txt, '-', 2)::int not between 1 and 512 or split_part(txt, '-', 1)::int < 1 then raise exception 'Adresse DMX : format univers-adresse (ex. 1-120, adresse de 1 à 512)' using errcode = '22023'; end if;
+        if not ('direct' = any (r.curve)) then raise exception 'Coche d''abord la courbe DIRECT pour saisir une adresse DMX' using errcode = '22023'; end if;
+      end if;
+    elsif p_field = 'position' and txt <> '' and txt not in ('P1','P2','P3','P4','P5','P6','P7','P8','P9','P10','mezza J','mezza C','allemande J1','allemande J2','allemande C1','allemande C2','corbeille','balcon','3e','sol','coupole','autre') then
+      raise exception 'Position inconnue' using errcode = '22023';
+    end if;
+    execute format('update patch_lines set %I = $1, updated_at = now(), updated_by_label = $2 where id = $3', p_field) using txt, lbl, r.id;
+  elsif p_field in ('curve', 'accessories') then
+    if jsonb_typeof(p_value) <> 'array' then raise exception 'Liste attendue' using errcode = '22023'; end if;
+    select coalesce(array_agg(distinct v), '{}') into arr from jsonb_array_elements_text(p_value) v;
+    ok := case p_field when 'curve' then array['lineaire','onoff','autre','direct'] else array['iris','gobo','volets','autre'] end;
+    if not (arr <@ ok) then raise exception 'Choix inconnu' using errcode = '22023'; end if;
+    if p_field = 'curve' and not ('direct' = any (arr)) then   -- plus de DIRECT : l'adresse DMX n'a plus de sens
+      update patch_lines set dmx = '' where id = r.id;
+    end if;
+    execute format('update patch_lines set %I = $1, updated_at = now(), updated_by_label = $2 where id = $3', p_field) using arr, lbl, r.id;
+  else   -- focus
+    update patch_lines set focus = coalesce((p_value #>> '{}')::boolean, false), updated_at = now(), updated_by_label = lbl where id = r.id;
+  end if;
+  select * into r from patch_lines where id = r.id;
+  return to_jsonb(r);
+end $$;
+revoke all on function set_patch_field(uuid, int, uuid, text, jsonb) from public, anon;
+grant execute on function set_patch_field(uuid, int, uuid, text, jsonb) to authenticated;

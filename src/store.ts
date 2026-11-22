@@ -80,10 +80,10 @@ export async function pull() {
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
   }
   const q = (t: string) => supabase.from(t).select('*');
-  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr, shp, sgl, sdm, sex] = await Promise.all([
+  const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr, shp, sgl, sdm, sex, ptl] = await Promise.all([
     q('families').order('name'), q('item_types').order('name'), q('sockets').order('name'),
     q('filter_sizes').order('label'), q('lamps').order('name'), q('models').order('name'),
-    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs'), q('show_posts').order('created_at', { ascending: false }), q('show_gels'), q('show_demands'), q('show_externals')
+    q('items').order('id'), q('faults').order('reported_at', { ascending: false }), q('fault_log').order('at'), q('immos').order('start_date'), q('shows').order('start_date'), q('show_items'), q('show_regisseurs'), q('show_posts').order('created_at', { ascending: false }), q('show_gels'), q('show_demands'), q('show_externals'), q('patch_lines')
   ]);
   for (const r of [fam, typ, soc, fs, lamps, models, items, faults, flog]) if (r.error) throw r.error;
   // agenda : si la table n'existe pas encore (base pas à jour), l'appli reste utilisable sans lui
@@ -97,7 +97,8 @@ export async function pull() {
     showPosts: (shp.error ? [] : shp.data) as Data['showPosts'],
     showGels: (sgl.error ? [] : sgl.data) as Data['showGels'],
     showDemands: (sdm.error ? [] : sdm.data) as Data['showDemands'],
-    showExternals: (sex.error ? [] : sex.data) as Data['showExternals']
+    showExternals: (sex.error ? [] : sex.data) as Data['showExternals'],
+    patchLines: (ptl.error ? [] : ptl.data) as Data['patchLines']
   };
   state.lastPull = new Date().toISOString();
   await persist();

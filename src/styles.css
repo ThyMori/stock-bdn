@@ -400,3 +400,45 @@ button.fold { display: flex; align-items: center; gap: 8px; background: transpar
 .stickyhead { position: sticky; top: 0; z-index: 40; background: var(--paper); margin-top: calc(-1 * env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
 .stickyhead { padding-bottom: 8px; }
 .stickyhead .banner { margin-bottom: 0; margin-top: 6px; }
+
+/* ---------- feuille de patch / focus ---------- */
+.patch-btn { background: var(--sec-dem, #0a63ff); border-color: var(--sec-dem, #0a63ff); color: #fff; }   /* bouton distinct, facile à repérer */
+.patch-btn:hover { filter: brightness(1.1); }
+#app:has(.patch-page) { max-width: 1400px; }   /* la feuille a besoin de largeur sur ordinateur */
+.patch-sortbar { display: none; align-items: end; gap: 8px; }
+table.patch { width: 100%; border-collapse: collapse; font-size: .92rem; margin-top: 10px; }
+table.patch th { position: sticky; top: var(--head-h, 0px); background: var(--ink); color: var(--paper); text-align: left; padding: 0; z-index: 2; }
+table.patch th button { width: 100%; background: transparent; border: 0; color: inherit; font: 700 .75rem/1 var(--font-display, inherit); letter-spacing: .06em; text-transform: uppercase; padding: 12px 8px; text-align: left; cursor: pointer; min-height: 44px; white-space: nowrap; }
+table.patch th[aria-sort="ascending"] button, table.patch th[aria-sort="descending"] button { text-decoration: underline; text-underline-offset: 4px; }
+table.patch td { padding: 4px 8px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 22%, transparent); vertical-align: middle; }
+table.patch tbody tr:hover td { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+table.patch tr.done td { background: color-mix(in srgb, var(--green) 10%, transparent); }   /* focus fait */
+table.patch .num { font-variant-numeric: tabular-nums; font-weight: 700; }
+table.patch .idlink { font-size: 1.05rem; }
+.pin { width: 100%; min-width: 0; min-height: 40px; padding: 6px 8px; background: transparent; border: 0; border-bottom: 2px solid color-mix(in srgb, var(--ink) 30%, transparent); font-size: 16px; }
+.pin:focus { background: var(--paper); border-bottom-color: var(--ink); outline: none; }
+select.pin { appearance: auto; }
+.fcb { width: 26px; height: 26px; accent-color: var(--green); }
+.direct { color: #0a63ff; font-weight: 800; }   /* DIRECT toujours écrit en bleu */
+:root[data-theme="dark"] .direct { color: #5aa0ff; }
+@media (prefers-color-scheme: dark) { .direct { color: #5aa0ff; } }
+details.multi { position: relative; }
+details.multi > summary { cursor: pointer; list-style: none; min-height: 40px; display: flex; align-items: center; padding: 4px 8px; border-bottom: 2px solid color-mix(in srgb, var(--ink) 30%, transparent); }
+details.multi > summary::-webkit-details-marker { display: none; }
+details.multi[open] > summary { border-bottom-color: var(--ink); }
+details.multi .opts { position: absolute; z-index: 30; left: 0; top: 100%; min-width: 170px; background: var(--paper); border: 2px solid var(--ink); padding: 6px 10px; display: grid; gap: 2px; box-shadow: 4px 4px 0 var(--ink); }
+details.multi .opts label { display: flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; }
+details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink); }
+/* téléphone / tablette étroite : une carte par ligne, libellés au-dessus des valeurs */
+@media (max-width: 1000px) {
+  .patch-sortbar { display: flex; margin-top: 10px; }
+  table.patch, table.patch tbody, table.patch tr, table.patch td { display: block; }
+  table.patch thead { display: none; }
+  table.patch tr { border: 2px solid var(--ink); border-left-width: 8px; margin: 10px 0; padding: 6px 10px 10px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; }
+  table.patch tr.done { border-left-color: var(--green); }
+  table.patch td { border: 0; padding: 6px 0; min-width: 0; }
+  table.patch td::before { content: attr(data-label); display: block; font: 700 .68rem/1 var(--font-display, inherit); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  table.patch td[data-c="id"], table.patch td[data-c="notes"], table.patch td[data-c="model"], table.patch td[data-c="gels"], table.patch td[data-c="accessories"] { grid-column: 1 / -1; }
+  table.patch td[data-c="id"] { order: -2; } table.patch td[data-c="model"] { order: -1; }
+  table.patch tbody tr:hover td { background: transparent; }
+}

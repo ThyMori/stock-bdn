@@ -12,6 +12,7 @@ import { faultView } from './views/fault';
 import { showsView } from './views/shows';
 import { murView } from './views/mur';
 import { showView } from './views/show';
+import { patchView } from './views/patch';
 import { logView } from './views/log';
 import { UPDATE_PENDING } from './flags';
 import { alertText, showAlerts } from './alerts';
@@ -41,7 +42,7 @@ startWatchdog(app);   // si l'écran reste vide 8 s : erreur + « Réinitialiser
 const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   '': { f: listView, tab: 'list' }, item: { f: itemView, tab: 'list' }, scan: { f: scanView, tab: 'scan' },
   mur: { f: murView, tab: 'mur' },
-  shows: { f: showsView, tab: 'shows' }, show: { f: showView, tab: 'shows' },
+  shows: { f: showsView, tab: 'shows' }, show: { f: showView, tab: 'shows' }, patch: { f: patchView, tab: 'shows' },
   faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, log: { f: logView, tab: 'more', min: 'admin' }, more: { f: moreView, tab: 'more' },
   labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
@@ -96,6 +97,7 @@ function paintStatus() {
     ${notifBanner && !installBannerWanted() ? `<div class="banner notif" role="region" aria-label="Notifications"><span>Les notifications sont désactivées : tu ne seras pas prévenu quand on te cite ou quand un message arrive sur un de tes spectacles.</span><span class="row"><button class="btn primary" data-act="notif-on">Activer</button><button class="btn" data-act="notif-later">Plus tard</button></span></div>` : ''}
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
     ${state.error && navigator.onLine ? `<div class="banner">Synchro en échec : ${state.error}</div>` : ''}`;
+  document.documentElement.style.setProperty('--head-h', (el.querySelector<HTMLElement>('.stickyhead')?.offsetHeight ?? 0) + 'px');   // hauteur de l'en-tête collé : les titres de tableau se collent juste dessous
   el.querySelector('#syncBtn')?.addEventListener('click', () => void sync());
   el.querySelector('#onlineBtn')?.addEventListener('click', () => { onlineOpen = !onlineOpen; paintStatus(); });
   el.querySelector('[data-act=inst-now]')?.addEventListener('click', () => void promptInstall());

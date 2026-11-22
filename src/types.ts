@@ -31,6 +31,7 @@ export const SHOW_COLORS: [string, string][] = [['#1d4ed8', 'Bleu'], ['#0f766e',
   ['#4d7c0f', 'Olive'], ['#78350f', 'Brun'], ['#4338ca', 'Indigo'], ['#475569', 'Ardoise'], ['#0e7490', 'Cyan']];
 export const showColor = (s: { color?: string | null }): string => s.color ?? '#475569';
 export interface Show { id: string; name: string; color?: string | null; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
+import type { PatchLine } from './patch';
 export interface ShowRegisseur { show_id: string; user_id: string; label: string | null }
 export interface ShowPost { id: string; show_id: string | null; kind?: 'show' | 'admin' | 'general'; author_id: string | null; author_label: string | null; body: string; created_at: string; edited_at: string | null }
 /** Gélatines : couleurs proposées (ordre = ordre de tri dans la liste de prépa) et teinte d'aperçu. Identique à gel_colors() en base. */
@@ -69,10 +70,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[]; showExternals: ShowExternal[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[]; showExternals: ShowExternal[]; patchLines: PatchLine[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: [], showExternals: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: [], showExternals: [], patchLines: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */

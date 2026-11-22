@@ -9,6 +9,8 @@ import { EMPTY_DATA } from '../src/types';
 import { rollingStart } from '../src/views/calendar';
 import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
+import { buildRows, sortRows, editableCols, dmxRank } from '../src/patch';
+import type { PatchRow } from '../src/patch';
 
 let n = 0;
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name); };
@@ -266,5 +268,25 @@ t('calendrier glissant : commence le lundi de la semaine passée', () => {
   assert.equal(rollingStart('2026-11-22'), '2026-11-09');   // dimanche 22/11 -> lundi 16/11 -> 1 semaine avant
   assert.equal(rollingStart('2026-11-16'), '2026-11-09');   // un lundi
   assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
+});
+// --- Feuille de patch / focus ---
+const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
+t('patch : droits par colonne', () => {
+  assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer']);   // technicien
+  assert.equal(editableCols(false, false).size, 0);                                // lecture seule
+  assert.ok(editableCols(true, true).has('position') && !editableCols(true, true).has('gels'));
+});
+t('patch : tri naturel, vides en dernier, égalité par ID', () => {
+  const rows = [prow({ key: 'a', itemId: 3, circuit: '10' }), prow({ key: 'b', itemId: 1, circuit: '' }), prow({ key: 'c', itemId: 2, circuit: '2' })];
+  assert.deepEqual(sortRows(rows, 'circuit', 1).map((r) => r.key), ['c', 'a', 'b']);
+  assert.deepEqual(sortRows(rows, 'circuit', -1).map((r) => r.key), ['a', 'c', 'b']);   // le vide reste dernier
+  assert.deepEqual(sortRows(rows, 'id', -1).map((r) => r.key), ['a', 'c', 'b']);
+});
+t('patch : adresse DMX comparée univers puis adresse', () => {
+  assert.ok(dmxRank('1-200') < dmxRank('2-5'));
+  assert.equal(dmxRank(''), Infinity);
+});
+t('patch : buildRows sans projecteur ni ligne = vide', () => {
+  assert.deepEqual(buildRows(EMPTY_DATA, 's1', []), []);
 });
 console.log(`\n${n} tests OK`);
