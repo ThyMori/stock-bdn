@@ -166,13 +166,13 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | Technicien, régisseur non affecté au spectacle | voir ; modifier **grada**, **courbe** et **gélatines** |
 | Régisseur du spectacle, RG, admin | tout : colonnes, cellule ID, ajout / suppression de lignes |
 
-**Cellule ID** (régisseur du spectacle, RG, admin) :
+**Cellule ID** (régisseur du spectacle, RG, admin). Liste d'une ligne avec projecteur : noID, « Ajouter un projecteur du stock… » (fenêtre avec recherche), puis les ID du spectacle. Liste d'une ligne sans projecteur (et d'une ligne qu'on vient d'ajouter) : noID, ou directement les ID des projecteurs du stock disponibles aux dates du spectacle et pas encore affectés. Le bouton « + Ajouter une ligne » est au-dessus du tableau.
 
 | Geste | Effet sur la ligne | Le projecteur d'avant |
 |---|---|---|
 | Choisir un ID déjà affecté | la ligne prend ce projecteur | les deux lignes échangent leurs projecteurs |
 | noID | la ligne devient « sans projecteur » (texte libre pour le modèle) | reste affecté, sur une ligne vide |
-| newID | la ligne prend un projecteur ajouté au spectacle (mêmes vérifications que l'affectation : dates, prêt, SAV, panne ; lampe montée des PAR) | reste affecté, sur une ligne vide |
+| Ajouter un projecteur du stock | la ligne prend un projecteur ajouté au spectacle (mêmes vérifications que l'affectation : dates, prêt, SAV, panne ; lampe montée des PAR) | reste affecté, sur une ligne vide |
 | ⇄ | la ligne prend un projecteur du stock (changement de type possible) | retiré du spectacle ; proposition de déclarer une panne |
 
 - **Les gélatines appartiennent à la ligne (au circuit)** : elles suivent la ligne quand on échange, ajoute ou remplace un ID, et la liste « Projecteurs affectés » de la fiche du spectacle est mise à jour. Exception : avec noID, elles restent sur le projecteur (une ligne sans projecteur ne peut pas porter de gélatine).
@@ -180,7 +180,8 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 - Supprimer une ligne : ligne N/C = elle disparaît ; ligne d'un projecteur = on la vide, avec le choix de retirer aussi le projecteur des projecteurs affectés.
 - Base : table `patch_lines` (écriture uniquement par fonctions), fonctions `set_patch_field`, `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel`.
 - **Supabase** : rejouer `supabase/schema.sql` (aucune fonction Edge à redéployer).
-- À venir : suggestion d'ID par position, PDF imprimable.
+- **PDF (v1.26.0)** : bouton « PDF » au-dessus du tableau. A4 paysage, lien de l'appli en en-tête, dans l'ordre affiché à l'écran. Chaque page porte la date et l'heure de génération (en pied de page ; en rouge sur la première page) ; la première page indique aussi la dernière modification de la feuille et son auteur. Nom du fichier : `patch-<spectacle>-AAAAMMJJ-HHMM.pdf`. Sur téléphone : fenêtre Partager / Télécharger / Ouvrir.
+- À venir : suggestion d'ID par position.
 
 | Migration | Apporte | Indispensable pour |
 |---|---|---|

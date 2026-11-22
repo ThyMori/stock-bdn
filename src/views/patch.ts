@@ -35,9 +35,12 @@ export const patchView: ViewFactory = ([showId]) => {
   const idCell = (r: PatchRow): string => {
     const d = view(), ids = d.showItems.filter((s) => s.show_id === showId).map((s) => s.item_id).sort((a, b) => a - b);
     const modelOf = (n: number) => { const it = d.items.find((i) => i.id === n); return it ? describe(d, it).model?.name ?? '' : ''; };
-    const opts = ids.map((n) => `<option value="${n}" ${n === r.itemId ? 'selected' : ''}>${n === r.itemId ? n : `${n} · ${esc(modelOf(n))}`}</option>`).join('');
-    return `<span class="idcell"><select class="pin idsel" data-k="id" aria-label="ID du projecteur (ou noID, newID)">
-      <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option>${opts}<option value="new">newID…</option></select>
+    // Ligne d'un projecteur : noID, « ajouter du stock » (avec recherche), puis les ID du spectacle.
+    // Ligne sans projecteur : noID, ou directement les ID des projecteurs du stock disponibles à ces dates et pas encore affectés.
+    const own = ids.map((n) => `<option value="${n}" ${n === r.itemId ? 'selected' : ''}>${n === r.itemId ? n : `${n} · ${esc(modelOf(n))}`}</option>`).join('');
+    const stock = r.itemId !== null ? "" : candidates(null).map(([v, l]) => `<option value="stock:${v}">${esc(l.replace(/^n° /, ''))}</option>`).join('');
+    return `<span class="idcell"><select class="pin idsel" data-k="id" aria-label="ID du projecteur (ou noID, ou un projecteur du stock)">
+      <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option>${r.itemId === null ? stock : `<option value="new">Ajouter un projecteur du stock…</option>${own}`}</select>
       ${r.itemId !== null ? `<a class="idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}" aria-label="Voir la fiche du projecteur ${r.itemId}">↗</a><button class="btn mini swapbtn" data-act="swap" title="Remplacer ce projecteur par un autre du stock" aria-label="Remplacer le projecteur ${r.itemId} par un autre">⇄</button>` : ''}</span>`;
   };
   /** Projecteurs qu'on peut ajouter : pas déjà dans ce spectacle, disponibles à ses dates (ni prêt, SAV ou panne). Même modèle en premier. */
@@ -81,6 +84,10 @@ export const patchView: ViewFactory = ([showId]) => {
     const who = { p_item: r.itemId, p_line: r.itemId === null ? r.lineId : null };
     if (what === 'id') {
       if (v === 'noid') { if (r.itemId !== null) await structural(root, 'patch_set_item', { ...who, p_mode: 'noid' }, 'Ligne sans projecteur'); return; }
+      if (v?.startsWith('stock:')) {   // ID choisi directement dans la liste du stock disponible
+        const n = Number(v.slice(6));
+        await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${n} ajouté`); return;
+      }
       if (v === 'new') {
         const f = await openForm('Ajouter un projecteur au spectacle', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: candidates(r.itemId), hint: 'Seuls les projecteurs disponibles à ces dates sont proposés.' }], { submit: 'Ajouter' });
         if (!f) { paintRow(root, key); return; }
@@ -167,11 +174,11 @@ export const patchView: ViewFactory = ([showId]) => {
       <div class="sub">${esc(show.name)} · du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)} · ${rows.length} ligne${rows.length > 1 ? 's' : ''} · focus ${rows.filter((r) => r.focus).length}/${rows.length}${last ? ` · dernière modification ${esc(fmtDateTime(last.updatedAt!))}${last.updatedBy ? ' par ' + esc(last.updatedBy) : ''}` : ''}</div>
       ${!navigator.onLine ? '<div class="banner">Hors ligne : la feuille est en lecture seule.</div>' : ed.size === 0 ? '<div class="sub">Consultation seulement : tu n\'es pas assigné à ce spectacle.</div>'
         : !canActShow(showId) ? '<div class="sub">Tu peux modifier la grada, la courbe et les gélatines.</div>' : ''}
+      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
       <table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
-        <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table>
-      ${ed.has('id') ? '<div class="row"><button class="btn primary" data-act="line-add">+ Ajouter une ligne</button><span class="sub">Ligne sans projecteur : choisis ensuite son ID (newID pour en ajouter un au spectacle).</span></div>' : ''}`;
+        <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table>`;
   }
   /** Redessine une seule ligne (changement de courbe : la colonne DMX s'active / se vide ; ou erreur : retour à la valeur enregistrée). */
   function paintRow(root: HTMLElement, key: string) {
@@ -215,6 +222,16 @@ export const patchView: ViewFactory = ([showId]) => {
             const id = (r.data as PatchLine | null)?.id;   // la nouvelle ligne est en bas : on la montre et on se place sur son circuit
             const tr = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === `l${id}`);
             tr?.scrollIntoView({ block: 'center' }); tr?.querySelector<HTMLInputElement>('input.pin')?.focus({ preventScroll: true });
+          })();
+          return;
+        }
+        if (t.closest('[data-act="pdf"]')) {   // PDF horodaté, dans l'ordre affiché à l'écran
+          void (async () => {
+            try {
+              const { buildPatchPdf } = await import('../patchPdf'); const { deliverPdf } = await import('../ui/deliverPdf');
+              const { blob, filename } = await buildPatchPdf(view(), showId, ordered());
+              await deliverPdf(blob, filename, 'Feuille de patch prête');
+            } catch (e) { toast('Impossible de générer le PDF : ' + String(e)); }
           })();
           return;
         }
