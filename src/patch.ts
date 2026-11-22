@@ -16,7 +16,7 @@ export const ACCESSORIES: { k: string; label: string }[] = [
   { k: 'iris', label: 'Iris' }, { k: 'gobo', label: 'Gobo' }, { k: 'volets', label: 'Volets' }, { k: 'autre', label: 'Autre' }
 ];
 /** Positions proposées, dans l'ordre d'usage (sert aussi au tri). */
-export const POSITIONS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'mezza J', 'mezza C', 'allemande J1', 'allemande J2', 'allemande C1', 'allemande C2', 'corbeille', 'balcon', '3e', 'sol', 'coupole', 'autre'];
+export const POSITIONS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'mezza J', 'mezza C', 'allemande J', 'allemande C', 'corbeille', 'balcon', '3e', 'sol', 'coupole', 'autre'];
 
 /** Colonnes, dans l'ordre d'affichage. */
 export type Col = 'circuit' | 'dimmer' | 'curve' | 'dmx' | 'id' | 'model' | 'gels' | 'accessories' | 'position' | 'focus' | 'notes';
