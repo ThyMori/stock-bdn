@@ -453,6 +453,41 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
   table.patch tbody tr:hover td { background: transparent; }
 }
 
+/* téléphone en paysage : le tableau complet (comme sur ordinateur), compact, avec défilement horizontal s'il déborde */
+.ptable { width: 100%; }
+@media (max-width: 1000px) and (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  #app:has(.patch-page) { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); max-width: none; }
+  body:has(.patch-page) .stickyhead { position: static; }                /* l'écran est bas : l'en-tête ne reste pas collé en haut */
+  .ptable { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* on annule les cartes du mode téléphone : retour au vrai tableau */
+  table.patch { display: table; } table.patch thead { display: table-header-group; } table.patch tbody { display: table-row-group; }
+  table.patch tr { display: table-row; border: 0; margin: 0; padding: 0; }
+  table.patch td { display: table-cell; } table.patch td::before { display: none; }
+  table.patch tr.done td { background: color-mix(in srgb, var(--green) 10%, transparent); }
+  table.patch td[data-c="id"], table.patch td[data-c="model"] { order: 0; }
+  table.patch td.rowact:empty { display: table-cell; }
+  table.patch { font-size: .78rem; margin-top: 6px; min-width: 860px; }
+  table.patch th { position: static; }
+  table.patch th button { padding: 8px 4px; min-height: 36px; font-size: .66rem; letter-spacing: .03em; }
+  table.patch td { padding: 2px 3px; }
+  .pin { min-height: 36px; padding: 3px 4px; }
+  details.multi > summary { min-height: 36px; padding: 2px 4px; }
+  .idcell { gap: 1px; } .idcell .idsel { min-width: 58px; } .idcell .idlink { padding: 0 3px; min-height: 36px; }
+  .btn.mini { min-height: 36px; padding: 0 6px; font-size: .7rem; }
+  .fcb { width: 22px; height: 22px; }
+  .patch-sortbar { display: none; }
+  /* écran bas : on libère la hauteur pour le tableau (bandeaux d'installation / notifications / spectacle en cours masqués, barres compactes) */
+  body:has(.patch-page) { --nav-h: 42px; overflow-x: clip; }   /* seul le tableau défile à l'horizontale, pas la page */
+  body:has(.patch-page) #status .banner.install, body:has(.patch-page) #status .banner.notif, body:has(.patch-page) #status .banner.now { display: none; }
+  body:has(.patch-page) .topbar { padding-top: 2px; padding-bottom: 2px; min-height: 0; }
+  body:has(.patch-page) .topbar .brand { font-size: .9rem; }
+  body:has(.patch-page) nav.tabs a { flex-direction: row; gap: 6px; font-size: .75rem; }
+  body:has(.patch-page) nav.tabs a svg { width: 18px; height: 18px; }
+  .patch-page h1 { font-size: 1.1rem; margin: 0; }
+  .patch-page .noprint { margin: 2px 0; }
+  .patch-page .noprint .btn { min-height: 36px; }
+}
+
 /* ---------- aide intégrée (bouton « i ») ---------- */
 .info-btn { font-weight: 800; font-style: italic; font-family: Georgia, serif; min-width: 44px; }
 dialog.help { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 0 16px 16px; width: min(94vw, 640px); max-height: 88dvh; overflow-y: auto; }

@@ -1,3 +1,4 @@
+import { lastPositionOf } from '../patchSuggest';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
@@ -189,6 +190,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
           <dt>Lampe</dt><dd>${d.lamp ? esc(d.lamp.name) + (d.lamp.power_w ? ` · ${d.lamp.power_w} W` : '') : '—'}</dd>
           <dt>Douille</dt><dd>${esc(d.socket?.name ?? '—')}</dd>
           <dt>Porte-filtre</dt><dd>${d.filter ? `${esc(d.filter.label)} <span class="muted">(${d.filter.sheets_lee ?? '–'} / feuille LEE · ${d.filter.sheets_rosco ?? '–'} / feuille Rosco)</span>` : '—'}</dd>
+          <dt>Dernière position</dt><dd>${(() => { const lp = lastPositionOf(data, id, today); return lp ? `${esc(lp.position)} <span class="muted">· à jouer sur ${esc(lp.show)}</span>` : '—'; })()}</dd>
           <dt>Dernier SAV</dt><dd>${fmtDate(item.last_service)}</dd>
           <dt>Notice</dt><dd>${d.model?.notice_url ? `<a href="${esc(d.model.notice_url)}" target="_blank" rel="noopener">Ouvrir la fiche technique</a>` : '—'}</dd>
         </dl>

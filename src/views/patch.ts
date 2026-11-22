@@ -11,6 +11,8 @@ import { openForm } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { blockedReason } from '../alerts';
 import { describe } from '../ref';
+import { rankStock } from '../patchSuggest';
+import type { Suggestion } from '../patchSuggest';
 
 /** Feuille de patch / focus d'un spectacle : une ligne par projecteur affecté, saisie directe, tri par colonne. */
 export const patchView: ViewFactory = ([showId]) => {
@@ -38,20 +40,33 @@ export const patchView: ViewFactory = ([showId]) => {
     // Ligne d'un projecteur : noID, « ajouter du stock » (avec recherche), puis les ID du spectacle.
     // Ligne sans projecteur : noID, ou directement les ID des projecteurs du stock disponibles à ces dates et pas encore affectés.
     const own = ids.map((n) => `<option value="${n}" ${n === r.itemId ? 'selected' : ''}>${n === r.itemId ? n : `${n} · ${esc(modelOf(n))}`}</option>`).join('');
-    const stock = r.itemId !== null ? "" : candidates(null).map(([v, l]) => `<option value="stock:${v}">${esc(l.replace(/^n° /, ''))}</option>`).join('');
+    // Ligne sans projecteur : suggestions classées (même modèle, modèles similaires, autres), avec la raison du classement.
+    const sug = r.itemId !== null ? [] : suggest(r), grp = (g: Suggestion['group'], t: string) => {
+      const l = sug.filter((x) => x.group === g); return l.length ? `<optgroup label="${t}">${l.map((x) => `<option value="stock:${x.id}">${esc(sugLabel(x, false))}</option>`).join('')}</optgroup>` : '';
+    };
+    const stock = r.modelId ? grp('same', 'Suggestions (même modèle)') + grp('similar', 'Modèles similaires') + grp('other', 'Autres modèles') : grp('other', 'Projecteurs disponibles');
     return `<span class="idcell"><select class="pin idsel" data-k="id" aria-label="ID du projecteur (ou noID, ou un projecteur du stock)">
       <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option><option value="scan">Scanner un QR code…</option>${r.itemId === null ? stock : `<option value="new">Ajouter un projecteur du stock…</option>${own}`}</select>
       ${r.itemId !== null ? `<a class="idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}" aria-label="Voir la fiche du projecteur ${r.itemId}">↗</a><button class="btn mini swapbtn" data-act="swap" title="Remplacer ce projecteur par un autre du stock" aria-label="Remplacer le projecteur ${r.itemId} par un autre">⇄</button>` : ''}</span>`;
   };
-  /** Projecteurs qu'on peut ajouter : pas déjà dans ce spectacle, disponibles à ses dates (ni prêt, SAV ou panne). Même modèle en premier. */
-  const candidates = (sameModelAs: number | null): [string, string][] => {
+  /** Ce que demande une ligne : son modèle, sa lampe (PAR) et sa position. */
+  const suggest = (r: PatchRow): Suggestion[] => {
     const d = view(), show = d.shows.find((s) => s.id === showId); if (!show) return [];
-    const taken = new Set(d.showItems.filter((s) => s.show_id === showId).map((s) => s.item_id));
-    const ref = sameModelAs === null ? null : d.items.find((i) => i.id === sameModelAs)?.model_id;
-    const st = (i: (typeof d.items)[number]) => ({ dispo: 'disponible', utilise: 'utilisé', sav: 'SAV', en_pret: 'en prêt' }[i.eff ?? i.status]);
-    return d.items.filter((i) => !taken.has(i.id) && !blockedReason(d, i.id, show)).map((i) => ({ i, ds: describe(d, i) }))
-      .sort((a, b) => Number(b.i.model_id === ref) - Number(a.i.model_id === ref) || (a.ds.model?.name ?? '').localeCompare(b.ds.model?.name ?? '', 'fr', { numeric: true }) || a.i.id - b.i.id)
-      .map(({ i, ds }): [string, string] => [String(i.id), `n° ${i.id} · ${ds.model?.name ?? '?'}${ref && i.model_id === ref ? ' (même modèle)' : ''} · ${d.lamps.find((l) => l.id === i.lamp_id)?.name ?? 'sans lampe'} · ${st(i)}`]);
+    return rankStock(d, show, { modelId: r.modelId, lampId: r.lampId, par: r.par, position: r.position });
+  };
+  /** Texte d'une suggestion : « 123 · Modèle · raisons du classement ». */
+  const sugLabel = (x: Suggestion, withN: boolean): string => `${withN ? 'n° ' : ''}${x.id} · ${x.model}${x.group === 'similar' ? ' (similaire)' : ''} · ${x.reasons.join(' · ')}`;
+  /** Projecteurs qu'on peut ajouter dans une fenêtre de choix, classés pour la ligne r (ou sans critère si null). */
+  const candidates = (r: PatchRow | null): [string, string][] => {
+    const d = view(), show = d.shows.find((s) => s.id === showId); if (!show) return [];
+    const list = r ? suggest(r) : rankStock(d, show, { modelId: null, lampId: null, par: false, position: '' });
+    return list.map((x): [string, string] => [String(x.id), sugLabel(x, true)]);
+  };
+  /** Avertissement si l'ID choisi n'a pas le modèle voulu par la ligne (ni un modèle similaire) : accepté quand même. */
+  const warnModel = (r: PatchRow, n: number) => {
+    if (!r.modelId) return;
+    const g = suggest(r).find((x) => x.id === n)?.group;
+    if (g === 'other') toast(`Attention : le projecteur ${n} n'est pas du modèle prévu sur cette ligne (${r.model}).`);
   };
   /** Réponse à un QR code lu dans une fenêtre de choix : accepte un projecteur de la liste, sinon explique pourquoi pas. */
   const scanReply = (opts: [string, string][]) => (text: string): { value: string } | { error: string } => {
@@ -61,8 +76,8 @@ export const patchView: ViewFactory = ([showId]) => {
     if (!d.items.some((i) => i.id === n)) return { error: `Projecteur n° ${n} introuvable dans la base.` };
     return { error: `Le n° ${n} n'est pas disponible : ${(show && blockedReason(d, n, show)) || 'indisponible'}.` };
   };
-  /** Lampe à demander pour un PAR : toujours celle qui est montée sur le projecteur choisi. */
-  const lampFor = (n: number): string | null => { const d = view(), it = d.items.find((i) => i.id === n); return it && /^PAR/i.test(describe(d, it).type?.name ?? '') ? it.lamp_id : null; };
+  /** Lampe à demander pour un PAR : celle voulue par la ligne si elle en a une, sinon celle qui est montée sur le projecteur choisi. */
+  const lampFor = (n: number, r?: PatchRow): string | null => { const d = view(), it = d.items.find((i) => i.id === n); return it && /^PAR/i.test(describe(d, it).type?.name ?? '') ? (r?.itemId === null && r.lampId ? r.lampId : it.lamp_id) : null; };
   /** Petite fenêtre à plusieurs boutons : renvoie la valeur du bouton touché, ou null. */
   const ask = (title: string, text: string, buttons: [string, string, boolean?][]): Promise<string | null> => new Promise((resolve) => {
     const dlg = document.createElement('dialog'); dlg.className = 'dlg';
@@ -95,39 +110,39 @@ export const patchView: ViewFactory = ([showId]) => {
       if (v === 'scan') {   // scan d'un QR code : projecteur déjà affecté = échange de lignes ; projecteur du stock disponible = ajout
         const inShow = new Set(view().showItems.filter((x) => x.show_id === showId).map((x) => x.item_id));
         const mine = [...inShow].filter((n) => n !== r.itemId).sort((a, b) => a - b).map((n): [string, string] => [String(n), `n° ${n} · déjà dans ce spectacle`]);
-        const opts = [...mine, ...candidates(null)];
+        const opts = [...mine, ...candidates(r)];
         const p = openForm('Scanner un projecteur', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), hint: 'Un projecteur déjà dans le spectacle prend la place de celui de la ligne ; un projecteur du stock est ajouté au spectacle.' }], { submit: 'Valider' });
         setTimeout(() => document.querySelector<HTMLElement>('dialog.dlg [data-scan]')?.click(), 150);   // la caméra démarre tout de suite
         const f = await p;
         if (!f) { paintRow(root, key); return; }
-        const n = Number(f.to);
+        const n = Number(f.to); if (!inShow.has(n)) warnModel(r, n);
         if (inShow.has(n)) await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`);
-        else await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${n} ajouté`);
+        else await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`);
         return;
       }
       if (v?.startsWith('stock:')) {   // ID choisi directement dans la liste du stock disponible
-        const n = Number(v.slice(6));
-        await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${n} ajouté`); return;
+        const n = Number(v.slice(6)); warnModel(r, n);
+        await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`); return;
       }
       if (v === 'new') {
-        const f = await openForm('Ajouter un projecteur au spectacle', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: candidates(r.itemId), hint: 'Seuls les projecteurs disponibles à ces dates sont proposés.' }], { submit: 'Ajouter' });
+        const f = await openForm('Ajouter un projecteur au spectacle', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: candidates(r), hint: 'Seuls les projecteurs disponibles à ces dates sont proposés.' }], { submit: 'Ajouter' });
         if (!f) { paintRow(root, key); return; }
-        const n = Number(f.to);
-        await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${n} ajouté`); return;
+        const n = Number(f.to); warnModel(r, n);
+        await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`); return;
       }
       const n = Number(v);
       await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`); return;
     }
     if (what === 'swap' && r.itemId !== null) {
-      const old = r.itemId, opts = candidates(old);
+      const old = r.itemId, opts = candidates(r);
       if (!opts.length) { toast('Aucun projecteur du stock n\'est disponible pendant ce spectacle.'); return; }
       const f = await openForm(`Remplacer le projecteur ${old}`, [
         { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), hint: r.auto ? 'Ce projecteur vient d\'une demande : choisis le même modèle.' : 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
         { name: 'fault', label: `Déclarer une panne sur le projecteur ${old} ?`, type: 'select', options: [['', 'Non'], ['oui', 'Oui, en même temps']], value: '' },
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea' }], { submit: 'Remplacer' });
       if (!f) return;
-      const n = Number(f.to);
-      const ok = await structural(root, 'patch_set_item', { ...who, p_mode: 'replace', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${old} remplacé par ${n}`);
+      const n = Number(f.to); warnModel(r, n);
+      const ok = await structural(root, 'patch_set_item', { ...who, p_mode: 'replace', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${old} remplacé par ${n}`);
       if (ok && f.fault === 'oui') {
         await reportFault(old, f.desc || `Remplacé dans la feuille de patch (${view().shows.find((s) => s.id === showId)?.name ?? ''})`);
         toast(`Panne déclarée sur le projecteur ${old}.`, 'ok');
@@ -157,6 +172,20 @@ export const patchView: ViewFactory = ([showId]) => {
     }
   }
 
+  /** Cellule modèle d'une ligne sans projecteur : modèle du catalogue (groupé par type), texte libre, ajout au catalogue (régisseur général / admin) et lampe pour un PAR. */
+  const modelCell = (r: PatchRow): string => {
+    const d = view(), types = [...d.types].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    const groups = [...types.map((t) => ({ label: t.name, id: t.id as string | null })), { label: 'Sans type', id: null }].map((g) => {
+      const ms = d.models.filter((m) => (m.type_id ?? null) === g.id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+      return ms.length ? `<optgroup label="${esc(g.label)}">${ms.map((m) => `<option value="${esc(m.id)}" ${m.id === r.modelId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</optgroup>` : '';
+    }).join('');
+    const free = !r.modelId && r.model ? `<option value="__keep" selected>${esc(r.model)} (texte libre)</option>` : '';
+    const sel = `<select class="pin" data-k="model_pick" aria-label="Modèle du projecteur"><option value="" ${!r.modelId && !r.model ? 'selected' : ''}>—</option>${free}${groups}<option value="__text">Autre (texte libre)…</option>${can('regisseur_general') ? '<option value="__add">+ Ajouter un modèle au catalogue…</option>' : ''}</select>`;
+    if (!r.par) return sel;
+    const model = d.models.find((m) => m.id === r.modelId);
+    const lamps = d.lamps.filter((l) => !model?.socket_id || !l.socket_id || l.socket_id === model.socket_id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    return `${sel}<select class="pin" data-k="lamp_pick" aria-label="Lampe du PAR"><option value="">Lampe ?</option>${lamps.map((l) => `<option value="${esc(l.id)}" ${l.id === r.lampId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>`;
+  };
   const cell = (r: PatchRow, c: Col, ed: Set<Col>): string => {
     const can_ = ed.has(c);
     switch (c) {
@@ -175,7 +204,7 @@ export const patchView: ViewFactory = ([showId]) => {
       case 'dmx': return can_ && r.curve.includes('direct') ? `<input class="pin num" data-k="dmx" value="${esc(r.dmx)}" placeholder="1-120" maxlength="7" inputmode="numeric" autocomplete="off" aria-label="Adresse DMX, univers-adresse">`
         : r.curve.includes('direct') ? `<span class="num">${esc(r.dmx) || '<i class="muted">—</i>'}</span>` : '<i class="muted">—</i>';
       case 'id': return can_ ? idCell(r) : r.itemId === null ? '<span class="muted">N/C</span>' : `<a class="num idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}">${r.itemId}</a>`;
-      case 'model': return r.itemId === null && can_ ? `<input class="pin" data-k="model_text" value="${esc(r.model)}" maxlength="80" autocomplete="off" aria-label="Modèle">` : `<span>${esc(r.model) || '<i class="muted">—</i>'}</span>`;
+      case 'model': return r.itemId === null && can_ ? modelCell(r) : `<span>${esc(r.model) || '<i class="muted">—</i>'}</span>`;
       case 'gels': {
         const chips = r.gels.map((g, i) => `<span class="gel"><i style="background:${gelCss(gelColorOf(g))}"></i>${esc(g)}${can_ && r.gelIds[i] ? `<button class="gx" data-act="gel-del" data-v="${esc(r.gelIds[i])}" aria-label="Retirer le gel ${esc(g)}">✕</button>` : ''}</span>`).join(' ');
         const add = can_ ? `<button class="btn mini" data-act="gel-add" aria-label="Ajouter un gel">+ Gel</button>` : '';
@@ -187,6 +216,29 @@ export const patchView: ViewFactory = ([showId]) => {
     }
   };
   const rowHtml = (r: PatchRow, ed: Set<Col>): string => `<tr data-key="${esc(r.key)}" class="${r.focus ? 'done' : ''}" ${r.updatedAt ? `title="Modifié ${esc(fmtDateTime(r.updatedAt))}${r.updatedBy ? ' par ' + esc(r.updatedBy) : ''}"` : ''}>${COLS.map((c) => `<td data-label="${c.label}" data-c="${c.k}">${cell(r, c.k, ed)}</td>`).join('')}<td class="rowact" data-c="act">${ed.has('id') ? `<button class="btn mini" data-act="line-del" aria-label="Supprimer la ligne">Suppr.</button>` : ''}</td></tr>`;
+
+  /** Choix du modèle d'une ligne sans projecteur : catalogue, texte libre, ou nouveau modèle ajouté au catalogue. */
+  async function pickModel(root: HTMLElement, key: string, v: string) {
+    if (v === '__keep') return;                                   // texte libre déjà en place : rien à faire
+    if (v === '') { save(root, key, 'model_id', ''); save(root, key, 'model_text', ''); queue = queue.then(() => paintRow(root, key)); return; }
+    if (v === '__text') {
+      const f = await openForm('Modèle en texte libre', [{ name: 't', label: 'Nom du modèle', required: true }], { submit: 'Valider' });
+      if (!f) { paintRow(root, key); return; }
+      save(root, key, 'model_text', f.t.trim()); queue = queue.then(() => paintRow(root, key)); return;
+    }
+    if (v === '__add') {
+      const types = [...view().types].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+      const f = await openForm('Ajouter un modèle au catalogue', [
+        { name: 'n', label: 'Nom du modèle', required: true, hint: 'Il rejoint le catalogue du stock : tout le monde pourra le choisir.' },
+        { name: 't', label: 'Type', type: 'select', options: [['', 'Sans type'], ...types.map((t): [string, string] => [t.id, t.name])] }], { submit: 'Ajouter' });
+      if (!f) { paintRow(root, key); return; }
+      const r = await rpcCall('add_model', { p_name: f.n.trim(), p_type: f.t || null });
+      if (r.error || !r.data) { toast(r.error ?? 'Ajout impossible'); paintRow(root, key); return; }
+      toast(`Modèle « ${f.n.trim()} » ajouté au catalogue.`, 'ok');
+      save(root, key, 'model_id', String(r.data)); queue = queue.then(() => paintRow(root, key)); return;
+    }
+    save(root, key, 'model_id', v); queue = queue.then(() => paintRow(root, key));   // modèle du catalogue : on redessine (la lampe n'apparaît que pour un PAR)
+  }
 
   const edSet = () => (navigator.onLine ? editableCols(canActShow(showId), can('technicien')) : new Set<Col>());
 
@@ -205,8 +257,8 @@ export const patchView: ViewFactory = ([showId]) => {
       <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
-      <table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
-        <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table>`;
+      <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
+        <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
   }
   /** Redessine une seule ligne (changement de courbe : la colonne DMX s'active / se vide ; ou erreur : retour à la valeur enregistrée). */
   function paintRow(root: HTMLElement, key: string) {
@@ -275,7 +327,9 @@ export const patchView: ViewFactory = ([showId]) => {
         if (multi) { save(root, key, multi.dataset.k!, [...multi.querySelectorAll<HTMLInputElement>('input[type=checkbox]:checked')].map((x) => x.dataset.v!)); return; }
         const k = (t as HTMLElement).dataset.k; if (!k) return;
         if (k === 'curve') { save(root, key, 'curve', [t.value]); return; }   // courbe : un seul choix
-        if (k === 'id') { void act(root, key, 'id', t.value); return; }   // cellule ID : changement de projecteur
+        if (k === 'id') { void act(root, key, 'id', t.value); return; }
+        if (k === 'model_pick') { void pickModel(root, key, t.value); return; }   // modèle d'une ligne sans projecteur
+        if (k === 'lamp_pick') { save(root, key, 'lamp_id', t.value); return; }   // cellule ID : changement de projecteur
         save(root, key, k, k === 'focus' ? (t as HTMLInputElement).checked : t.value.trim());
         if (k === 'focus') tr.classList.toggle('done', (t as HTMLInputElement).checked);
       });

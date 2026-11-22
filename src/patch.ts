@@ -6,6 +6,7 @@ import { describe } from './ref';
 export interface PatchLine {
   id: string; show_id: string; item_id: number | null; circuit: string; dimmer: string; curve: string[]; dmx: string;
   model_text: string; accessories: string[]; position: string; focus: boolean; notes: string; updated_at: string; updated_by_label: string | null;
+  model_id?: string | null; lamp_id?: string | null;   // ligne N/C préparée : modèle du catalogue (et lampe voulue pour un PAR)
   gels?: { ref: string; color: string }[];   // gélatines d'une ligne N/C (celles d'un projecteur affecté sont dans show_gels)
 }
 
@@ -34,6 +35,7 @@ export interface PatchRow {
   itemId: number | null;
   circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; gelIds: string[]; auto: boolean; accessories: string[]; position: string; focus: boolean; notes: string;
   updatedAt: string | null; updatedBy: string | null;
+  modelId: string | null; lampId: string | null; par: boolean;   // modèle et lampe voulus (projecteur affecté : ceux du spectacle ; ligne N/C : ceux choisis)
 }
 
 /** Lignes de la feuille : un projecteur affecté = une ligne (même sans saisie), puis les lignes N/C. */
@@ -48,19 +50,23 @@ export function buildRows(data: Data, showId: string, lines: PatchLine[]): Patch
     const l = mine.find((x) => x.item_id === si.item_id);
     const gl = data.showGels.filter((g) => g.show_id === showId && g.item_id === si.item_id).sort((a, b) => a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
     const row = fromLine(l ?? null, `i${si.item_id}`, si.item_id, `${ds.model?.name ?? '?'}${par && lamp ? ' ' + lamp : ''}`, gl.map((g) => g.ref));
+    row.modelId = it.model_id; row.par = par; row.lampId = par ? (si.lamp_id ?? it.lamp_id) : null;
     row.gelIds = gl.map((g) => g.id); row.auto = !!si.demand_id;   // gélatines modifiables une à une ; projecteur issu d'une demande = ni retrait ni remplacement par un autre modèle
     rows.push(row);
   }
   for (const l of mine.filter((x) => x.item_id === null)) {
-    const row = fromLine(l, `l${l.id}`, null, l.model_text, (l.gels ?? []).map((g) => g.ref));
+    const m = data.models.find((x) => x.id === l.model_id), par = /^PAR/i.test(data.types.find((t) => t.id === m?.type_id)?.name ?? '');
+    const lampName = par ? data.lamps.find((x) => x.id === l.lamp_id)?.name : undefined;
+    const row = fromLine(l, `l${l.id}`, null, m ? `${m.name}${lampName ? ' ' + lampName : ''}` : l.model_text, (l.gels ?? []).map((g) => g.ref));
     row.gelIds = row.gels;   // pour une ligne N/C, une gélatine se retire par sa référence
+    row.modelId = m?.id ?? null; row.par = par; row.lampId = par ? l.lamp_id ?? null : null;
     rows.push(row);
   }
   return rows;
 }
 function fromLine(l: PatchLine | null, key: string, itemId: number | null, model: string, gels: string[]): PatchRow {
   return {
-    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false,
+    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false, modelId: null, lampId: null, par: false,
     circuit: l?.circuit ?? '', dimmer: l?.dimmer ?? '', curve: l?.curve ?? ['lineaire'], dmx: l?.dmx ?? '', accessories: l?.accessories ?? [],
     position: l?.position ?? '', focus: l?.focus ?? false, notes: l?.notes ?? '', updatedAt: l?.updated_at ?? null, updatedBy: l?.updated_by_label ?? null
   };

@@ -11,6 +11,7 @@ import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
 import { buildRows, sortRows, editableCols, dmxRank } from '../src/patch';
 import type { PatchRow } from '../src/patch';
+import { rankStock, similarNames, lastPositions, lastPositionOf } from '../src/patchSuggest';
 
 let n = 0;
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name); };
@@ -270,7 +271,7 @@ t('calendrier glissant : commence le lundi de la semaine passée', () => {
   assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
 });
 // --- Feuille de patch / focus ---
-const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
+const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
 t('patch : droits par colonne', () => {
   assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer', 'gels']);   // technicien
   assert.equal(editableCols(false, false).size, 0);                                // lecture seule
@@ -296,5 +297,36 @@ t('patch : une ligne sans projecteur porte ses gélatines', () => {
   assert.deepEqual(rows[0].gels, ['R80', 'L201']);
   assert.deepEqual(rows[0].gelIds, ['R80', 'L201']);   // retrait par référence
   assert.equal(rows[0].itemId, null);
+});
+// --- Mode prépa : suggestions d'ID ---
+const prepData = (): Data => ({ ...EMPTY_DATA,
+  types: [{ id: 't-par', name: 'PAR' }, { id: 't-dec', name: 'Découpe' }],
+  models: [{ id: 'm-par', name: 'PAR64', type_id: 't-par' }, { id: 'm-a', name: '614SX', type_id: 't-dec' }, { id: 'm-b', name: '614S', type_id: 't-dec' }, { id: 'm-c', name: '713', type_id: 't-dec' }] as Data['models'],
+  lamps: [{ id: 'l1', name: 'CP60' }, { id: 'l2', name: 'CP62' }] as Data['lamps'],
+  items: [
+    { id: 1, model_id: 'm-par', lamp_id: 'l2', status: 'dispo' }, { id: 2, model_id: 'm-par', lamp_id: 'l1', status: 'dispo' },
+    { id: 3, model_id: 'm-a', lamp_id: null, status: 'dispo' }, { id: 4, model_id: 'm-b', lamp_id: null, status: 'dispo' }, { id: 5, model_id: 'm-c', lamp_id: null, status: 'dispo' }
+  ] as unknown as Data['items'],
+  shows: [{ id: 's0', name: 'Ancien', start_date: '2026-01-10', end_date: '2026-01-12' }, { id: 's1', name: 'Courant', start_date: '2026-12-01', end_date: '2026-12-05' }, { id: 's2', name: 'Récent', start_date: '2026-06-01', end_date: '2026-06-03' }] as Data['shows'],
+  patchLines: [
+    { id: 'a', show_id: 's0', item_id: 3, position: 'P1', updated_at: '2026-09-01T00:00:00Z' }, { id: 'b', show_id: 's2', item_id: 3, position: '3e', updated_at: '2026-01-01T00:00:00Z' },
+    { id: 'c', show_id: 's2', item_id: 1, position: 'P2', updated_at: '2026-06-01T00:00:00Z' }] as unknown as Data['patchLines'] });
+t('prépa : modèles similaires', () => {
+  assert.ok(similarNames('614SX', '614S') && similarNames('ETC 25-50', '613') && similarNames('329HPC', '329HPB') && similarNames('310HPC', '306HPC'));
+  assert.ok(!similarNames('614SX', '713'));
+});
+t('prépa : dernière position = spectacle le plus récent (chronologie, pas date de saisie)', () => {
+  const d = prepData();
+  assert.equal(lastPositionOf(d, 3, '2026-11-22')?.position, '3e');   // « Récent » (juin) passe avant « Ancien » même si saisi plus tôt
+  assert.equal(lastPositionOf(d, 3, '2026-03-01')?.position, 'P1');   // à cette date, seul « Ancien » a eu lieu
+  assert.equal(lastPositionOf(d, 5, '2026-11-22'), null);
+  assert.equal(lastPositions(d, 's2', '2026-12-01').get(3)?.position, 'P1');   // le spectacle préparé lui-même est ignoré
+});
+t('prépa : classement même modèle, similaire, autres ; lampe et position', () => {
+  const d = prepData(), show = d.shows[1];
+  const r = rankStock(d, show, { modelId: 'm-a', lampId: null, par: false, position: '3e' });
+  assert.deepEqual(r.map((x) => [x.id, x.group]), [[3, 'same'], [4, 'similar'], [1, 'other'], [2, 'other'], [5, 'other']]);
+  const p = rankStock(d, show, { modelId: 'm-par', lampId: 'l1', par: true, position: 'P2' });
+  assert.deepEqual(p.slice(0, 2).map((x) => x.id), [2, 1]);   // la lampe voulue passe avant la position
 });
 console.log(`\n${n} tests OK`);

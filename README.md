@@ -157,7 +157,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - « Inviter » envoie l'invitation habituelle (`admin-users`) puis marque la demande « invitée » ; « Refuser » l'archive sans e-mail. Les deux sont inscrits au journal.
 - **Supabase** : 1) rejouer `supabase/schema.sql` (table `signup_requests`, fonctions `create_signup_request` et `resolve_signup_request`) ; 2) redéployer la fonction `push-notify` (Verify JWT reste désactivé).
 
-## Feuille de patch / focus (v1.23.0, complétée en v1.24.0)
+## Feuille de patch / focus (v1.23.0, complétée jusqu'en v1.30.0)
 
 Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « sans projecteur » (N/C : prêté, loué, autre). Colonnes : circuit, grada, courbe (un seul choix : Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines, accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique ; hors ligne = lecture seule.
 
@@ -181,12 +181,16 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 - Base : table `patch_lines` (écriture uniquement par fonctions), fonctions `set_patch_field`, `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel`.
 - **Supabase** : rejouer `supabase/schema.sql` (aucune fonction Edge à redéployer).
 - **PDF (v1.26.0)** : bouton « PDF » au-dessus du tableau. A4 paysage, lien de l'appli en en-tête, dans l'ordre affiché à l'écran. Chaque page porte la date et l'heure de génération (en pied de page ; en rouge sur la première page) ; la première page indique aussi la dernière modification de la feuille et son auteur. Nom du fichier : `patch-<spectacle>-AAAAMMJJ-HHMM.pdf`. Sur téléphone : fenêtre Partager / Télécharger / Ouvrir.
-- À venir : suggestion d'ID par position.
+- **Mode prépa (v1.30.0)** : on part d'une feuille vide et on remplit les lignes noID d'après le plan de feu. Une ligne sans projecteur porte un **modèle du catalogue** (`patch_lines.model_id`, liste groupée par type) ou un texte libre (`model_text`), et pour un PAR la **lampe voulue** (`patch_lines.lamp_id`). « + Ajouter un modèle au catalogue… » (fonction `add_model`) est réservé au **régisseur général et à l'admin**. En touchant noID, la liste d'ID est **classée** (logique pure dans `src/patchSuggest.ts`, testée) : 1) même modèle, puis modèle similaire, puis autres ; 2) disponibilité (« disponible » avant « utilisé ailleurs, libre à ces dates ») ; 3) PAR : lampe déjà montée = lampe voulue ; 4) dernière position connue = position de la ligne ; 5) numéro. Chaque ID affiche la raison de son rang. Un ID d'un autre modèle est accepté avec un avertissement. Quand la ligne reçoit un projecteur, son modèle et sa lampe voulue sont remplacés par ceux du projecteur ; pour un PAR, la lampe voulue est demandée au montage.
+- **Modèles « similaires »** (liste `SIMILAR` dans `src/patchSuggest.ts`) : ETC 25-50 / 613 · 614 SX / 614 S · 714 SX / 714 · 329 HPC / 329 HPB · 310 HPC / 306 HPC.
+- **Dernière position (v1.30.0)** : calculée d'après la chronologie des spectacles (le plus récent qui a une position pour ce projecteur), pas d'après la date de saisie. Affichée dans la fiche du projecteur (« Dernière position · à jouer sur <spectacle> ») et utilisée pour classer les suggestions (spectacles commencés avant celui qu'on prépare).
+- **Téléphone en paysage (v1.30.0)** : sous 1000 px de large et 520 px de haut en paysage, la feuille s'affiche en vrai tableau compact (défilement horizontal dans le tableau), bandeaux masqués et barres réduites pour laisser la place.
 
 | Migration | Apporte | Indispensable pour |
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.30.0) | mode prépa : colonnes `patch_lines.model_id` / `lamp_id`, `set_patch_field` étendue, `patch_item_model`, `patch_set_item` mise à jour, `add_model` | v1.30.0 |
 | `schema.sql` fin de fichier (v1.27.0) | gélatines des lignes sans projecteur : colonne `patch_lines.gels`, `patch_add_line_gel`, `patch_delete_line_gel` | v1.27.0 |
 | `schema.sql` fin de fichier (v1.26.1) | courbe à choix unique (anciennes saisies multiples ramenées à un choix) | v1.26.1 |
 | `schema.sql` fin de fichier (v1.24.3) | positions « allemande J / C » (au lieu de J1, J2, C1, C2) et « passerelle J / C » | v1.24.4 |

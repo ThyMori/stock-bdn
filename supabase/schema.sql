@@ -1474,6 +1474,8 @@ create table if not exists patch_lines (
   updated_at       timestamptz not null default now(),
   updated_by_label text
 );
+alter table patch_lines add column if not exists model_id text references models(id) on delete set null;   -- ligne N/C : modèle choisi dans le catalogue (prépa)
+alter table patch_lines add column if not exists lamp_id text references lamps(id) on delete set null;       -- ligne N/C d'un PAR : lampe voulue
 alter table patch_lines add column if not exists gels jsonb not null default '[]'::jsonb;   -- gélatines d'une ligne N/C : [{ref, color}] (celles d'un projecteur affecté sont dans show_gels)
 create unique index if not exists patch_lines_item_uniq on patch_lines (show_id, item_id) where item_id is not null;
 create index if not exists patch_lines_show_idx on patch_lines (show_id);
@@ -1491,7 +1493,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare r patch_lines; lbl text; txt text; arr text[]; ok text[];
 begin
   if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
-  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'accessories', 'position', 'focus', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
+  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'model_id', 'lamp_id', 'accessories', 'position', 'focus', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
   if p_field not in ('dimmer', 'curve') and not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   -- ligne existante, ou création pour un projecteur affecté
   if p_line is not null then select * into r from patch_lines where id = p_line and show_id = p_show;
@@ -1500,7 +1502,7 @@ begin
     if p_item is null or not exists (select 1 from show_items where show_id = p_show and item_id = p_item) then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
     insert into patch_lines (show_id, item_id) values (p_show, p_item) returning * into r;
   end if;
-  if p_field = 'model_text' and r.item_id is not null then raise exception 'Le modèle d''un projecteur vient de sa fiche' using errcode = '22023'; end if;
+  if p_field in ('model_text', 'model_id', 'lamp_id') and r.item_id is not null then raise exception 'Le modèle d''un projecteur vient de sa fiche' using errcode = '22023'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
   if p_field in ('circuit', 'dimmer', 'dmx', 'model_text', 'position', 'notes') then
     txt := trim(coalesce(p_value #>> '{}', ''));
@@ -1513,6 +1515,21 @@ begin
       raise exception 'Position inconnue' using errcode = '22023';
     end if;
     execute format('update patch_lines set %I = $1, updated_at = now(), updated_by_label = $2 where id = $3', p_field) using txt, lbl, r.id;
+    if p_field = 'model_text' and txt <> '' then update patch_lines set model_id = null, lamp_id = null where id = r.id; end if;   -- texte libre ou modèle du catalogue, pas les deux
+  elsif p_field in ('model_id', 'lamp_id') then
+    txt := nullif(trim(coalesce(p_value #>> '{}', '')), '');
+    if p_field = 'model_id' then
+      if txt is not null and not exists (select 1 from models where id = txt) then raise exception 'Modèle inconnu' using errcode = '22023'; end if;
+      update patch_lines set model_id = txt, lamp_id = case when txt is not distinct from model_id then lamp_id end, model_text = case when txt is not null then '' else model_text end,
+             updated_at = now(), updated_by_label = lbl where id = r.id;
+    else
+      if txt is not null then
+        if not exists (select 1 from lamps where id = txt) then raise exception 'Lampe inconnue' using errcode = '22023'; end if;
+        if r.model_id is null or not exists (select 1 from models m join item_types t on t.id = m.type_id where m.id = r.model_id and t.name ilike 'PAR%') then
+          raise exception 'La lampe ne concerne que les PAR' using errcode = '22023'; end if;
+      end if;
+      update patch_lines set lamp_id = txt, updated_at = now(), updated_by_label = lbl where id = r.id;
+    end if;
   elsif p_field in ('curve', 'accessories') then
     if jsonb_typeof(p_value) <> 'array' then raise exception 'Liste attendue' using errcode = '22023'; end if;
     select coalesce(array_agg(distinct v), '{}') into arr from jsonb_array_elements_text(p_value) v;
@@ -1538,6 +1555,15 @@ create or replace function patch_label() returns text language sql stable securi
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = auth.uid();
 $$;
 
+-- Modèle d'un projecteur affecté (et lampe voulue s'il s'agit d'un PAR), pour les lignes qui passent « sans projecteur ».
+create or replace function patch_item_model(p_show uuid, p_item int) returns table(m_id text, l_id text)
+language sql stable security definer set search_path = public as $$
+  select i.model_id,
+         case when exists (select 1 from models m join item_types t on t.id = m.type_id where m.id = i.model_id and t.name ilike 'PAR%')
+              then coalesce((select si.lamp_id from show_items si where si.show_id = p_show and si.item_id = i.id), i.lamp_id) end
+    from items i where i.id = p_item;
+$$;
+
 -- Reporte les gélatines d'une ligne N/C ([{ref, color}]) sur un projecteur affecté.
 create or replace function patch_gels_to_item(p_show uuid, p_item int, p_gels jsonb, p_label text) returns void
 language sql security definer set search_path = public as $$
@@ -1555,7 +1581,7 @@ $$;
 -- Réservé au régisseur du spectacle, au régisseur général et à l'admin.
 create or replace function patch_set_item(p_show uuid, p_item int, p_line uuid, p_mode text, p_target int default null, p_lamp text default null)
 returns void language plpgsql security definer set search_path = public as $$
-declare s shows; cb patch_lines; tb patch_lines; lbl text; res jsonb; oldsi show_items; m1 text; m2 text; gj jsonb;
+declare s shows; cb patch_lines; tb patch_lines; lbl text; res jsonb; oldsi show_items; m1 text; m2 text; gj jsonb; pm text; pl text;
 begin
   if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   if p_mode not in ('choose', 'noid', 'new', 'replace') then raise exception 'Action inconnue' using errcode = '22023'; end if;
@@ -1577,8 +1603,9 @@ begin
     -- les gélatines suivent la ligne : elles passent de la liste du projecteur à la ligne sans projecteur
     select coalesce(jsonb_agg(jsonb_build_object('ref', ref, 'color', color) order by ref), '[]'::jsonb) into gj from show_gels where show_id = p_show and item_id = p_item;
     delete from show_gels where show_id = p_show and item_id = p_item;
-    if cb.id is null then insert into patch_lines (show_id, item_id, gels, updated_by_label) values (p_show, null, gj, lbl);
-    else update patch_lines set item_id = null, model_text = '', gels = gj, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
+    select m_id, l_id into pm, pl from patch_item_model(p_show, p_item);   -- la ligne garde le modèle (et la lampe voulue) du projecteur qu'elle quitte
+    if cb.id is null then insert into patch_lines (show_id, item_id, gels, model_id, lamp_id, updated_by_label) values (p_show, null, gj, pm, pl, lbl);
+    else update patch_lines set item_id = null, model_text = '', gels = gj, model_id = pm, lamp_id = pl, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     perform log_event('SPECTACLE', format('« %s » : patch, la ligne du projecteur %s devient « sans projecteur » (il reste affecté)', s.name, p_item));
     return;
   end if;
@@ -1603,10 +1630,11 @@ begin
     else   -- ligne N/C qui prend un projecteur affecté ; sa ligne d'origine devient N/C
       select coalesce(jsonb_agg(jsonb_build_object('ref', ref, 'color', color) order by ref), '[]'::jsonb) into gj from show_gels where show_id = p_show and item_id = p_target;
       delete from show_gels where show_id = p_show and item_id = p_target;   -- les gélatines de l'ancienne ligne du projecteur passent à la ligne qui devient N/C
-      if tb.id is not null then update patch_lines set item_id = null, model_text = '', gels = gj, updated_at = now(), updated_by_label = lbl where id = tb.id;
-      elsif jsonb_array_length(gj) > 0 then insert into patch_lines (show_id, item_id, gels, updated_by_label) values (p_show, null, gj, lbl); end if;
+      select m_id, l_id into pm, pl from patch_item_model(p_show, p_target);
+      if tb.id is not null then update patch_lines set item_id = null, model_text = '', gels = gj, model_id = pm, lamp_id = pl, updated_at = now(), updated_by_label = lbl where id = tb.id;
+      elsif jsonb_array_length(gj) > 0 then insert into patch_lines (show_id, item_id, gels, model_id, lamp_id, updated_by_label) values (p_show, null, gj, pm, pl, lbl); end if;
       perform patch_gels_to_item(p_show, p_target, cb.gels, lbl);   -- celles de la ligne N/C passent au projecteur
-      update patch_lines set item_id = p_target, model_text = '', gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
+      update patch_lines set item_id = p_target, model_text = '', model_id = null, lamp_id = null, gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
       perform log_event('SPECTACLE', format('« %s » : patch, une ligne sans projecteur prend le projecteur %s', s.name, p_target));
     end if;
     return;
@@ -1628,7 +1656,7 @@ begin
   if p_mode = 'new' then
     if p_item is null then
       perform patch_gels_to_item(p_show, p_target, cb.gels, lbl);   -- les gélatines de la ligne passent au projecteur ajouté
-      update patch_lines set item_id = p_target, model_text = '', gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
+      update patch_lines set item_id = p_target, model_text = '', model_id = null, lamp_id = null, gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
     elsif cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     if p_item is not null then update show_gels set item_id = p_target where show_id = p_show and item_id = p_item; end if;   -- les gélatines suivent la ligne
     perform log_event('SPECTACLE', format('« %s » : patch, projecteur %s ajouté au spectacle sur une ligne', s.name, p_target));
@@ -1752,3 +1780,18 @@ begin
 end $$;
 revoke all on function patch_delete_line_gel(uuid, uuid, text) from public, anon;
 grant execute on function patch_delete_line_gel(uuid, uuid, text) to authenticated;
+
+-- v1.30 : mode prépa — ajouter un modèle au catalogue depuis la feuille de patch (régisseur général et admin)
+create or replace function add_model(p_name text, p_type text default null) returns text
+language plpgsql security definer set search_path = public as $$
+declare nm text := trim(coalesce(p_name, '')); mid text;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if nm = '' or length(nm) > 60 then raise exception 'Nom du modèle obligatoire (60 caractères maximum)' using errcode = '22023'; end if;
+  if exists (select 1 from models where lower(name) = lower(nm)) then raise exception 'Ce modèle existe déjà' using errcode = '22023'; end if;
+  if p_type is not null and not exists (select 1 from item_types where id = p_type) then raise exception 'Type inconnu' using errcode = '22023'; end if;
+  insert into models (name, type_id) values (nm, p_type) returning id into mid;
+  return mid;
+end $$;
+revoke all on function add_model(text, text) from public, anon;
+grant execute on function add_model(text, text) to authenticated;

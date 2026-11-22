@@ -51,6 +51,9 @@ const SECTIONS: Section[] = [
     '<b>Cellule ID</b> : choisis un autre ID du spectacle (les deux lignes échangent leurs projecteurs), <b>noID</b> (ligne sans projecteur : prêté, loué, autre), <b>Ajouter un projecteur du stock</b>, ou <b>Scanner un QR code</b>. Le bouton <b>⇄</b> remplace le projecteur par un autre du stock (l\'ancien quitte le spectacle).',
     '<b>Les gélatines et le reste de la saisie restent sur la ligne</b> (le circuit) quand l\'ID change. La liste « Projecteurs affectés » du spectacle suit.',
     '<b>Ajouter une ligne</b> : une ligne noID à remplir ; tu choisis ensuite son ID parmi les projecteurs du stock disponibles. <b>Suppr.</b> vide ou supprime une ligne (avec la question : retirer aussi le projecteur du spectacle ?).',
+    '<b>Mode prépa</b> : pars d\'une feuille vide, lis le plan de feu et ajoute une ligne par projecteur (« + Ajouter une ligne », noID). Remplis position, circuit, gélatines, accessoires et le <b>modèle</b> (liste du catalogue ; pour un PAR, la lampe voulue). « Autre (texte libre) » sert si le modèle est inconnu ; le régisseur général et l\'admin peuvent <b>ajouter un modèle au catalogue</b>.',
+    'Ensuite touche <b>noID</b> : la liste propose les projecteurs <b>du plus judicieux au moins judicieux</b> (même modèle, puis modèles similaires, puis les autres). Critères : disponibilité, puis, pour un PAR, la lampe déjà montée, puis la dernière position connue. Choisir un autre modèle est accepté, avec un avertissement.',
+    '<b>Téléphone en paysage</b> : la feuille s\'affiche comme sur ordinateur (tableau complet, qui défile de côté si besoin).',
     '<b>PDF</b> : bouton « PDF », A4 paysage, avec la date et l\'heure de génération sur chaque page (important si le kit change) et la dernière modification de la feuille.'
   ] },
   { title: 'Le mur et les notifications', items: [
