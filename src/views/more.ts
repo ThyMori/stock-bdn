@@ -74,11 +74,12 @@ export const moreView: ViewFactory = () => ({
       if (el.dataset.act === 'dismiss') void dismissRejected(Number(el.dataset.v));
       if (el.dataset.act === 'logout') {
         if (state.pending.length && !window.confirm(`${state.pending.length} action(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return;
-        await forgetPushOnLogout();
-        await supabase.auth.signOut();
+        try { sessionStorage.setItem('logging-out', '1'); } catch { /* ignore */ }   // évite un 2e rechargement par l'écouteur SIGNED_OUT
+        await Promise.race([forgetPushOnLogout().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);   // jamais bloqué par le réseau
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});   // déconnecte cet appareil
         await clearLocal();
-        location.hash = '#/';
-        location.reload();
+        try { sessionStorage.removeItem('logging-out'); } catch { /* ignore */ }
+        location.replace(location.pathname);   // un seul rechargement, vers la page de connexion
       }
     });
     paint(root);
@@ -112,7 +113,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.18.0</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.18.1</div></div>`;
 }
 
 function pushCard(): string {

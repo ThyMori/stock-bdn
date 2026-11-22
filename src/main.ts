@@ -30,9 +30,11 @@ import { enablePush, listenPushNavigation, notifBannerWanted, snoozeNotifBanner,
 import { toast } from './ui/toast';
 import { initInstall, installBannerWanted, installButtonLabel, promptInstall, snoozeInstall } from './install';
 import { initUpdates } from './updates';
+import { startWatchdog } from './watchdog';
 
 initUpdates();
 const app = document.getElementById('app')!;
+startWatchdog(app);   // si l'écran reste vide 8 s : erreur + « Réinitialiser et recharger »
 
 const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   '': { f: listView, tab: 'list' }, item: { f: itemView, tab: 'list' }, scan: { f: scanView, tab: 'scan' },
@@ -160,7 +162,8 @@ async function boot() {
 
   supabase.auth.onAuthStateChange((event, session) => {
     setSession(session);
-    if (event === 'SIGNED_OUT') void clearLocal().then(() => location.reload());
+    // Déconnexion : un seul rechargement (celui du bouton « Se déconnecter » s'en charge déjà s'il l'a déclenchée).
+    if (event === 'SIGNED_OUT' && !sessionStorage.getItem('logging-out')) void clearLocal().then(() => location.reload());
   });
 
   const finish = async () => {
