@@ -168,6 +168,7 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
   // prêts et locations (pas d'ID : une ligne par prêt / location, en bleu)
   if (exts.length) {
     bar(`Prêts et locations`, exts.length, true);
+    y += 3;   // un espace entre le liseré bleu et les cases à cocher
     for (const e of exts) {
       ensure(11); doc.setDrawColor(29, 107, 255); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
       doc.setTextColor(29, 107, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`${e.kind === 'pret' ? 'PRÊT' : 'LOCATION'}  ${e.text}`, M + 14, y, { maxWidth: W - 2 * M - 14 });

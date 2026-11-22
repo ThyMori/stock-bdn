@@ -6,7 +6,7 @@ import { gelColorOf } from './gels';
 import { ACCESSORIES, CURVES, labelsOf } from './patch';
 import type { PatchRow } from './patch';
 import { sortRows } from './patch';
-import { accessoryList, gelList, positionGroups } from './patchLists';
+import { positionGroups } from './patchLists';
 import { appReference } from './pdfHeader';
 import { HAND, addHandFont } from './pdfFonts';
 import { noise, wobblePoints } from './handwriting';
@@ -16,11 +16,11 @@ const HOUR = (d: Date) => `${String(d.getHours()).padStart(2, '0')}h${String(d.g
 const ISO_DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 const stamp = (d: Date) => `${DAY(d)} à ${HOUR(d)}`;
 
-/** Quel PDF : l'ordre de l'écran, un classement précis, les listes à préparer, ou tout dans un seul fichier. */
-export type PatchPdfKind = 'screen' | 'circuit' | 'dimmer' | 'position' | 'lists' | 'all';
+/** Quel PDF : l'ordre de l'écran, un classement précis, ou tout dans un seul fichier (les gélatines à couper et accessoires sont dans la liste de prépa). */
+export type PatchPdfKind = 'screen' | 'circuit' | 'dimmer' | 'position' | 'all';
 export const PDF_KINDS: [PatchPdfKind, string][] = [
   ['screen', 'Feuille comme à l\'écran'], ['circuit', 'Circuit → Grada (classée par circuits)'], ['dimmer', 'Grada → Circuits (classée par grada)'],
-  ['position', 'Par position (avec les zones)'], ['lists', 'Gélatines à couper et accessoires'], ['all', 'Toutes, dans un seul PDF']
+  ['position', 'Par position (zones, puis positions)'], ['all', 'Toutes, dans un seul PDF']
 ];
 type PCol = { k: string; label: string; w: number };
 
@@ -47,6 +47,9 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
   const generated = stamp(now);
   let seed = 1;                                                // graine du tremblé : change à chaque trait, mais identique à chaque génération
   const font = (bold: boolean, size: number) => { doc.setFont(FONT, bold ? 'bold' : 'normal'); doc.setFontSize(size * K); };
+  /** Police lisible (sans empattement) pour les informations de dernier niveau ; la manuscrite reste pour les titres et sous-titres. */
+  const plain = (bold: boolean, size: number) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); };
+  const say = (t: string | string[], x: number, y: number) => doc.text(t, x, y);   // texte posé droit, sans tremblé
   const color = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
   /** Trait tremblé (suite de petits segments qui s'écartent un peu de la droite). */
   const pen = (x1: number, y1: number, x2: number, y2: number, amp = 0.22, step = 9) => {
@@ -73,10 +76,10 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     const tw = doc.getTextWidth('Patch / Focus ');
     color(INK); font(true, 16); write(show.name, M + tw + 6, 20);
     doc.setDrawColor(...RED); doc.setLineWidth(0.5); pen(M, 22.3, M + tw - 2, 22.3, 0.3, 6);   // soulignement rouge
-    color(PENCIL); font(false, 11); write(`Du ${ISO_DAY(show.start_date)} au ${ISO_DAY(show.end_date)}  -  ${rows.length} ligne${rows.length > 1 ? 's' : ''}  -  focus ${rows.filter((r) => r.focus).length}/${rows.length}`, M, 28);
-    color(RED); font(true, 11); write(`Générée le ${generated}`, M, 34);
-    if (last) { const gw = doc.getTextWidth(`Générée le ${generated}`); color(PENCIL); font(false, 11);
-      write(`   -   dernière modification de la feuille le ${stamp(new Date(last.updatedAt!))}${last.updatedBy ? ' par ' + last.updatedBy : ''}`, M + gw + 1, 34); }
+    color(PENCIL); plain(false, 10); say(`Du ${ISO_DAY(show.start_date)} au ${ISO_DAY(show.end_date)}  -  ${rows.length} ligne${rows.length > 1 ? 's' : ''}  -  focus ${rows.filter((r) => r.focus).length}/${rows.length}`, M, 28);
+    color(RED); plain(true, 10); say(`Générée le ${generated}`, M, 34);
+    if (last) { const gw = doc.getTextWidth(`Générée le ${generated}`); color(PENCIL); plain(false, 10);
+      say(`   -   dernière modification de la feuille le ${stamp(new Date(last.updatedAt!))}${last.updatedBy ? ' par ' + last.updatedBy : ''}`, M + gw + 1, 34); }
     if (cur.title) { color(INK); font(true, 15); write(cur.title, W - M - doc.getTextWidth(cur.title), 28); }   // nom de la feuille, en haut à droite
     font(true, 10); color(PENCIL);                                  // titres de colonnes, écrits à la main
     let x = M; for (const c of cur.cols) { write(c.label, x + 1.5, TOP - 2); x += c.w; }
@@ -100,15 +103,23 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     y += R;
   };
   /** Tableau de la feuille de patch, dans l'ordre reçu ; `groups` ajoute un titre de zone avant chaque paquet de lignes. */
-  const patchTable = (title: string, cols: PCol[], groups: { label: string; rows: PatchRow[] }[]) => {
+  const patchTable = (title: string, cols: PCol[], groups: { label: string; sub?: string; rows: PatchRow[] }[]) => {
     begin(title, cols);
+    let lastLabel = '\u0000';   // zone en cours : son titre n'est écrit qu'une fois
     const wOf = (k: string) => cols.find((c) => c.k === k)!.w;
-    if (!groups.some((g) => g.rows.length)) { color(INK); font(false, 12); write('Aucun projecteur affecté à ce spectacle.', M + 2, y + 5); }
+    if (!groups.some((g) => g.rows.length)) { color(INK); plain(false, 11); say('Aucun projecteur affecté à ce spectacle.', M + 2, y + 5); }
     for (const g of groups) {
-      if (g.label) band(g.label);
+      if (g.label && g.label !== lastLabel) band(g.label);
+      lastLabel = g.label;
+      if (g.sub) {   // sous-titre : la position précise, en écriture manuscrite, soulignée au crayon
+        if (y + 3 * R > H - 14) { newPage(false); y = TOP; }
+        color(INK); font(true, 11.5); write(g.sub, M + 6, y + 5);
+        doc.setDrawColor(...PENCIL); doc.setLineWidth(0.3); pen(M + 5, y + 6, M + 8 + doc.getTextWidth(g.sub), y + 6, 0.2, 5);
+        y += R;
+      }
       for (const r of g.rows) {
         // texte de chaque cellule, découpé à la largeur de la colonne (calculé avec la police et la taille réellement utilisées)
-        font(false, 10);
+        plain(false, 9);
         const cells: Record<string, string[]> = {
           circuit: [r.circuit], dimmer: [r.dimmer], curve: [labelsOf(CURVES, r.curve)], dmx: [r.curve.includes('direct') ? r.dmx : ''],
           id: [r.itemId === null ? 'N/C' : String(r.itemId)], model: doc.splitTextToSize((r.model || '') + (r.extNote ? ` (${r.extNote})` : ''), wOf('model') - 3) as string[], gels: [],
@@ -131,19 +142,19 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
               const gx = x + 1.5 + (i % 2) * 19, gy = base + Math.floor(i / 2) * 4.2;
               doc.setFillColor(...gelRgb(gelColor(g))); doc.rect(gx, gy - 2.8, 3, 3, 'F');
               doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); box(gx, gy - 2.8, 3, 3);
-              color(INK); font(false, 10); write(g, gx + 4, gy);
+              color(INK); plain(false, 9); say(g, gx + 4, gy);
             });
           } else if (c.k === 'focus') {
             doc.setDrawColor(...PENCIL); doc.setLineWidth(0.35); box(cx + 1, base - 3.6, 4.2, 4.2);
             if (r.focus) { doc.setDrawColor(20, 130, 60); doc.setLineWidth(0.7); pen(cx + 1.4, base - 1.2, cx + 2.8, base + 0.3, 0.1, 4); pen(cx + 2.8, base + 0.3, cx + 5.4, base - 4, 0.1, 4); }
           } else if (c.k === 'curve' && r.curve.includes('direct')) {
-            font(true, 9.5); doc.setTextColor(29, 107, 255);   // DIRECT en bleu vif, comme à l'écran
+            plain(true, 9); doc.setTextColor(29, 107, 255);   // DIRECT en bleu vif, comme à l'écran
             const others = labelsOf(CURVES.filter((q) => q.k !== 'direct'), r.curve);
-            write(others ? ['DIRECT', others] : 'DIRECT', cx, base); color(INK);
+            say(others ? ['DIRECT', others] : 'DIRECT', cx, base); color(INK);
           } else {
             const bold = c.k === 'circuit' || c.k === 'dimmer' || c.k === 'id';
-            font(bold, bold ? 11 : 10); color(r.itemId === null && c.k === 'id' ? PENCIL : INK);
-            write(cells[c.k], cx, base);
+            plain(bold, bold ? 10.5 : 9); color(r.itemId === null && c.k === 'id' ? PENCIL : INK);
+            say(cells[c.k], cx, base);
           }
           x += c.w;
         }
@@ -151,49 +162,20 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
       }
     }
   };
-  /** Liste simple (gélatines, accessoires) : une ligne par entrée, texte découpé à la largeur de chaque colonne ; `swatch` = couleur d'une pastille devant la première colonne. */
-  const listTable = (title: string, cols: PCol[], items: { cells: string[]; swatch?: [number, number, number] }[], empty: string) => {
-    begin(title, cols);
-    if (!items.length) { color(INK); font(false, 12); write(empty, M + 2, y + 5); return; }
-    for (const it of items) {
-      font(false, 10);
-      const wrapped = it.cells.map((t, i) => doc.splitTextToSize(t, cols[i].w - 3 - (i === 0 && it.swatch ? 5 : 0)) as string[]);
-      const h = Math.max(1, Math.ceil((Math.max(1, ...wrapped.map((w) => w.length)) * 4.2 + 2.8) / R)) * R;
-      if (y + h > H - 14) { newPage(false); y = TOP; }
-      let x = M; const base = y + 5;
-      wrapped.forEach((w, i) => {
-        let cx = x + 1.5;
-        if (i === 0 && it.swatch) { doc.setFillColor(...it.swatch); doc.rect(cx, base - 3.2, 3.6, 3.6, 'F'); doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); box(cx, base - 3.2, 3.6, 3.6); cx += 5; }
-        const bold = i === 0 || cols[i].k === 'qty';
-        font(bold, bold ? 11 : 10); color(INK); write(w, cx, base);
-        x += cols[i].w;
-      });
-      y += h;
-    }
-  };
-
   // colonnes du tableau : la clé de classement passe en premier (grada avant circuit pour « Grada → Circuits »)
   const swap = (first: string): PCol[] => [COLS.find((c) => c.k === first)!, ...COLS.filter((c) => c.k !== first)];
   const sheetCircuit = () => patchTable('Circuit -> Grada', swap('circuit'), [{ label: '', rows: sortRows(rows, 'circuit', 1) }]);
   const sheetDimmer = () => patchTable('Grada -> Circuits', swap('dimmer'), [{ label: '', rows: sortRows(rows, 'dimmer', 1) }]);
   const sheetPosition = () => patchTable('Par position', COLS, positionGroups(rows));
-  const sheetGels = () => listTable('Gélatines à couper', [{ k: 'ref', label: 'RÉFÉRENCE', w: 30 }, { k: 'color', label: 'COULEUR', w: 52 }, { k: 'qty', label: 'QTÉ', w: 14 }, { k: 'models', label: 'MODÈLES', w: 90 }, { k: 'circuits', label: 'CIRCUITS', w: 91 }],
-    gelList(rows).map((g) => ({ cells: [g.ref, gelColor(g.ref), String(g.qty), g.models, g.circuits], swatch: gelRgb(gelColor(g.ref)) })), 'Aucune gélatine sur cette feuille.');
-  const sheetAcc = () => {
-    let last = '';   // le modèle n'est écrit qu'à sa première ligne
-    listTable('Accessoires par modèle', [{ k: 'model', label: 'MODÈLE', w: 80 }, { k: 'acc', label: 'ACCESSOIRE', w: 50 }, { k: 'qty', label: 'QTÉ', w: 14 }, { k: 'circuits', label: 'CIRCUITS', w: 133 }],
-      accessoryList(rows).map((a) => { const first = a.model !== last; last = a.model; return { cells: [first ? a.model : '', a.accessory, String(a.qty), a.circuits] }; }), 'Aucun accessoire sur cette feuille.');
-  };
   if (kind === 'screen') patchTable('', COLS, [{ label: '', rows }]);
   if (kind === 'circuit' || kind === 'all') sheetCircuit();
   if (kind === 'dimmer' || kind === 'all') sheetDimmer();
   if (kind === 'position' || kind === 'all') sheetPosition();
-  if (kind === 'lists' || kind === 'all') { sheetGels(); sheetAcc(); }
   // pied de page de chaque page : spectacle, date et heure de génération, numéro de page
   const n = doc.getNumberOfPages();
   for (let p = 1; p <= n; p++) {
     doc.setPage(p); appReference(doc, W, M);
-    font(false, 9); color(PENCIL);
+    plain(false, 8); color(PENCIL);
     doc.text(`Patch / Focus - ${show.name} - générée le ${generated}`, M, H - 6); doc.text(`Page ${p} / ${n}`, W - M, H - 6, { align: 'right' });
   }
   const safe = show.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'spectacle';

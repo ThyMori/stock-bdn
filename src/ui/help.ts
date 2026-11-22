@@ -67,7 +67,7 @@ const SECTIONS: Section[] = [
     '<b>À louer / à emprunter</b> : sur une ligne sans ID, choisis le modèle « Location / prêt… » puis « + À louer / à emprunter… ». La demande monte de 1 et l\'alarme « manque » joue si le stock ne suffit pas. Le matériel du décor ou de la Cie, lui, n\'est jamais compté.',
     '<b>Locations et prêts</b> : si la fiche du spectacle contient du matériel loué ou prêté, chaque ligne noID peut être rattachée à l\'une d\'elles (dans la liste des modèles, choisis « Location / prêt… » : une 2e liste apparaît pour désigner laquelle). L\'en-tête compte les lignes placées (ex. 3/4) et signale en orange ce qui manque ou dépasse. C\'est une information : rien n\'est bloqué.',
     '<b>Sur téléphone</b> : la feuille est un tableau comme sur ordinateur. Fais-le défiler vers la droite : les colonnes <b>Circuit</b> et <b>Modèle</b> et l\'en-tête restent toujours visibles.',
-    '<b>Choix du PDF</b> : le bouton « PDF » demande quoi imprimer : la feuille comme à l\'écran, classée par circuits, par grada, par position (avec les zones), les listes de gélatines à couper et d\'accessoires par modèle, ou toutes dans un seul PDF.',
+    '<b>Choix du PDF</b> : le bouton « PDF » demande quoi imprimer : la feuille comme à l\'écran, classée par circuits, par grada, par position (zone, puis position précise, puis projecteurs par ID), ou toutes dans un seul PDF. Les gélatines à couper et les accessoires sont dans la liste de prépa du spectacle.',
     '<b>PDF</b> : bouton « PDF », A4 paysage, avec la date et l\'heure de génération sur chaque page (important si le kit change) et la dernière modification de la feuille.'
   ] },
   { title: 'Le mur et les notifications', items: [

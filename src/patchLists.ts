@@ -1,37 +1,24 @@
-// Listes tirées de la feuille de patch pour le PDF : lignes par zone, gélatines à couper, accessoires par modèle.
+// Listes tirées de la feuille de patch pour les PDF : lignes par zone et par position, accessoires par modèle (liste de prépa).
 // Fonctions « pures » (sans DOM ni réseau) : testées dans tests/logic.test.ts.
-import { ACCESSORIES, POSITIONS, POSITION_GROUPS, nat, sortRows } from './patch';
+import { ACCESSORIES, POSITIONS, POSITION_GROUPS, nat } from './patch';
 import type { PatchRow } from './patch';
 
-/** Lignes rangées par zone (Cintres, Cage de scène, FOH, Autres), dans l'ordre de la liste des positions, puis par circuit. Les lignes sans position finissent dans « Sans position ». */
-export function positionGroups(rows: PatchRow[]): { label: string; rows: PatchRow[] }[] {
-  const byCircuit = sortRows(rows, 'circuit', 1);                                   // base : classées par circuit
-  const out = POSITION_GROUPS.map((g) => ({ label: g.label, rows: [] as PatchRow[] }));
-  const none: PatchRow[] = [];
-  for (const r of byCircuit) {
-    const gi = POSITION_GROUPS.findIndex((g) => g.items.includes(r.position));       // zone de la position (−1 si vide ou inconnue)
-    if (gi < 0) none.push(r); else out[gi].rows.push(r);
+/** Lignes rangées par zone (Cintres, Cage de scène, FOH, Autres), puis par position précise (dans l'ordre de la liste), puis par numéro d'ID
+ *  (les lignes sans projecteur « N/C » à la fin, par circuit). Les lignes sans position finissent dans « Sans position ». Une entrée = une position (`sub`). */
+export function positionGroups(rows: PatchRow[]): { label: string; sub: string; rows: PatchRow[] }[] {
+  const byId = (a: PatchRow, b: PatchRow) => (a.itemId ?? 1e9) - (b.itemId ?? 1e9) || nat(a.circuit, b.circuit);   // ID croissant, N/C à la fin
+  const out: { label: string; sub: string; rows: PatchRow[] }[] = [];
+  for (const g of POSITION_GROUPS) for (const pos of g.items) {
+    const list = rows.filter((r) => r.position === pos).sort(byId);
+    if (list.length) out.push({ label: g.label, sub: pos, rows: list });   // positions vides non affichées
   }
-  for (const g of out) g.rows.sort((a, b) => POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position));   // tri stable : l'ordre par circuit est gardé à position égale
-  return [...out, { label: 'Sans position', rows: none }].filter((g) => g.rows.length);   // zones vides non affichées
+  const none = rows.filter((r) => !POSITIONS.includes(r.position)).sort(byId);   // position vide ou inconnue
+  if (none.length) out.push({ label: 'Sans position', sub: '', rows: none });
+  return out;
 }
 
-/** Texte « PAR64 ×3, Découpe ×2 » : combien de projecteurs de chaque modèle. */
-const countText = (m: Map<string, number>): string => [...m.entries()].sort((a, b) => nat(a[0], b[0])).map(([k, n]) => `${k} ×${n}`).join(', ');
 /** Circuits renseignés, triés, séparés par des virgules (« - » si aucun). */
 const circuitsText = (cs: string[]): string => cs.filter(Boolean).sort(nat).join(', ') || '-';
-
-export interface GelItem { ref: string; qty: number; models: string; circuits: string }
-/** Gélatines à couper : une ligne par référence (classées par référence), avec la quantité, les modèles concernés et les circuits. */
-export function gelList(rows: PatchRow[]): GelItem[] {
-  const m = new Map<string, { qty: number; models: Map<string, number>; circuits: string[] }>();
-  for (const r of rows) for (const ref of r.gels) {
-    const e = m.get(ref) ?? { qty: 0, models: new Map<string, number>(), circuits: [] };
-    e.qty++; const mod = r.model || 'Sans modèle'; e.models.set(mod, (e.models.get(mod) ?? 0) + 1); e.circuits.push(r.circuit);
-    m.set(ref, e);
-  }
-  return [...m.entries()].sort((a, b) => nat(a[0], b[0])).map(([ref, e]) => ({ ref, qty: e.qty, models: countText(e.models), circuits: circuitsText(e.circuits) }));
-}
 
 export interface AccItem { model: string; accessory: string; qty: number; circuits: string; ids: string }
 /** Numéros des projecteurs triés, puis « N/C » pour les lignes sans projecteur (« 12, 15, 2 N/C »). */

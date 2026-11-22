@@ -11,7 +11,7 @@ import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
 import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount, POSITIONS, POSITION_GROUPS } from '../src/patch';
 import type { PatchRow } from '../src/patch';
-import { positionGroups, gelList, accessoryList } from '../src/patchLists';
+import { positionGroups, accessoryList } from '../src/patchLists';
 import { rankStock, similarNames } from '../src/patchSuggest';
 import { clampW, cleanWidths, colCss, MIN_W, MAX_W } from '../src/patchCols';
 import { noise, wobblePoints } from '../src/handwriting';
@@ -349,15 +349,13 @@ t('positions : groupes par zone, P0 présent, aucun doublon', () => {
   assert.ok(!POSITIONS.includes('balcon') && !POSITIONS.includes('3e'), 'anciens noms retirés');
   assert.equal(new Set(POSITIONS).size, POSITIONS.length);
 });
-t('PDF patch : zones, gélatines à couper, accessoires par modèle', () => {
+t('PDF patch : zones > positions, accessoires par modèle', () => {
   const R = (o: Partial<PatchRow>): PatchRow => ({ key: String(Math.random()), lineId: null, itemId: 1, circuit: '', dimmer: '', curve: [], dmx: '', model: 'PC', gels: [], gelIds: [], auto: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false, ...o });
   const rows = [R({ circuit: '10', position: 'sol', gels: ['L201', 'R80'], accessories: ['iris'] }), R({ circuit: '2', position: 'P3', gels: ['L201'], model: 'Découpe', accessories: ['iris', 'gobo'] }), R({ circuit: '5', position: '2e balcon' }), R({ circuit: '1', position: 'P0' }), R({ circuit: '7' })];
   const g = positionGroups(rows);
-  assert.deepEqual(g.map((x) => x.label), ['Cintres', 'FOH', 'Autres', 'Sans position'], 'zones dans l\'ordre, zones vides omises');
-  assert.deepEqual(g[0].rows.map((r) => r.position), ['P0', 'P3'], 'P0 avant P3');
-  const gl = gelList(rows);
-  assert.deepEqual(gl.map((x) => [x.ref, x.qty]), [['L201', 2], ['R80', 1]], 'classées par référence, quantités');
-  assert.equal(gl[0].circuits, '2, 10'); assert.equal(gl[0].models, 'Découpe ×1, PC ×1');
+  assert.deepEqual(g.map((x) => [x.label, x.sub]), [['Cintres', 'P0'], ['Cintres', 'P3'], ['FOH', '2e balcon'], ['Autres', 'sol'], ['Sans position', '']], 'zone > position, dans l\'ordre, vides omises');
+  const ids = positionGroups([R({ itemId: 9, position: 'P1' }), R({ itemId: null, circuit: '3', position: 'P1' }), R({ itemId: 2, position: 'P1' })])[0].rows.map((r) => r.itemId);
+  assert.deepEqual(ids, [2, 9, null], 'classés par ID, N/C à la fin');
   const al = accessoryList(rows);
   assert.deepEqual(al.map((x) => [x.model, x.accessory, x.qty]), [['Découpe', 'Iris', 1], ['Découpe', 'Gobo', 1], ['PC', 'Iris', 1]], 'classés par modèle');
 });
