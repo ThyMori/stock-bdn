@@ -1,6 +1,5 @@
 import '@fontsource-variable/archivo/wdth.css';
 import './styles.css';
-import { registerSW } from 'virtual:pwa-register';
 import { authFlow, configured, supabase } from './supabase';
 import { loadLocal, loadProfile, setOnline, setSession, state, subscribe, sync, clearLocal, view } from './store';
 import { parseHash } from './router';
@@ -27,8 +26,9 @@ import { playPinball } from './pinball';
 import type { Role } from './types';
 import { fmtDateTime } from './logic';
 import { listenPushNavigation, syncPush } from './push';
+import { initUpdates } from './updates';
 
-registerSW({ immediate: true });
+initUpdates();
 const app = document.getElementById('app')!;
 
 const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {

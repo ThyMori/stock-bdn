@@ -15,6 +15,9 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.4 var(--font-body); }
 body { min-height: 100dvh; }
+/* Pas de rechargement en tirant l'écran vers le bas : le bandeau « Nouvelle version » et le bouton « À jour » s'en chargent. */
+html, body { overscroll-behavior-y: none; }
+dialog, .pick-list { overscroll-behavior: contain; }
 a { color: inherit; text-underline-offset: 3px; }
 h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-stretch: 125%; line-height: 1.05; }
 h1 { font-size: 1.4rem; } h2 { font-size: 1rem; } h3 { font-size: .95rem; }
@@ -330,3 +333,9 @@ nav.tabs a { font-size: .68rem; }
 .bandeau { display: inline-block; align-self: flex-start; padding: 3px 10px; font-weight: 800; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: #fff; }
 .bandeau.adm { background: repeating-linear-gradient(135deg, #ffd400 0 8px, #111 8px 16px); text-shadow: 0 0 3px #000, 0 0 3px #000; }
 .bandeau.gen { background: #0a7f73; }
+
+/* Bandeau « nouvelle version disponible » */
+.update-bar { position: fixed; z-index: 130; left: 8px; right: 8px; top: calc(env(safe-area-inset-top, 0px) + 8px); display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); box-shadow: 0 0 0 3px var(--paper); font-weight: 700; }
+.update-bar[hidden] { display: none; }
+.update-bar span { flex: 1; min-width: 0; }
+.update-bar .btn { flex: none; width: auto; }

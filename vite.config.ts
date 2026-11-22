@@ -9,7 +9,7 @@ export default defineConfig({
   build: { target: 'es2020' },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // la nouvelle version attend : un bandeau propose de la recharger (src/updates.ts)
       includeAssets: ['favicon.ico', 'favicon-32.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Stock BdN',
