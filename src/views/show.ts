@@ -50,6 +50,30 @@ export const showView: ViewFactory = ([id]) => {
     return list;
   };
 
+  /** Lampes actuellement montées sur les PAR du lot (nom → nombre), pour pré-sélectionner et prévenir si elles diffèrent. */
+  const lotLamps = (): Map<string, number> => {
+    const d = view(), m = new Map<string, number>();
+    for (const n of sel) {
+      const it = d.items.find((i) => i.id === n); if (!it || !isPar(n) || !it.lamp_id) continue;
+      const name = d.lamps.find((l) => l.id === it.lamp_id)?.name; if (name) m.set(name, (m.get(name) ?? 0) + 1);
+    }
+    return m;
+  };
+  /** Pré-sélectionne la lampe montée sur le premier PAR du lot (seulement si aucun choix n'a encore été fait et qu'elle fait partie des lampes proposées). */
+  const suggestLamp = (): void => {
+    if (lamp) return;
+    const d = view(), ids = new Set(lampOptions().map((l) => l.id));
+    for (const n of [...sel].sort((a, b) => a - b)) {
+      const it = d.items.find((i) => i.id === n);
+      if (it && isPar(n) && it.lamp_id && ids.has(it.lamp_id)) { lamp = it.lamp_id; return; }
+    }
+  };
+  /** Petite mention sous la liste des lampes : lampe montée, ou avertissement si le lot en mélange plusieurs. */
+  const lampHint = (): string => {
+    const m = lotLamps(); if (!m.size) return '';
+    return m.size === 1 ? `Montée actuellement : ${[...m.keys()][0]}` : `⚠ Lampes montées différentes : ${[...m].map(([k, c]) => `${k} ×${c}`).join(', ')}`;
+  };
+
   function paint(root: HTMLElement) {
     const d = view();
     const show = d.shows.find((s) => s.id === id);
@@ -132,7 +156,7 @@ export const showView: ViewFactory = ([id]) => {
             <div class="num">${i.id}</div><div class="grow"><div class="t">${esc(ds.model?.name)}</div><div class="s">${esc(ds.type?.name)}</div></div>
             <span class="badge ${i.eff ?? i.status}">${esc({ dispo: 'Disponible', utilise: 'Utilisé', sav: 'SAV', en_pret: 'En prêt' }[i.eff ?? i.status])}</span></label>`).join('') || '<div class="empty">Aucun projecteur</div>'}</div>`}
         <div class="gelpick"><label class="f">Gel (facultatif, appliqué à tout le lot)<input id="gref" placeholder="Réf., ex. L201 ou R80" value="${esc(gref)}" autocomplete="off"></label></div>
-        ${needLamp ? `<label class="f">Lampe requise pour les PAR<select id="lamp"><option value="">— choisir —</option>${lampOptions().map((l) => `<option value="${l.id}" ${l.id === lamp ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>` : ''}
+        ${needLamp ? `<label class="f">Lampe requise pour les PAR<select id="lamp"><option value="">— choisir —</option>${lampOptions().map((l) => `<option value="${l.id}" ${l.id === lamp ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select><span class="sub" id="lamphint">${esc(lampHint())}</span></label>` : ''}
         <div id="aerr" class="sub warn" role="alert">${esc(mode === 'pick' ? msg : '')}</div>
         <div class="row"><button class="btn primary grow" data-act="assign" ${staged.length ? '' : 'disabled'}>Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}</button>
           <button class="btn" data-act="mode" data-v="view">Fermer</button></div></div>`;
@@ -176,7 +200,7 @@ export const showView: ViewFactory = ([id]) => {
       if (n === null) { msg = `QR non reconnu : « ${text.slice(0, 30)} »`; return; }
       if (!view().items.some((i) => i.id === n)) { msg = `Projecteur n° ${n} introuvable.`; return; }
       if (view().showItems.some((s) => s.show_id === id && s.item_id === n)) { msg = `N° ${n} déjà dans ce spectacle.`; return; }
-      sel.add(n); msg = `N° ${n} ajouté au lot.`; navigator.vibrate?.(40);
+      sel.add(n); suggestLamp(); msg = `N° ${n} ajouté au lot.`; navigator.vibrate?.(40);
       repaintKeepVideo(root);
     };
     (root as HTMLElement & { _add?: (t: string) => void })._add = add;
@@ -197,7 +221,9 @@ export const showView: ViewFactory = ([id]) => {
     const btn = root.querySelector<HTMLButtonElement>('[data-act="assign"]');
     if (btn) { btn.disabled = !staged.length; btn.textContent = `Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}`; }
     const need = staged.some(isPar);
-    if (need !== !!root.querySelector('#lamp')) { stopScan?.(); stopScan = null; paint(root); }
+    if (need !== !!root.querySelector('#lamp')) { stopScan?.(); stopScan = null; paint(root); return; }
+    const ls = root.querySelector<HTMLSelectElement>('#lamp'); if (ls) ls.value = lamp;   // met à jour la présélection sans recréer la caméra
+    const hint = root.querySelector('#lamphint'); if (hint) hint.textContent = lampHint();
   }
 
   /** Livre le PDF : téléchargement direct sur ordinateur ; sur téléphone, fenêtre avec partage / téléchargement / ouverture (les téléchargements programmés y sont bloqués). */
@@ -277,6 +303,7 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'toggle') {
           const n = Number(v);
           if (el instanceof HTMLInputElement) { el.checked ? sel.add(n) : sel.delete(n); } else sel.delete(n);
+          suggestLamp();   // un PAR dans le lot : sa lampe montée est pré-sélectionnée
           repaintKeepVideo(root);   // mise à jour sur place : la liste ne bouge pas
         }
         else if (act === 'assign') {
