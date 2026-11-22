@@ -62,6 +62,14 @@ export const patchView: ViewFactory = ([showId]) => {
     const list = r ? suggest(r) : rankStock(d, show, { modelId: null, lampId: null, par: false, position: '' });
     return list.map((x): [string, string] => [String(x.id), sugLabel(x, true)]);
   };
+  /** Garde : un projecteur indisponible pendant le spectacle (autre spectacle, prêt, SAV, panne) est refusé, même s'il est déjà affecté au spectacle. Renvoie true si c'est refusé. */
+  const refuseBlocked = async (n: number): Promise<boolean> => {
+    const d = view(), show = d.shows.find((x) => x.id === showId), why = show ? blockedReason(d, n, show) : null;
+    if (!why) return false;
+    navigator.vibrate?.([250, 100, 250, 100, 250]);
+    await ask('⛔ PROJECTEUR INDISPONIBLE', `Le projecteur ${n} n'est pas disponible pendant toute la durée du spectacle : ${why}. Il ne peut pas être utilisé ici.`, [], true);
+    return true;
+  };
   /** Texte d'alerte si le projecteur n'a pas le modèle prévu par la ligne (sinon null). Sert au scan et à la fenêtre de confirmation. */
   const modelGap = (r: PatchRow, n: number): string | null => {
     const d = view(), it = d.items.find((i) => i.id === n);
@@ -82,8 +90,10 @@ export const patchView: ViewFactory = ([showId]) => {
   /** Réponse à un QR code lu dans une fenêtre de choix : accepte un projecteur de la liste, sinon explique pourquoi pas. */
   const scanReply = (opts: [string, string][]) => (text: string): { value: string } | { error: string } => {
     const n = parseScan(text); if (n === null) return { error: `⚠ QR non reconnu : « ${text.slice(0, 40)} »` };
-    if (opts.some(([v]) => v === String(n))) return { value: String(n) };
     const d = view(), show = d.shows.find((x) => x.id === showId);
+    const why = show && d.items.some((i) => i.id === n) ? blockedReason(d, n, show) : null;   // même un projecteur déjà dans le spectacle peut être devenu indisponible (prêt, SAV, panne…)
+    if (why) return { error: `⚠ PROJECTEUR INDISPONIBLE : le n° ${n} n'est pas disponible pendant tout le spectacle (${why}).` };
+    if (opts.some(([v]) => v === String(n))) return { value: String(n) };
     if (!d.items.some((i) => i.id === n)) return { error: `⚠ Projecteur n° ${n} introuvable dans la base.` };
     return { error: `⚠ PROJECTEUR INDISPONIBLE : le n° ${n} n'est pas disponible pendant tout le spectacle (${(show && blockedReason(d, n, show)) || 'indisponible'}).` };
   };
@@ -129,25 +139,25 @@ export const patchView: ViewFactory = ([showId]) => {
         if (!f) { paintRow(root, key); return; }
         if (f.to === 'noid') { await structural(root, 'patch_set_item', { ...who, p_mode: 'noid' }, 'Ligne sans projecteur'); return; }
         const n = Number(f.to);
-        if (!(await warnModel(r, n))) { paintRow(root, key); return; }          // modèle différent : on demande confirmation
+        if (await refuseBlocked(n) || !(await warnModel(r, n))) { paintRow(root, key); return; }          // modèle différent : on demande confirmation
         if (inShow.has(n)) await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`);
         else await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`);
         return;
       }
       if (v?.startsWith('stock:')) {   // ID choisi directement dans la liste du stock disponible
         const n = Number(v.slice(6));
-        if (!(await warnModel(r, n))) { paintRow(root, key); return; }
+        if (await refuseBlocked(n) || !(await warnModel(r, n))) { paintRow(root, key); return; }
         await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`); return;
       }
       if (v === 'new') {
         const f = await openForm('Ajouter un projecteur au spectacle', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: candidates(r), hint: 'Seuls les projecteurs disponibles à ces dates sont proposés.' }], { submit: 'Ajouter' });
         if (!f) { paintRow(root, key); return; }
         const n = Number(f.to);
-        if (!(await warnModel(r, n))) { paintRow(root, key); return; }
+        if (await refuseBlocked(n) || !(await warnModel(r, n))) { paintRow(root, key); return; }
         await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${n} ajouté`); return;
       }
       const n = Number(v);
-      if (!(await warnModel(r, n))) { paintRow(root, key); return; }
+      if (await refuseBlocked(n) || !(await warnModel(r, n))) { paintRow(root, key); return; }
       await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`); return;
     }
     if (what === 'swap' && r.itemId !== null) {
@@ -159,7 +169,7 @@ export const patchView: ViewFactory = ([showId]) => {
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea' }], { submit: 'Remplacer' });
       if (!f) return;
       const n = Number(f.to);
-      if (!(await warnModel(r, n))) { paintRow(root, key); return; }
+      if (await refuseBlocked(n) || !(await warnModel(r, n))) { paintRow(root, key); return; }
       const ok = await structural(root, 'patch_set_item', { ...who, p_mode: 'replace', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${old} remplacé par ${n}`);
       if (ok && f.fault === 'oui') {
         await reportFault(old, f.desc || `Remplacé dans la feuille de patch (${view().shows.find((s) => s.id === showId)?.name ?? ''})`);
