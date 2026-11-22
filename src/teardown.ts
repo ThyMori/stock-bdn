@@ -1,5 +1,6 @@
 import type { Data } from './types';
 import { describe } from './ref';
+import { appReference } from './pdfHeader';
 import { externalLabel } from './alerts';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
@@ -41,7 +42,7 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   let y = M;
   const footer = () => {
     const n = doc.getNumberOfPages();
-    for (let p = 1; p <= n; p++) { doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110);
+    for (let p = 1; p <= n; p++) { doc.setPage(p); appReference(doc, W, M); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110);
       doc.text(`Rapport de démontage - ${show.name} > ${next.name}`, M, H - 8, { maxWidth: W - 2 * M - 25 }); doc.text(`Page ${p} / ${n}`, W - M, H - 8, { align: 'right' }); }
   };
   const ensure = (h: number) => { if (y + h > H - 16) { doc.addPage(); y = M; } };
