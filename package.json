@@ -1,7 +1,7 @@
 {
   "name": "stock-bdn",
   "private": true,
-  "version": "1.38.2",
+  "version": "1.39.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

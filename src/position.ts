@@ -3,7 +3,7 @@ import type { Data, Show } from './types';
 import { currentImmo } from './logic';
 
 /** Positions « en hauteur » préférées pour les projecteurs stockés au 3e (pastille bleue). */
-export const HIGH_POSITIONS = ['3e', 'balcon', 'coupole'];
+export const HIGH_POSITIONS = ['3e balcon', '2e balcon', 'coupole'];
 /** Positions « cintres / en place » : Px, mezzas, allemandes, passerelles, sols, pont coupole. La corbeille compte dans les deux familles. */
 export const isHang = (p: string): boolean => /^P\d+$/.test(p) || /^(mezza|allemande|passerelle) [JC]$/.test(p) || p === 'sol' || p === 'pont coupole' || p === 'corbeille';
 export const isHigh = (p: string): boolean => HIGH_POSITIONS.includes(p) || p === 'corbeille';
@@ -63,7 +63,7 @@ export function posLabel(p: Pos): string {
 }
 
 /** Ordre de préférence d'une position de projecteur pour une ligne à monter à la position voulue (0 = le mieux).
- *  - ligne en hauteur (3e, balcon, coupole) : stock 3e ou déjà à cette position, puis une autre position haute, puis les dessous, puis le reste ;
+ *  - ligne en hauteur (3e balcon, 2e balcon, coupole) : stock 3e ou déjà à cette position, puis une autre position haute, puis les dessous, puis le reste ;
  *  - corbeille (haute ET cintres) : déjà là, puis stock 3e, puis les dessous ;
  *  - Px, mezza, allemande, passerelle, sol, pont coupole : déjà là, puis les dessous, puis le stock 3e ;
  *  - sans position voulue (ou « autre ») : aucun critère. */

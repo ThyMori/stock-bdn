@@ -9,7 +9,7 @@ import { EMPTY_DATA } from '../src/types';
 import { rollingStart } from '../src/views/calendar';
 import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
-import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount } from '../src/patch';
+import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount, POSITIONS, POSITION_GROUPS } from '../src/patch';
 import type { PatchRow } from '../src/patch';
 import { rankStock, similarNames } from '../src/patchSuggest';
 import { clampW, cleanWidths, colCss, MIN_W, MAX_W } from '../src/patchCols';
@@ -322,7 +322,7 @@ const posData = (): Data => ({ ...EMPTY_DATA,
   ] as unknown as Data['items'],
   shows: [{ id: 'sA', name: 'Avant', start_date: '2026-06-01', end_date: '2026-06-10' }, { id: 'sB', name: 'Courant', start_date: '2026-12-01', end_date: '2026-12-05' }] as Data['shows'],
   showItems: [{ show_id: 'sA', item_id: 3 }, { show_id: 'sA', item_id: 6 }] as unknown as Data['showItems'],
-  patchLines: [{ id: 'a', show_id: 'sA', item_id: 3, position: 'P2' }, { id: 'b', show_id: 'sA', item_id: 6, position: '3e' }] as unknown as Data['patchLines'] });
+  patchLines: [{ id: 'a', show_id: 'sA', item_id: 3, position: 'P2' }, { id: 'b', show_id: 'sA', item_id: 6, position: '3e balcon' }] as unknown as Data['patchLines'] });
 t('position : actuelle et au moment de préparer un spectacle', () => {
   const d = posData();
   assert.equal(posLabel(positionNow(d, 3, '2026-06-05')), 'P2 (Avant)', 'spectacle en cours : position de la feuille');
@@ -335,12 +335,18 @@ t('position : actuelle et au moment de préparer un spectacle', () => {
 });
 t('position : préférences selon la position voulue', () => {
   const st3 = { kind: 'stock3', position: '', show: '' } as const, des = { kind: 'dessous', position: '', show: '' } as const, at = (p: string) => ({ kind: 'show', position: p, show: 'X' }) as const;
-  assert.equal(positionTier(st3, '3e').tier, 0); assert.equal(positionTier(st3, 'balcon').tier, 0); assert.equal(positionTier(st3, 'coupole').tier, 0);
+  assert.equal(positionTier(st3, '3e balcon').tier, 0); assert.equal(positionTier(st3, '2e balcon').tier, 0); assert.equal(positionTier(st3, 'coupole').tier, 0);
   assert.ok(positionTier(st3, 'P3').tier > positionTier(des, 'P3').tier, 'Px : dessous avant stock 3e');
   assert.equal(positionTier(at('P3'), 'P3').tier, 0, 'déjà à cette position');
-  assert.equal(positionTier(at('balcon'), '3e').tier, 1, 'autre position haute');
+  assert.equal(positionTier(at('2e balcon'), '3e balcon').tier, 1, 'autre position haute');
   assert.ok(positionTier(st3, 'corbeille').tier < positionTier(des, 'corbeille').tier, 'corbeille : stock 3e avant dessous');
   assert.equal(positionTier(des, '').tier, 0, 'pas de position voulue : aucun critère');
+});
+t('positions : groupes par zone, P0 présent, aucun doublon', () => {
+  assert.deepEqual(POSITION_GROUPS.map((g) => g.label), ['Cintres', 'Cage de scène', 'FOH', 'Autres']);
+  assert.ok(POSITIONS.includes('P0') && POSITIONS.includes('2e balcon') && POSITIONS.includes('3e balcon'));
+  assert.ok(!POSITIONS.includes('balcon') && !POSITIONS.includes('3e'), 'anciens noms retirés');
+  assert.equal(new Set(POSITIONS).size, POSITIONS.length);
 });
 t('prépa : modèles similaires', () => {
   assert.ok(similarNames('614SX', '614S') && similarNames('ETC 25-50', '613') && similarNames('329HPC', '329HPB') && similarNames('310HPC', '306HPC'));
@@ -349,7 +355,7 @@ t('prépa : modèles similaires', () => {
 t('prépa : classement modèle > position > lampe', () => {
   const d = posData(), show = d.shows[1];
   // ligne 614 SX à monter au 3e : même modèle d'abord ; déjà au 3e, stock 3e, puis le reste ; le modèle similaire passe après
-  const r = rankStock(d, show, { modelId: 'm-a', lampId: null, par: false, position: '3e' });
+  const r = rankStock(d, show, { modelId: 'm-a', lampId: null, par: false, position: '3e balcon' });
   assert.deepEqual(r.map((x) => [x.id, x.group]).slice(0, 4), [[6, 'same'], [5, 'same'], [3, 'same'], [4, 'similar']]);   // 6 : déjà au 3e ; 5 : stock 3e ; 3 : à P2
   // ligne PAR en P2 : la position (stock dessous) passe avant la lampe
   const p = rankStock(d, show, { modelId: 'm-par', lampId: 'l1', par: true, position: 'P2' });
@@ -374,12 +380,12 @@ t('plan de démontage : stock dessous / 3e, en place, à déplacer, à monter av
     items: [1, 2, 3, 4, 5, 6].map((id) => ({ id, model_id: 'm', lamp_id: null, status: 'dispo', blue_dot: id === 2 })) as unknown as Data['items'],
     shows: [sh('a', '2026-01-01', '2026-01-05'), sh('b', '2026-02-01', '2026-02-05')] as unknown as Data['shows'],
     showItems: [1, 2, 3, 4].map((i) => ({ show_id: 'a', item_id: i, lamp_id: null })).concat([3, 4, 5, 6].map((i) => ({ show_id: 'b', item_id: i, lamp_id: null }))) as unknown as Data['showItems'],
-    patchLines: [pl('a', 1, 'P1'), pl('a', 2, '3e'), pl('a', 3, 'P2'), pl('a', 4, 'P3'), pl('b', 3, 'P2'), pl('b', 4, 'balcon'), pl('b', 5, '3e'), pl('b', 6, 'P1')] as unknown as Data['patchLines'] } as Data;
+    patchLines: [pl('a', 1, 'P1'), pl('a', 2, '3e balcon'), pl('a', 3, 'P2'), pl('a', 4, 'P3'), pl('b', 3, 'P2'), pl('b', 4, '2e balcon'), pl('b', 5, '3e balcon'), pl('b', 6, 'P1')] as unknown as Data['patchLines'] } as Data;
   const p = teardownPlan(d, 'a', 'b');
   assert.deepEqual(p.dessous.map((r) => r.id), [1], 'sans pastille, absent du suivant : dessous');
   assert.deepEqual(p.stock3.map((r) => r.id), [2], 'pastille bleue : stock 3e');
   assert.deepEqual(p.keep.map((r) => r.id), [3], 'même position : reste en place');
-  assert.deepEqual(p.move.map((r) => [r.id, r.oldPos, r.newPos]), [[4, 'P3', 'balcon']]);
+  assert.deepEqual(p.move.map((r) => [r.id, r.oldPos, r.newPos]), [[4, 'P3', '2e balcon']]);
   assert.deepEqual(p.mount.map((r) => [r.id, r.origin]), [[5, 'stock dessous'], [6, 'stock dessous']], 'trié par position voulue');
 });
 t('liste de prépa : provenance, position et accessoires ; prêts et locations sans ID', () => {

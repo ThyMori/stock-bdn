@@ -21,6 +21,7 @@ const SECTIONS: Section[] = [
     '<b>Liste</b> : recherche par numéro ou modèle (sans accents ni majuscules), filtre par état (disponible, utilisé, SAV, en prêt) et par type.',
     '<b>États</b> (mêmes couleurs partout) : <b>vert</b> disponible, <b>vert hachuré</b> utilisé (affecté à un spectacle en cours), <b>jaune</b> en prêt, <b>rouge</b> SAV.',
     '<b>Fiche</b> : état, lampe montée, historique, <b>agenda</b> (frise de 3 mois : libre, prêt, SAV), spectacles où il est affecté.',
+    '<b>Positions</b> : la liste de la feuille de patch est rangée par zone (Cintres, Cage de scène, FOH, Autres) pour t\'y retrouver en faisant défiler.',
     '<b>Position actuelle</b> : sur la fiche, où est le projecteur aujourd\'hui (position de la feuille de patch d\'un spectacle monté, stock dessous, stock 3e, PRÊT ou SAV).',
     '<b>Pastille bleue</b> : projecteur stocké au <b>3e</b> quand il ne joue pas. Seuls les régisseurs généraux et les admins la mettent ou l\'enlèvent (bouton sur la fiche). Filtre « Stocké au 3e » dans la liste.',
     '<b>PAR</b> : quatre boutons <b>CP62 · CP61 · CP60 · CP95</b> changent la lampe montée d\'un seul geste (technicien et plus).',

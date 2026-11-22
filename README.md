@@ -161,7 +161,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Pastille bleue** (`items.blue_dot`) : projecteur stocké au **3e** quand il ne joue pas. Fiche + liste du parc (filtre « Stocké au 3e »). Journal : « PASTILLE ». Pas de notification.
 - **Interrupteur monté / démonté** (`shows.mounted`, `mounted_at`) en haut d'un spectacle : en cours = figé monté ; avant : selon l'interrupteur ; après le dernier jour : démonté automatiquement (sauf forçage « monté » postérieur à la fin). Journal : « MONTAGE ».
 - **Position actuelle** d'un projecteur (fiche) : PRÊT / SAV, sinon position de la feuille de patch du spectacle monté, sinon stock 3e (pastille) ou stock dessous. Logique dans `src/position.ts`.
-- **Propositions d'ID** (feuille de patch) : 1) modèle (même, puis similaire) ; 2) disponible sur toute la durée ; 3) position qu'il avait dans le spectacle juste avant (sinon stock) : 3e / balcon / coupole → déjà là ou stock 3e d'abord ; Px / mezza / allemande / passerelle / sol / pont coupole → déjà là, puis dessous, puis 3e ; corbeille → déjà là, 3e, dessous ; 4) lampe des PAR.
+- **Propositions d'ID** (feuille de patch) : 1) modèle (même, puis similaire) ; 2) disponible sur toute la durée ; 3) position qu'il avait dans le spectacle juste avant (sinon stock) : 3e balcon / 2e balcon / coupole → déjà là ou stock 3e d'abord ; Px / mezza / allemande / passerelle / sol / pont coupole → déjà là, puis dessous, puis 3e ; corbeille → déjà là, 3e, dessous ; 4) lampe des PAR.
 - **Rapport de démontage** : à stocker dessous, à stocker au 3e, à garder en place, à déplacer, à monter (provenance), + infos lampes PAR et « À rendre ».
 - **Liste de prépa** : sections stock dessous / stock 3e / déjà monté, accessoires et position prévue, prêts et locations en bleu (accessoires des lignes rattachées cumulés).
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
@@ -178,6 +178,9 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Largeur des colonnes** (ordinateur seulement, écran > 1000 px avec souris) : poignée au bord droit de chaque titre ; tirer change la largeur, **double-clic** = largeur automatique pour cette colonne. Mémorisé sur l'ordinateur (localStorage `stockbdn.patchcols`). Sur téléphone, rien ne change (circuit + modèle = 1/3 de l'écran). Code : `src/patchCols.ts`.
 - **Largeur automatique selon les valeurs** (v1.38.2) : le titre d'une colonne ne l'élargit plus (il est tronqué s'il est trop long). Titres abrégés : c° (circuit), grad. (grada), acc. (accessoires) ; le nom complet reste en infobulle et pour les lecteurs d'écran.
 - **PDF de la feuille de patch** : look feuille de cahier griffonnée (papier crème, lignes bleues = une ligne du tableau, double marge rouge, écriture manuscrite **Caveat** en bleu stylo, traits et cases tremblés, focus fait = coup de surligneur). Police libre SIL OFL (`src/assets/fonts/`), téléchargée seulement à la génération ; **hors ligne ou en cas d'échec, le PDF garde le même look avec la police normale**. Code : `src/patchPdf.ts`, `src/pdfFonts.ts`, `src/handwriting.ts`. Les autres PDF (prépa, démontage, étiquettes QR) restent sobres.
+
+## Positions par zone (v1.39.0)
+La liste « Position » de la feuille de patch est classée en 4 zones : **Cintres** (P0 à P10, allemande J / C), **Cage de scène** (passerelle J / C, mezza J / C), **FOH** (corbeille, 2e balcon, 3e balcon), **Autres** (pont coupole, sol, coupole, autre). Renommages : `balcon` → `2e balcon`, `3e` → `3e balcon` (les lignes existantes sont converties par le SQL). Nouveau : `P0`. « Stock 3e » (pastille bleue) reste le nom du stock, pas d'une position. Code : `POSITION_GROUPS` dans `src/patch.ts`.
 
 ## Ligne « à louer / à emprunter » (v1.37.0)
 - Sur une ligne sans ID : modèle **« Location / prêt… »** → 2e liste → **« + À louer / à emprunter… »** → on choisit le modèle (et la lampe d'un PAR). La demande de matériel monte de 1 : si le stock ne suffit pas, le **manque** déclenche l'alarme habituelle ; sinon un projecteur du stock est réservé par la demande.
@@ -234,6 +237,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |
 | `schema.sql` fin de fichier (v1.36.0) | `demand_attach`, `demand_detach`, `patch_set_item` et `patch_delete_line` modifiées, reprise de l'existant | v1.36.0 |
 | `schema.sql` (v1.35.2) | position « pont coupole » acceptée par `set_patch_field` (liste des positions) | v1.35.2 |

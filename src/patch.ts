@@ -20,7 +20,15 @@ export const ACCESSORIES: { k: string; label: string }[] = [
   { k: 'iris', label: 'Iris' }, { k: 'gobo', label: 'Gobo' }, { k: 'volets', label: 'Volets' }, { k: 'autre', label: 'Autre' }
 ];
 /** Positions proposées, dans l'ordre d'usage (sert aussi au tri). */
-export const POSITIONS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'mezza J', 'mezza C', 'allemande J', 'allemande C', 'passerelle J', 'passerelle C', 'corbeille', 'balcon', '3e', 'sol', 'pont coupole', 'coupole', 'autre'];
+/** Positions regroupées par zone du théâtre (ordre d'affichage dans la liste déroulante). */
+export const POSITION_GROUPS: { label: string; items: string[] }[] = [
+  { label: 'Cintres', items: ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'allemande J', 'allemande C'] },
+  { label: 'Cage de scène', items: ['passerelle J', 'passerelle C', 'mezza J', 'mezza C'] },
+  { label: 'FOH', items: ['corbeille', '2e balcon', '3e balcon'] },
+  { label: 'Autres', items: ['pont coupole', 'sol', 'coupole', 'autre'] }
+];
+/** Toutes les positions à plat, dans l'ordre des groupes (sert au tri et au contrôle). */
+export const POSITIONS = POSITION_GROUPS.flatMap((g) => g.items);
 
 /** Colonnes, dans l'ordre d'affichage. */
 export type Col = 'circuit' | 'dimmer' | 'curve' | 'dmx' | 'id' | 'model' | 'gels' | 'accessories' | 'position' | 'focus' | 'notes';

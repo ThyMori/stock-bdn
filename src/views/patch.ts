@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
 import { gelColorOf } from '../gels';
-import { ACCESSORIES, COLS, CURVES, POSITIONS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows } from '../patch';
+import { ACCESSORIES, COLS, CURVES, POSITION_GROUPS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows } from '../patch';
 import type { Col, PatchLine, PatchRow } from '../patch';
 import { fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
@@ -251,7 +251,7 @@ export const patchView: ViewFactory = ([showId]) => {
         const add = can_ ? `<button class="btn mini" data-act="gel-add" aria-label="Ajouter un gel">+ Gel</button>` : '';
         return chips || add ? `<span class="gels">${chips}${add}</span>` : '<i class="muted">—</i>';
       }
-      case 'position': return can_ ? `<select class="pin" data-k="position" aria-label="Position"><option value="">—</option>${POSITIONS.map((p) => `<option ${p === r.position ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : `<span>${esc(r.position) || '<i class="muted">—</i>'}</span>`;
+      case 'position': return can_ ? `<select class="pin" data-k="position" aria-label="Position"><option value="">—</option>${POSITION_GROUPS.map((g) => `<optgroup label="${esc(g.label)}">${g.items.map((p) => `<option ${p === r.position ? 'selected' : ''}>${esc(p)}</option>`).join('')}</optgroup>`).join('')}</select>` : `<span>${esc(r.position) || '<i class="muted">—</i>'}</span>`;
       case 'focus': return `<input type="checkbox" class="fcb" data-k="focus" ${r.focus ? 'checked' : ''} ${can_ ? '' : 'disabled'} aria-label="Focus fait">`;
       case 'notes': return can_ ? `<input class="pin" data-k="notes" value="${esc(r.notes)}" maxlength="500" autocomplete="off" aria-label="Notes">` : `<span>${esc(r.notes) || '<i class="muted">—</i>'}</span>`;
     }
