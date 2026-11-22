@@ -16,6 +16,7 @@ import { logView } from './views/log';
 import { UPDATE_PENDING } from './flags';
 import { alertText, showAlerts } from './alerts';
 import { esc, todayStr } from './logic';
+import { showColor } from './types';
 import { moreView } from './views/more';
 import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
@@ -65,6 +66,15 @@ async function refreshNotifBanner() {
   if (want !== notifBanner) { notifBanner = want; paintStatus(); }
 }
 
+/** Petit rappel du (des) spectacle(s) en cours aujourd'hui : un appui ouvre sa fiche. */
+function nowBanner(): string {
+  const today = todayStr();
+  const on = view().shows.filter((s) => s.start_date <= today && s.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name));
+  const fmt = (d: string) => d.split('-').reverse().join('/');
+  return on.slice(0, 2).map((s) => `<a class="banner now" style="--c:${showColor(s)}" href="#/show/${s.id}" aria-label="Spectacle en cours : ${esc(s.name)}, ouvrir sa fiche"><span class="grow">En cours : <b>${esc(s.name)}</b> · jusqu'au ${fmt(s.end_date)}</span><span aria-hidden="true">›</span></a>`).join('')
+    + (on.length > 2 ? `<a class="banner now" href="#/shows">+ ${on.length - 2} autre${on.length > 3 ? 's' : ''} spectacle${on.length > 3 ? 's' : ''} en cours ›</a>` : '');
+}
+
 function paintStatus() {
   const el = document.getElementById('status');
   if (!el) return;
@@ -73,6 +83,7 @@ function paintStatus() {
   el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span>
       <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></div>
     ${showAlerts(view(), todayStr()).slice(0, 3).map((a) => `<a class="banner alarm" href="#/show/${a.show.id}" role="alert"><b>⚠ ALERTE MATÉRIEL · ${esc(a.show.name)}</b><br>${esc(alertText(a))} — à réparer, louer ou emprunter</a>`).join('')}
+    ${nowBanner()}
     ${installBannerWanted() ? `<div class="banner install" role="region" aria-label="Installer l'application"><img src="${import.meta.env.BASE_URL}icon-192.png" alt="" width="40" height="40"><span class="grow"><b>Installe Stock BdN</b><br>Un accès en un geste depuis ton écran d'accueil, en plein écran, comme une vraie appli.</span><span class="row"><button class="btn primary" data-act="inst-now">${installButtonLabel()}</button><button class="btn" data-act="inst-later">Plus tard</button></span></div>` : ''}
     ${notifBanner && !installBannerWanted() ? `<div class="banner notif" role="region" aria-label="Notifications"><span>Les notifications sont désactivées : tu ne seras pas prévenu quand on te cite ou quand un message arrive sur un de tes spectacles.</span><span class="row"><button class="btn primary" data-act="notif-on">Activer</button><button class="btn" data-act="notif-later">Plus tard</button></span></div>` : ''}
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}

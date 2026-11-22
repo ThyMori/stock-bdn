@@ -1,7 +1,7 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, rpcCall, view } from '../store';
-import { calendarHtml, shiftRef } from './calendar';
+import { calendarHtml, shiftRef, toggleCalExt } from './calendar';
 import type { CalMode } from './calendar';
 import { esc, todayStr, uuid } from '../logic';
 import { openForm } from '../ui/dialog';
@@ -22,6 +22,7 @@ export const showsView: ViewFactory = () => ({
       const a = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset;
       if (a?.act === 'vmode') { cal.mode = a.v as typeof cal.mode; paint(root); return; }
       if (a?.act === 'cal-prev' || a?.act === 'cal-next') { cal.ref = shiftRef(cal.ref, cal.mode === 'week' ? 'week' : 'month', a.act === 'cal-next' ? 1 : -1); paint(root); return; }
+      if (a?.act === 'cal-ext') { toggleCalExt(a.v ?? ''); paint(root); return; }   // plie / déplie les prêts de la semaine
       if (a?.act === 'cal-today') { cal.ref = todayStr(); paint(root); return; }
       if (a?.act !== 'new') return;
       const today = todayStr();

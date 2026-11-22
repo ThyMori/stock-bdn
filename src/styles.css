@@ -352,3 +352,9 @@ nav.tabs a { font-size: .68rem; }
 .install-guide details { border: 2px solid var(--ink); padding: 8px 12px; }
 .install-guide summary { cursor: pointer; }
 .install-guide ol { margin: 8px 0 2px; padding-left: 20px; display: grid; gap: 6px; }
+
+/* ligne de résumé des prêts / locations d'une semaine (touche pour déplier / replier) */
+button.cbar.cgroup { border: 0; cursor: pointer; text-align: left; font-family: inherit; }
+/* rappel du spectacle en cours */
+.banner.now { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: .85rem; border: 2px solid var(--ink); border-left: 8px solid var(--c, var(--ink)); background: var(--paper); color: var(--ink); text-decoration: none; margin-bottom: 8px; }
+.banner.now .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

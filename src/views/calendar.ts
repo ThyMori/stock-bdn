@@ -7,6 +7,10 @@ export interface CalExt { show_id: string; start: string; end: string; label: st
 
 export type CalMode = 'month' | 'week';
 
+// Semaines dont les prêts / locations sont dépliés (clé = lundi de la semaine). Replié par défaut : une seule ligne résume les prêts de la semaine.
+const openExt = new Set<string>();
+export const toggleCalExt = (week: string): void => { if (openExt.has(week)) openExt.delete(week); else openExt.add(week); };
+
 /** Lundi de la semaine contenant d (AAAA-MM-JJ). */
 export const mondayOf = (d: string): string => addDays(d, -((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7));
 const monthStart = (d: string): string => d.slice(0, 8) + '01';
@@ -33,12 +37,18 @@ function weekHtml(first: string, shows: Show[], mine: (id: string) => boolean, t
     let l = lanes.findIndex((e) => e < c0); if (l < 0) { l = lanes.length; lanes.push(-1); } lanes[l] = c1;
     return { c0, c1, l, cut: (start < first ? ' cut-l' : '') + (end > last ? ' cut-r' : '') };
   };
+  const grouped = extIn.length > 1, expanded = openExt.has(first);   // une seule ligne dès 2 prêts / locations dans la semaine
   const bars = inWeek.map((s) => {
     const c0 = Math.max(dayNum(s.start_date), dayNum(first)) - dayNum(first), c1 = Math.min(dayNum(s.end_date), dayNum(last)) - dayNum(first);
     let l = lanes.findIndex((end) => end < c0); if (l < 0) { l = lanes.length; lanes.push(-1); } lanes[l] = c1;
     const cut = (s.start_date < first ? ' cut-l' : '') + (s.end_date > last ? ' cut-r' : '');
     return `<a class="cbar ${mine(s.id) ? 'mine' : 'grey'}${cut}" style="--c:${showColor(s)};grid-column:${c0 + 1} / ${c1 + 2};grid-row:${l + 2}" href="#/show/${s.id}" title="${esc(s.name)}${mine(s.id) ? '' : ' (non assigné)'}">${esc(s.name)}</a>`;
-  }).join('') + extIn.map((x) => {
+  }).join('') + (() => {
+    if (!grouped) return '';
+    const sp = place(extIn.reduce((a, x) => (x.start < a ? x.start : a), extIn[0].start), extIn.reduce((a, x) => (x.end > a ? x.end : a), extIn[0].end));   // de la première livraison à la dernière reprise
+    return `<button type="button" class="cbar ext cgroup${sp.cut}" style="grid-column:${sp.c0 + 1} / ${sp.c1 + 2};grid-row:${sp.l + 2}" data-act="cal-ext" data-v="${first}" aria-expanded="${expanded}" title="${extIn.length} prêts / locations : appuyer pour ${expanded ? 'replier' : 'déplier'}">${expanded ? '▾' : '▸'} ${extIn.length} prêts / locations</button>`;
+  })() + extIn.map((x) => {
+    if (grouped && !expanded) return '';   // replié : seule la ligne de résumé est visible
     const { c0, c1, l, cut } = place(x.start, x.end);
     return `<a class="cbar ext${cut}" style="grid-column:${c0 + 1} / ${c1 + 2};grid-row:${l + 2}" href="#/show/${x.show_id}" title="${esc(x.label)}">${esc(x.label)}</a>`;
   }).join('');
