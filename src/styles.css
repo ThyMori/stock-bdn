@@ -378,3 +378,10 @@ button.fold { display: flex; align-items: center; gap: 8px; background: transpar
 .sec .row.wrap { row-gap: 8px; }
 .sec .row h2.grow { flex: 1 0 auto; }   /* base = largeur du titre : il garde sa place, le reste passe à la ligne */
 .sec .row .fold.grow { flex: 1 0 auto; }
+
+/* projecteurs affectés : sur téléphone, les boutons passent sous le texte pour ne jamais le masquer */
+@media (max-width: 560px) {
+  .item.sitem { flex-wrap: wrap; row-gap: 6px; }
+  .item.sitem .grow { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+  .item.sitem .btns { flex: 1 1 100%; max-width: 100%; justify-content: flex-start; padding-left: 0; }
+}

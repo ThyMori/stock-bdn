@@ -27,7 +27,7 @@ export const showView: ViewFactory = ([id]) => {
   let composer: HTMLElement | null = null;
   let gref = '';
   const rsel = new Set<number>();
-  let demFolded = false;   // « Matériel demandé » replié ?
+  let demFolded = true, itemsFolded = true;   // « Matériel demandé » et « Projecteurs affectés » : repliés au départ (pas mémorisé)
   let modelFilter = '';   // modèle affiché dans la liste des projecteurs ('' = tous) : un filtre, pas une sélection
 
   /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
@@ -87,7 +87,7 @@ export const showView: ViewFactory = ([id]) => {
     const assigned = shown.map((s) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
-      return `<div class="item">${canAssign ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
+      return `<div class="item sitem">${canAssign ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
         <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${origin(s)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
         ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button>${s.demand_id
           ? `<button class="btn" data-act="swap" data-v="${s.item_id}" aria-label="Changer le projecteur ${s.item_id}">Changer</button>${s.pinned ? `<button class="btn" data-act="release" data-v="${s.item_id}" aria-label="Remettre le projecteur ${s.item_id} en automatique">Auto</button>` : ''}`
@@ -151,12 +151,12 @@ export const showView: ViewFactory = ([id]) => {
       <div class="card stack sec sec-reg"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
         ${regs.map((r) => `<div class="stack reg"><div class="t">${esc(r.label)}</div>${canEdit ? `<div class="row wrap"><button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button></div>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
-      <div class="card sec sec-items"><div class="row wrap"><h2 class="grow">Projecteurs (${mine.length})</h2><span class="tag manual">manuel</span>${canAssign && mode === 'view' ? '<button class="btn" data-act="mode" data-v="pick">+ Choisir à la main</button>' : ''}</div>
-        <div class="sub">Partie manuelle : ajoute, retire, change, mets des gels.</div>
+      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button><span class="tag manual">manuel</span>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Choisir à la main</button>' : ''}</div>
+        ${itemsFolded ? '' : `<div class="sub">Partie manuelle : ajoute, retire, change, mets des gels.</div>
         ${selModels.length > 1 ? `<div class="selbar" role="group" aria-label="Filtrer par type de projecteur"><span class="sub">Filtre :</span>${selModels.map((m) => `<button class="chip" data-act="rmodel" data-v="${esc(m.id)}" aria-pressed="${modelFilter === m.id}">${esc(m.name)} (${m.ids.length})</button>`).join('')}</div>` : ''}
         ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${shown.length && shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'}${modelFilter ? ` (${shown.length})` : ''}</button>
           ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
-        <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}
+        <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>${picker}
       ${demandCard}`;
     if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
     const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
@@ -391,6 +391,7 @@ export const showView: ViewFactory = ([id]) => {
           if (all.length && all.every((n) => rsel.has(n))) all.forEach((n) => rsel.delete(n)); else all.forEach((n) => rsel.add(n));
           paint(root);
         }
+        else if (act === 'items-fold') { itemsFolded = !itemsFolded; paint(root); }   // replie / déplie les projecteurs affectés
         else if (act === 'dem-fold') { demFolded = !demFolded; paint(root); }   // replie / déplie le matériel demandé
         else if (act === 'rmodel') {
           modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui filtre la liste sur ce type ; un second appui retire le filtre
