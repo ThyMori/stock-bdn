@@ -517,6 +517,10 @@ dialog.help details > ul { margin: 2px 0 6px; padding-left: 20px; display: grid;
 .bluedot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #1d6bff; vertical-align: middle; margin-left: 4px; }
 /* Interrupteur monté / démonté en haut d'un spectacle */
 .mountsw { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.mountsw .seg button { min-height: 44px; }
-.mountsw .seg { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
-.mountsw .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }   /* état choisi : encre pleine */
+/* Interrupteur physique : curseur à gauche = OFF (gris), à droite = ON (vert) */
+.switch { flex: none; position: relative; width: 72px; height: 40px; border: 2px solid var(--ink); border-radius: 20px; background: #888; padding: 0; cursor: pointer; transition: background .2s; }
+.switch .knob { position: absolute; top: 3px; left: 3px; width: 30px; height: 30px; border-radius: 50%; background: #fff; border: 2px solid var(--ink); transition: left .2s; }
+.switch[aria-checked="true"] { background: var(--green); }
+.switch[aria-checked="true"] .knob { left: 35px; }
+.switch:disabled { cursor: default; opacity: .75; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch .knob { transition: none; } }

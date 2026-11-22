@@ -167,10 +167,9 @@ export const showView: ViewFactory = ([id]) => {
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
         ${(() => {                                                // interrupteur monté / démonté
           const mounted = showMounted(show, today), running = show.start_date <= today && show.end_date >= today, canMount = can('regisseur_general') && !running;
-          return `<div class="mountsw"><div class="seg" role="group" aria-label="État du montage">
-            <button data-act="mount" data-v="1" aria-pressed="${mounted}" ${canMount ? '' : 'disabled'}>Monté</button>
-            <button data-act="mount" data-v="0" aria-pressed="${!mounted}" ${canMount ? '' : 'disabled'}>Démonté</button></div>
-            <span class="sub">${running ? 'Spectacle en cours : toujours monté.' : canMount ? 'Les projecteurs sont en place (monté) ou rangés en stock (démonté).' : 'Seuls les régisseurs généraux et les administrateurs peuvent le changer.'}</span></div>`;
+          return `<div class="mountsw"><button class="switch" role="switch" aria-checked="${mounted}" aria-label="Spectacle monté" data-act="mount" data-v="${mounted ? '0' : '1'}" ${canMount ? '' : 'disabled'}><span class="knob"></span></button>
+            <b>${mounted ? 'Monté' : 'Démonté'}</b>
+            <span class="sub">${running ? 'Spectacle en cours : toujours monté.' : canMount ? 'ON = projecteurs en place ; OFF = rangés en stock.' : 'Seuls les régisseurs généraux et les admins peuvent le changer.'}</span></div>`;
         })()}
         <div class="row wrap"><a class="btn patch-btn" href="#/patch/${esc(id)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Patch / Focus</a><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button>
           <button class="btn" data-act="teardown"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10M18 15l2 2 3-4"/></svg>Rapport de démontage</button></div>
