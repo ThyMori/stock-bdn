@@ -112,6 +112,9 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### En-tête toujours visible (v1.22.6)
+Le titre « Stock BdN », la pastille « en ligne », « À jour » (et la liste des personnes en ligne quand elle est ouverte) et le bandeau du spectacle en cours restent collés en haut de l'écran pendant le défilement. Les autres bandeaux (alerte matériel, installation, notifications) défilent normalement.
+
 ### Affecter manuellement (v1.22.5)
 Le bouton s'appelle « + Affecter manuellement » et la fenêtre « Ajouter des projecteurs » s'ouvre en haut de la liste « Projecteurs affectés » (dans la même carte), avec défilement jusqu'à elle.
 

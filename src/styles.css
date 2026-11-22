@@ -394,3 +394,9 @@ button.fold { display: flex; align-items: center; gap: 8px; background: transpar
 .pick-list .item .grow { flex: 1 1 120px; min-width: 0; }
 .pick-list .item .badge { flex: none; margin-left: auto; }
 .chips .sub, .selbar .sub { white-space: nowrap; }
+
+/* en-tête toujours visible : titre, pastille « en ligne », « À jour » et spectacle en cours */
+#status { display: contents; }   /* ses enfants deviennent des enfants de #app : le collant peut suivre toute la page */
+.stickyhead { position: sticky; top: 0; z-index: 40; background: var(--paper); margin-top: calc(-1 * env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
+.stickyhead { padding-bottom: 8px; }
+.stickyhead .banner { margin-bottom: 0; margin-top: 6px; }

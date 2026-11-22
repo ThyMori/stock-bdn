@@ -86,12 +86,12 @@ function paintStatus() {
   const wait = state.pending.length;
   const label = state.syncing ? 'Synchronisation…' : !navigator.onLine ? `Hors ligne${wait ? ` · ${wait} en attente` : ''}` : wait ? `${wait} en attente` : 'À jour';
   const on = onlineNames();   // personnes en ligne : pastille verte avec leur nombre, un appui affiche les noms
-  el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span><span class="row" style="gap:8px">
+  el.innerHTML = `<div class="stickyhead"><div class="topbar"><span class="brand">Stock BdN</span><span class="row" style="gap:8px">
       ${on.length ? `<button class="online" id="onlineBtn" aria-expanded="${onlineOpen}" aria-label="${on.length} personne${on.length > 1 ? 's' : ''} en ligne"><i></i>${on.length}</button>` : ''}
       <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></span></div>
     ${onlineOpen && on.length ? `<div class="banner online-list" role="status"><b>En ligne</b> · ${on.map(esc).join(', ')}</div>` : ''}
+    ${nowBanner()}</div>
     ${showAlerts(view(), todayStr()).slice(0, 3).map((a) => `<a class="banner alarm" href="#/show/${a.show.id}" role="alert"><b>⚠ ALERTE MATÉRIEL · ${esc(a.show.name)}</b><br>${esc(alertText(a))} — à réparer, louer ou emprunter</a>`).join('')}
-    ${nowBanner()}
     ${installBannerWanted() ? `<div class="banner install" role="region" aria-label="Installer l'application"><img src="${import.meta.env.BASE_URL}icon-192.png" alt="" width="40" height="40"><span class="grow"><b>Installe Stock BdN</b><br>Un accès en un geste depuis ton écran d'accueil, en plein écran, comme une vraie appli.</span><span class="row"><button class="btn primary" data-act="inst-now">${installButtonLabel()}</button><button class="btn" data-act="inst-later">Plus tard</button></span></div>` : ''}
     ${notifBanner && !installBannerWanted() ? `<div class="banner notif" role="region" aria-label="Notifications"><span>Les notifications sont désactivées : tu ne seras pas prévenu quand on te cite ou quand un message arrive sur un de tes spectacles.</span><span class="row"><button class="btn primary" data-act="notif-on">Activer</button><button class="btn" data-act="notif-later">Plus tard</button></span></div>` : ''}
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
