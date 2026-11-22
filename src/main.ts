@@ -25,7 +25,8 @@ import { playArc, reducedMotion } from './arc';
 import { playPinball } from './pinball';
 import type { Role } from './types';
 import { fmtDateTime } from './logic';
-import { listenPushNavigation, syncPush } from './push';
+import { enablePush, listenPushNavigation, notifBannerWanted, snoozeNotifBanner, syncPush } from './push';
+import { toast } from './ui/toast';
 import { initUpdates } from './updates';
 
 initUpdates();
@@ -56,6 +57,13 @@ function shell() {
   app.innerHTML = `${UPDATE_PENDING ? '<div class="update-note" role="status">update en cours</div>' : ''}<div id="status"></div><main id="view"></main><nav class="tabs"><div class="in" id="tabs"></div></nav>`;
 }
 
+let notifBanner = false;   // faut-il afficher le bandeau « active les notifications » ?
+async function refreshNotifBanner() {
+  const uid = state.session?.user.id;
+  const want = uid ? await notifBannerWanted(uid).catch(() => false) : false;
+  if (want !== notifBanner) { notifBanner = want; paintStatus(); }
+}
+
 function paintStatus() {
   const el = document.getElementById('status');
   if (!el) return;
@@ -64,9 +72,17 @@ function paintStatus() {
   el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span>
       <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></div>
     ${showAlerts(view(), todayStr()).slice(0, 3).map((a) => `<a class="banner alarm" href="#/show/${a.show.id}" role="alert"><b>⚠ ALERTE MATÉRIEL · ${esc(a.show.name)}</b><br>${esc(alertText(a))} — à réparer, louer ou emprunter</a>`).join('')}
+    ${notifBanner ? `<div class="banner notif" role="region" aria-label="Notifications"><span>Les notifications sont désactivées : tu ne seras pas prévenu quand on te cite ou quand un message arrive sur un de tes spectacles.</span><span class="row"><button class="btn primary" data-act="notif-on">Activer</button><button class="btn" data-act="notif-later">Plus tard</button></span></div>` : ''}
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
     ${state.error && navigator.onLine ? `<div class="banner">Synchro en échec : ${state.error}</div>` : ''}`;
   el.querySelector('#syncBtn')?.addEventListener('click', () => void sync());
+  el.querySelector('[data-act=notif-later]')?.addEventListener('click', () => { snoozeNotifBanner(); notifBanner = false; paintStatus(); });
+  el.querySelector('[data-act=notif-on]')?.addEventListener('click', async () => {
+    const uid = state.session?.user.id; if (!uid) return;
+    const err = await enablePush(uid);   // demande l'autorisation puis abonne l'appareil
+    if (err) toast(err); else toast('Notifications activées.', 'ok');
+    void refreshNotifBanner();
+  });
 }
 
 function paintTabs(tab: string) {
@@ -113,11 +129,13 @@ function startApp() {
   void sync();
   listenPushNavigation();
   if (state.session) void syncPush(state.session.user.id);
+  void refreshNotifBanner();
 }
 
 window.addEventListener('online', () => { setOnline(true); void sync(); });
 window.addEventListener('offline', () => setOnline(false));
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void sync(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { void sync(); void refreshNotifBanner(); } });
+window.addEventListener('push-changed', () => void refreshNotifBanner());   // activé / désactivé depuis Plus ou depuis le bandeau
 
 async function boot() {
   if (!configured) return showConfigMissing(app);

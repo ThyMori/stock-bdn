@@ -40,6 +40,24 @@ async function saveSub(sub: PushSubscription): Promise<string | null> {
   return error ? error.message : null;
 }
 
+// ---- Bandeau « active les notifications » ----
+// « Plus tard » reporte le rappel d'une semaine ; après 3 reports il ne revient plus tout seul (Plus → Notifications reste disponible).
+const BANNER_KEY = 'stockbdn:pushbanner';
+const SNOOZE_MS = 7 * 24 * 3600 * 1000, MAX_SNOOZES = 3;
+const bannerState = (): { until?: number; count?: number } => { try { return JSON.parse(localStorage.getItem(BANNER_KEY) ?? '{}') || {}; } catch { return {}; } };
+
+/** Faut-il proposer d'activer les notifications ? Oui si elles sont éteintes sur cet appareil, activables, et que le rappel n'est pas reporté. */
+export async function notifBannerWanted(uid: string): Promise<boolean> {
+  const s = bannerState();
+  if ((s.count ?? 0) >= MAX_SNOOZES || Date.now() < (s.until ?? 0)) return false;
+  return (await pushStatus(uid)) === 'off';
+}
+export function snoozeNotifBanner(): void {
+  const s = bannerState();
+  try { localStorage.setItem(BANNER_KEY, JSON.stringify({ until: Date.now() + SNOOZE_MS, count: (s.count ?? 0) + 1 })); } catch { /* stockage indisponible : le rappel reviendra */ }
+}
+const changed = () => window.dispatchEvent(new Event('push-changed'));   // l'état des notifications a changé : les écrans se mettent à jour
+
 /** Active les notifications sur cet appareil. Renvoie un message d'erreur, ou null. */
 export async function enablePush(uid: string): Promise<string | null> {
   if (!navigator.onLine) return 'Cette action demande une connexion.';
@@ -52,6 +70,7 @@ export async function enablePush(uid: string): Promise<string | null> {
     const err = await saveSub(sub);
     if (err) return /push_subscriptions|save_push_subscription|schema cache/i.test(err) ? 'La base n’est pas à jour : rejoue supabase/schema.sql (voir le README).' : err;
     setFlag(uid, true);
+    changed();
     return null;
   } catch (e) { return 'Abonnement impossible : ' + (e as Error).message; }
 }
@@ -59,6 +78,7 @@ export async function enablePush(uid: string): Promise<string | null> {
 /** Désactive les notifications sur cet appareil. */
 export async function disablePush(uid: string): Promise<string | null> {
   setFlag(uid, false);
+  changed();
   try {
     const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
     if (sub) { await supabase.rpc('delete_push_subscription', { p_endpoint: sub.endpoint }); await sub.unsubscribe(); }
