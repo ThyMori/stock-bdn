@@ -455,10 +455,12 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
 
 /* téléphone en paysage : le tableau complet (comme sur ordinateur), compact, avec défilement horizontal s'il déborde */
 .ptable { width: 100%; }
-@media (max-width: 1000px) and (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
   #app:has(.patch-page) { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); max-width: none; }
   body:has(.patch-page) .stickyhead { position: static; }                /* l'écran est bas : l'en-tête ne reste pas collé en haut */
-  .ptable { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ptable { overflow: auto; -webkit-overflow-scrolling: touch; }   /* hauteur fixée par patch.ts (fitTable) : l'en-tête au-dessus ne bouge pas */
+  body:has(.patch-page) { overflow-y: hidden; }
+  #app:has(.patch-page) { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
   /* on annule les cartes du mode téléphone : retour au vrai tableau */
   table.patch { display: table; } table.patch thead { display: table-header-group; } table.patch tbody { display: table-row-group; }
   table.patch tr { display: table-row; border: 0; margin: 0; padding: 0; }
@@ -467,7 +469,7 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
   table.patch td[data-c="id"], table.patch td[data-c="model"] { order: 0; }
   table.patch td.rowact:empty { display: table-cell; }
   table.patch { font-size: .78rem; margin-top: 6px; min-width: 860px; }
-  table.patch th { position: static; }
+  table.patch th { position: sticky; top: 0; z-index: 2; }   /* titres de colonnes fixes : seules les lignes défilent (le tableau est sa propre zone de défilement) */
   table.patch th button { padding: 8px 4px; min-height: 36px; font-size: .66rem; letter-spacing: .03em; }
   table.patch td { padding: 2px 3px; }
   .pin { min-height: 36px; padding: 3px 4px; }

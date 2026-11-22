@@ -259,7 +259,16 @@ export const patchView: ViewFactory = ([showId]) => {
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
       <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
         <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
+    fitTable(root);
   }
+  /** Écran bas en paysage : l'en-tête (titre, boutons, titres de colonnes) reste en place, seules les lignes défilent dans le tableau. */
+  const fitTable = (root: HTMLElement) => {
+    const el = root.querySelector<HTMLElement>('.ptable'); if (!el) return;
+    if (!window.matchMedia('(orientation: landscape) and (max-height: 520px) and (min-width: 560px)').matches) { el.style.maxHeight = ''; return; }
+    window.scrollTo(0, 0);                                                   // la page elle-même ne défile pas
+    const nav = document.querySelector<HTMLElement>('nav.tabs')?.offsetHeight ?? 0;
+    el.style.maxHeight = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - nav - 2) + 'px';   // place restante sous l'en-tête, au-dessus de la barre du bas
+  };
   /** Redessine une seule ligne (changement de courbe : la colonne DMX s'active / se vide ; ou erreur : retour à la valeur enregistrée). */
   function paintRow(root: HTMLElement, key: string) {
     const r = rowsNow().find((x) => x.key === key), tr = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === key);
@@ -336,8 +345,10 @@ export const patchView: ViewFactory = ([showId]) => {
       // un menu à cases se ferme quand on touche ailleurs
       const repaint = () => paint(root);
       document.addEventListener('click', closeMenus);
+      const refit = () => fitTable(root);   // rotation ou redimensionnement
+      window.addEventListener('resize', refit); window.addEventListener('orientationchange', refit);
       window.addEventListener('online', repaint); window.addEventListener('offline', repaint);
-      return () => { document.removeEventListener('click', closeMenus); window.removeEventListener('online', repaint); window.removeEventListener('offline', repaint); };   // nettoyage à la sortie de la page
+      return () => { document.removeEventListener('click', closeMenus); window.removeEventListener('resize', refit); window.removeEventListener('orientationchange', refit); window.removeEventListener('online', repaint); window.removeEventListener('offline', repaint); };   // nettoyage à la sortie de la page
     },
     update(root) {
       if (busy || root.querySelector('.patch :focus, details.multi[open]')) return;   // jamais pendant une saisie
