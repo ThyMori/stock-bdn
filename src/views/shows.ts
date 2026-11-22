@@ -3,7 +3,7 @@ import { go } from '../router';
 import { can, canActShow, rpcCall, view } from '../store';
 import { calendarHtml, shiftRef, toggleCalExt } from './calendar';
 import type { CalMode } from './calendar';
-import { esc, todayStr, uuid } from '../logic';
+import { esc, isShowOver, sortShows, todayStr, uuid } from '../logic';
 import { openForm } from '../ui/dialog';
 import { fmtDay } from './agenda';
 import { showColor } from '../types';
@@ -11,7 +11,7 @@ import { calendarExternals, showAlerts } from '../alerts';
 
 const cal = { mode: 'month' as 'list' | CalMode, ref: todayStr() };
 
-/** Catalogue des spectacles : en cours / à venir d'abord, terminés ensuite. */
+/** Catalogue des spectacles : à venir d'abord (le prochain en premier), terminés grisés et rayés en bas. */
 export const showsView: ViewFactory = () => ({
   mount(root) {
     root.innerHTML = `<div class="page"><div class="row shows-head"><h1 class="grow">Spectacles</h1>
@@ -49,12 +49,11 @@ function paint(root: HTMLElement) {
   const today = todayStr();
   const alerted = new Set(showAlerts(view(), today).map((a) => a.show.id));
   const n = (id: string) => showItems.filter((s) => s.show_id === id).length;
-  const live = shows.filter((s) => s.end_date >= today).sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const past = shows.filter((s) => s.end_date < today).sort((a, b) => b.end_date.localeCompare(a.end_date));
-  const row = (s: (typeof shows)[number]) => `<a class="item" href="#/show/${s.id}"><i class="dotc" style="background:${showColor(s)}"></i><div class="grow"><div class="t">${esc(s.name)}</div>
+  // une seule liste : à venir / en cours (ordre chronologique), puis terminés grisés et rayés (le plus ancien en dernier)
+  const row = (s: (typeof shows)[number]) => `<a class="item${isShowOver(s, today) ? ' over' : ''}" href="#/show/${s.id}"><i class="dotc" style="background:${showColor(s)}"></i><div class="grow"><div class="t">${esc(s.name)}</div>
     <div class="s">du ${fmtDay(s.start_date)} au ${fmtDay(s.end_date)} · ${n(s.id)} projecteur${n(s.id) > 1 ? 's' : ''}${showPosts.filter((p) => p.show_id === s.id).length ? ` · ${showPosts.filter((p) => p.show_id === s.id).length} message${showPosts.filter((p) => p.show_id === s.id).length > 1 ? 's' : ''}` : ''}</div></div>
     ${alerted.has(s.id) ? '<span class="tag late">⚠ matériel manquant</span>' : ''}${s.start_date <= today && s.end_date >= today ? '<span class="tag run">en cours</span>' : ''}</a>`;
   root.querySelector('#list')!.innerHTML = shows.length
-    ? live.map(row).join('') + (past.length ? `<h2 style="margin-top:18px">Terminés</h2>` + past.map(row).join('') : '')
+    ? sortShows(shows, today).map(row).join('')
     : `<div class="empty">Aucun spectacle${can('regisseur_general') ? '' : ' (seuls les régisseurs généraux peuvent en créer)'}</div>`;
 }

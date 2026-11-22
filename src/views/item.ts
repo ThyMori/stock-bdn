@@ -1,7 +1,7 @@
 import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
-import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, todayStr, uuid } from '../logic';
+import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, sortShows, todayStr, uuid } from '../logic';
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
 import { describe, isPar, parLamps } from '../ref';
@@ -133,7 +133,7 @@ export const itemView: ViewFactory = ([idStr]) => {
     const data = view(); const today = todayStr();
     const item = data.items.find((i) => i.id === id); if (!item) return;
     const taken = new Set(data.showItems.filter((x) => x.item_id === id).map((x) => x.show_id));
-    const open = data.shows.filter((s) => s.end_date >= today && !taken.has(s.id) && canActShow(s.id));
+    const open = sortShows(data.shows.filter((s) => s.end_date >= today && !taken.has(s.id) && canActShow(s.id)), today);
     if (!open.length) { window.alert('Aucun spectacle disponible : il faut être assigné à un spectacle à venir ou en cours.'); return; }
     const par = /^PAR/i.test(describe(data, item).type?.name ?? '');
     const lamps = data.lamps.filter((l) => /^CP\d+/i.test(l.name));

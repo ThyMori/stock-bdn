@@ -7,7 +7,7 @@ import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf } from '../gels';
 import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
 import { toast } from '../ui/toast';
-import { esc, fmtDateTime, parseScan, todayStr, uuid } from '../logic';
+import { esc, fmtDateTime, parseScan, sortShows, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
 import { describe, norm } from '../ref';
@@ -442,7 +442,7 @@ export const showView: ViewFactory = ([id]) => {
         }
         else if (act === 'teardown') {
           const d = view();
-          const others = d.shows.filter((s) => s.id !== id).sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name));
+          const others = sortShows(d.shows.filter((s) => s.id !== id), todayStr());
           if (!others.length) { err('Aucun autre spectacle : crée d’abord le prochain spectacle.'); return; }
           const cs = d.shows.find((s) => s.id === id)!;
           const def = others.find((s) => s.start_date >= cs.start_date) ?? others[others.length - 1];

@@ -1,6 +1,6 @@
 import type { ViewFactory } from '../router';
 import { can, rpcCall, state, view } from '../store';
-import { esc, fmtDateTime, uuid } from '../logic';
+import { esc, fmtDateTime, isShowOver, sortShows, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
 import { openForm } from '../ui/dialog';
@@ -68,9 +68,10 @@ function paint(root: HTMLElement) {
   const d = view();
   const sel = root.querySelector<HTMLSelectElement>('#mfilter');
   if (sel) {
-    const shows = [...d.shows].sort((a, b) => b.start_date.localeCompare(a.start_date));
+    const today = todayStr();
+    const shows = sortShows(d.shows, today);   // prochain en premier, terminés en bas
     if (filter && filter !== '__general' && !shows.some((s) => s.id === filter)) filter = '';
-    sel.innerHTML = `<option value="">Tout</option><option value="__general" ${filter === '__general' ? 'selected' : ''}>Infos générales (annonces admin et régie générale)</option>` + shows.map((s) => `<option value="${s.id}" ${s.id === filter ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+    sel.innerHTML = `<option value="">Tout</option><option value="__general" ${filter === '__general' ? 'selected' : ''}>Infos générales (annonces admin et régie générale)</option>` + shows.map((s) => `<option value="${s.id}" ${s.id === filter ? 'selected' : ''} ${isShowOver(s, today) ? 'class="over"' : ''}>${esc(s.name)}${isShowOver(s, today) ? ' (terminé)' : ''}</option>`).join('');
   }
   const myId = state.profile?.id;
   const posts = d.showPosts.filter((p) => !filter || (filter === '__general' ? p.show_id === null : p.show_id === filter)).sort((a, b) => b.created_at.localeCompare(a.created_at));

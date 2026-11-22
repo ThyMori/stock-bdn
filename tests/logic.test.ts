@@ -4,7 +4,7 @@ import { prepRows, gelGroups } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
 import { compareShows } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
-import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
+import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan, sortShows, isShowOver } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
 import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
@@ -253,5 +253,12 @@ t('agenda : fenêtre glissante de 20 jours (5 avant, aujourd\'hui, 14 après)', 
   const next = dayWindow('2026-11-22', 14);
   assert.deepEqual([next.from, next.to], ['2026-12-01', '2026-12-20']);
   assert.deepEqual([dayWindow('2026-03-01', 0).from, dayWindow('2026-01-03', 0).from], ['2026-02-24', '2025-12-29']);   // passage de mois et d'année
+});
+
+t('sortShows : à venir chronologique, terminés grisés en bas (le plus ancien en dernier)', () => {
+  const S = (name: string, s: string, e: string) => ({ name, start_date: s, end_date: e });
+  const r = sortShows([S('vieux', '2026-01-01', '2026-01-10'), S('loin', '2027-01-01', '2027-01-05'), S('récent', '2026-10-01', '2026-10-31'), S('prochain', '2026-12-01', '2026-12-05'), S('en cours', '2026-11-10', '2026-11-30')], '2026-11-22').map((x) => x.name);
+  assert.deepEqual(r, ['en cours', 'prochain', 'loin', 'récent', 'vieux']);
+  assert.ok(isShowOver(S('x', '2026-11-01', '2026-11-21'), '2026-11-22') && !isShowOver(S('x', '2026-11-01', '2026-11-22'), '2026-11-22'));
 });
 console.log(`\n${n} tests OK`);

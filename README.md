@@ -112,6 +112,9 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### Ordre des spectacles (v1.19.2)
+Partout (liste des Spectacles, filtre du Mur, « Assigner à un spectacle », rapport de démontage) : en cours et à venir d'abord, le prochain en premier ; puis les terminés, du plus récent au plus ancien. Les terminés sont grisés et rayés (« (terminé) » dans les menus déroulants). Règle unique : `sortShows` dans `src/logic.ts`.
+
 ### Demande d'inscription (v1.19.0)
 Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (prénom, nom, e-mail, message facultatif). L'accès reste sur invitation.
 

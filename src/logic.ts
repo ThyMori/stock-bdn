@@ -117,6 +117,19 @@ export const dayNum = (d: string): number => Math.floor(Date.parse(d + 'T00:00:0
 export const addDays = (d: string, n: number): string => new Date((dayNum(d) + n) * 86400000).toISOString().slice(0, 10);
 
 export type ImmoState = 'planned' | 'running' | 'late' | 'done';
+/** Un spectacle est terminé quand sa date de fin est passée. */
+export const isShowOver = (s: { end_date: string }, today: string): boolean => s.end_date < today;
+
+/**
+ * Ordre d'affichage des spectacles, partout dans l'appli : en cours et à venir d'abord, dans l'ordre chronologique
+ * (le prochain en premier) ; puis les terminés, du plus récent au plus ancien (le plus ancien en tout dernier).
+ */
+export function sortShows<T extends { name: string; start_date: string; end_date: string }>(shows: T[], today: string): T[] {
+  const live = shows.filter((s) => !isShowOver(s, today)).sort((a, b) => a.start_date.localeCompare(b.start_date) || a.end_date.localeCompare(b.end_date) || a.name.localeCompare(b.name));
+  const past = shows.filter((s) => isShowOver(s, today)).sort((a, b) => b.end_date.localeCompare(a.end_date) || b.start_date.localeCompare(a.start_date) || a.name.localeCompare(b.name));
+  return [...live, ...past];
+}
+
 /** Planifiée (pas encore commencée) · en cours · en retard (fin prévue dépassée, pas clôturée) · terminée. */
 export function immoState(i: Immo, today: string): ImmoState {
   if (i.closed_date) return 'done';

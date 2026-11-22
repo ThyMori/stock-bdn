@@ -100,6 +100,8 @@ label.f { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; fo
   color: inherit; text-decoration: none; width: 100%; text-align: left; font: inherit; cursor: pointer; }
 @media (hover: hover) { .item:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); } }
 .item .num { flex: none; min-width: 56px; font-family: var(--font-display); font-stretch: 125%; font-weight: 800; font-size: 1.5rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.item.over { opacity: .5; } .item.over .t { text-decoration: line-through; }   /* spectacle terminé : grisé et rayé */
+option.over { color: #888; text-decoration: line-through; }
 .item .t { font-weight: 700; } .item .s { font-size: .85rem; color: var(--muted); }
 .cnt { font-weight: 700; font-variant-numeric: tabular-nums; }
 .cnt.dispo { color: var(--green); } .cnt.sav { color: var(--red); } .cnt.en_pret { color: var(--yellow-text); }
