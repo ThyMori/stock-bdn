@@ -112,6 +112,9 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### Affecter manuellement (v1.22.5)
+Le bouton s'appelle « + Affecter manuellement » et la fenêtre « Ajouter des projecteurs » s'ouvre en haut de la liste « Projecteurs affectés » (dans la même carte), avec défilement jusqu'à elle.
+
 ### Étiquettes QR imprimées et zoom (v1.22.4)
 - Impression des étiquettes : plus aucun bandeau (spectacle en cours, installation, mise à jour) ; le lien de l'appli (cliquable) est en en-tête.
 - Zoom désactivé (`user-scalable=no`, `touch-action: pan-x pan-y`, blocage du pincement iOS). Réglage à connaître : Firefox Android peut le réactiver si « Toujours activer le zoom » est coché dans ses réglages d'accessibilité.

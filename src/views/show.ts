@@ -138,7 +138,7 @@ export const showView: ViewFactory = ([id]) => {
         .filter((r) => (!type || r.d.model?.type_id === type) && tokens.every((t) => norm(`${r.i.id} ${r.d.model?.name ?? ''} ${r.d.type?.name ?? ''}`).includes(t)));
       const needLamp = [...sel].some(isPar);
       const staged = [...sel].sort((a, b) => a - b);
-      picker = `<div class="card stack"><h2>${mode === 'scan' ? 'Scanner un lot' : 'Ajouter des projecteurs'}</h2>
+      picker = `<div class="card stack picker"><h2>${mode === 'scan' ? 'Scanner un lot' : 'Ajouter des projecteurs'}</h2>
         <div class="chips"><button class="chip" data-act="mode" data-v="pick" aria-pressed="${mode === 'pick'}">Liste</button>
           <button class="chip" data-act="mode" data-v="scan" aria-pressed="${mode === 'scan'}">Scan QR</button></div>
         ${mode === 'scan' ? `<div class="viewport"><video playsinline muted></video></div>
@@ -171,12 +171,13 @@ export const showView: ViewFactory = ([id]) => {
       <div class="card stack sec sec-reg"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
         ${regs.map((r) => `<div class="stack reg"><div class="t">${esc(r.label)}</div>${canEdit ? `<div class="row wrap"><button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button></div>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
-      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button><span class="tag manual">manuel</span>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Choisir à la main</button>' : ''}</div>
+      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button><span class="tag manual">manuel</span>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Affecter manuellement</button>' : ''}</div>
         ${itemsFolded ? '' : `<div class="sub">Partie manuelle : ajoute, retire, change, mets des gels.</div>
+        ${picker}
         ${selModels.length > 1 ? `<div class="selbar" role="group" aria-label="Filtrer par type de projecteur"><span class="sub">Filtre :</span>${selModels.map((m) => `<button class="chip" data-act="rmodel" data-v="${esc(m.id)}" aria-pressed="${modelFilter === m.id}">${esc(m.name)} (${m.ids.length})</button>`).join('')}</div>` : ''}
         ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${shown.length && shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'}${modelFilter ? ` (${shown.length})` : ''}</button>
           ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
-        <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>${picker}
+        <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
       ${demandCard}`;
     if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
     const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
@@ -294,7 +295,7 @@ export const showView: ViewFactory = ([id]) => {
           const miss = (r.data as { missing?: number } | null)?.missing ?? 0;
           err(miss > 0 ? `⚠ Impossible de tout fournir : il manque ${miss} projecteur${miss > 1 ? 's' : ''} (à réparer, louer ou emprunter).` : '');
         };
-        if (act === 'mode') { mode = v as Mode; msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); }
+        if (act === 'mode') { mode = v as Mode; msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); if (mode === 'pick') root.querySelector('.picker')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }   // la fenêtre d'ajout s'ouvre en haut de la liste, bien visible
         else if (act === 'type') { type = v ?? ''; paint(root); }
         else if (act === 'toggle') {
           const n = Number(v);

@@ -388,3 +388,9 @@ button.fold { display: flex; align-items: center; gap: 8px; background: transpar
   .item.sitem .grow { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
   .item.sitem .btns { flex: 1 1 100%; max-width: 100%; justify-content: flex-start; padding-left: 0; }
 }
+/* fenêtre « Ajouter des projecteurs » ouverte dans la carte Projecteurs affectés : pas de double cadre, texte jamais écrasé par l'état */
+.sec .picker { border-width: 2px 0; padding: 14px 0; margin: 10px 0; }
+.pick-list .item { flex-wrap: wrap; row-gap: 4px; }
+.pick-list .item .grow { flex: 1 1 120px; min-width: 0; }
+.pick-list .item .badge { flex: none; margin-left: auto; }
+.chips .sub, .selbar .sub { white-space: nowrap; }
