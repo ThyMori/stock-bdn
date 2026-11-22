@@ -59,14 +59,10 @@ export const showView: ViewFactory = ([id]) => {
     }
     return m;
   };
-  /** Pré-sélectionne la lampe montée sur le premier PAR du lot (seulement si aucun choix n'a encore été fait et qu'elle fait partie des lampes proposées). */
-  const suggestLamp = (): void => {
-    if (lamp) return;
-    const d = view(), ids = new Set(lampOptions().map((l) => l.id));
-    for (const n of [...sel].sort((a, b) => a - b)) {
-      const it = d.items.find((i) => i.id === n);
-      if (it && isPar(n) && it.lamp_id && ids.has(it.lamp_id)) { lamp = it.lamp_id; return; }
-    }
+  /** Pré-sélectionne la lampe montée sur le PAR qu'on vient d'ajouter au lot (même si une autre lampe avait été choisie avant) ; sans effet si elle n'est pas dans les lampes proposées. */
+  const suggestLamp = (n: number): void => {
+    const it = view().items.find((i) => i.id === n);
+    if (it && isPar(n) && it.lamp_id && lampOptions().some((l) => l.id === it.lamp_id)) lamp = it.lamp_id;
   };
   /** Petite mention sous la liste des lampes : lampe montée, ou avertissement si le lot en mélange plusieurs. */
   const lampHint = (): string => {
@@ -200,7 +196,7 @@ export const showView: ViewFactory = ([id]) => {
       if (n === null) { msg = `QR non reconnu : « ${text.slice(0, 30)} »`; return; }
       if (!view().items.some((i) => i.id === n)) { msg = `Projecteur n° ${n} introuvable.`; return; }
       if (view().showItems.some((s) => s.show_id === id && s.item_id === n)) { msg = `N° ${n} déjà dans ce spectacle.`; return; }
-      sel.add(n); suggestLamp(); msg = `N° ${n} ajouté au lot.`; navigator.vibrate?.(40);
+      sel.add(n); suggestLamp(n); msg = `N° ${n} ajouté au lot.`; navigator.vibrate?.(40);
       repaintKeepVideo(root);
     };
     (root as HTMLElement & { _add?: (t: string) => void })._add = add;
@@ -303,7 +299,7 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'toggle') {
           const n = Number(v);
           if (el instanceof HTMLInputElement) { el.checked ? sel.add(n) : sel.delete(n); } else sel.delete(n);
-          suggestLamp();   // un PAR dans le lot : sa lampe montée est pré-sélectionnée
+          if (el instanceof HTMLInputElement && el.checked) suggestLamp(n);   // PAR ajouté : sa lampe montée est pré-sélectionnée, à chaque fois
           repaintKeepVideo(root);   // mise à jour sur place : la liste ne bouge pas
         }
         else if (act === 'assign') {
