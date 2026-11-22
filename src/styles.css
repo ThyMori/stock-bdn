@@ -366,3 +366,15 @@ button.cbar.cgroup { border: 0; cursor: pointer; text-align: left; font-family: 
 /* rappel du spectacle en cours */
 .banner.now { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: .85rem; border: 2px solid var(--ink); border-left: 8px solid var(--c, var(--ink)); background: var(--paper); color: var(--ink); text-decoration: none; margin-bottom: 8px; }
 .banner.now .grow { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* fiche de spectacle : zones bien distinctes (liseré de couleur en haut de chaque carte) */
+:root { --sec-wall: #1d4ed8; --sec-reg: #7e22ce; --sec-items: var(--ink); --sec-dem: #0a63ff; }
+.sec { border-top: 8px solid var(--sec, var(--ink)); }
+.sec-wall { --sec: var(--sec-wall); } .sec-reg { --sec: var(--sec-reg); } .sec-items { --sec: var(--sec-items); } .sec-dem { --sec: var(--sec-dem); border-style: dashed; border-top-style: solid; }   /* pointillés : zone automatique */
+.sec h2 { margin: 0; }
+.tag.manual { background: var(--ink); color: var(--paper); }
+button.fold { display: flex; align-items: center; gap: 8px; background: transparent; border: 0; padding: 4px 0; min-height: 44px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.sec .row h2 { white-space: nowrap; }   /* un titre de zone ne se coupe jamais : ce sont les boutons qui passent à la ligne */
+.sec .row.wrap { row-gap: 8px; }
+.sec .row h2.grow { flex: 1 0 auto; }   /* base = largeur du titre : il garde sa place, le reste passe à la ligne */
+.sec .row .fold.grow { flex: 1 0 auto; }
