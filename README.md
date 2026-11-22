@@ -157,22 +157,35 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - « Inviter » envoie l'invitation habituelle (`admin-users`) puis marque la demande « invitée » ; « Refuser » l'archive sans e-mail. Les deux sont inscrits au journal.
 - **Supabase** : 1) rejouer `supabase/schema.sql` (table `signup_requests`, fonctions `create_signup_request` et `resolve_signup_request`) ; 2) redéployer la fonction `push-notify` (Verify JWT reste désactivé).
 
-## Feuille de patch / focus (v1.23.0, étape 1)
+## Feuille de patch / focus (v1.23.0, complétée en v1.24.0)
 
-Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « N/C ». Colonnes : circuit, grada, courbe (Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines (lecture seule pour l'instant), accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique, hors ligne = lecture seule.
+Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « sans projecteur » (N/C : prêté, loué, autre). Colonnes : circuit, grada, courbe (Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines, accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique ; hors ligne = lecture seule.
 
 | Qui | Droit sur la feuille |
 |---|---|
-| Technicien, régisseur non affecté au spectacle | voir ; modifier **grada** et **courbe** des lignes existantes |
-| Régisseur du spectacle, RG, admin | toutes les colonnes (sauf gélatines : étape 2) |
+| Technicien, régisseur non affecté au spectacle | voir ; modifier **grada**, **courbe** et **gélatines** |
+| Régisseur du spectacle, RG, admin | tout : colonnes, cellule ID, ajout / suppression de lignes |
 
-- Base : table `patch_lines` (lecture réservée aux comptes actifs, écriture uniquement par la fonction `set_patch_field`, qui applique les droits).
+**Cellule ID** (régisseur du spectacle, RG, admin) :
+
+| Geste | Effet sur la ligne | Le projecteur d'avant |
+|---|---|---|
+| Choisir un ID déjà affecté | la ligne prend ce projecteur | les deux lignes échangent leurs projecteurs |
+| noID | la ligne devient « sans projecteur » (texte libre pour le modèle) | reste affecté, sur une ligne vide |
+| newID | la ligne prend un projecteur ajouté au spectacle (mêmes vérifications que l'affectation : dates, prêt, SAV, panne ; lampe montée des PAR) | reste affecté, sur une ligne vide |
+| ⇄ | la ligne prend un projecteur du stock (changement de type possible) | retiré du spectacle ; proposition de déclarer une panne |
+
+- **Les gélatines appartiennent à la ligne (au circuit)** : elles suivent la ligne quand on échange, ajoute ou remplace un ID, et la liste « Projecteurs affectés » de la fiche du spectacle est mise à jour. Exception : avec noID, elles restent sur le projecteur (une ligne sans projecteur ne peut pas porter de gélatine).
+- Un projecteur issu d'une demande de matériel ne peut être remplacé que par le même modèle et ne peut pas être retiré d'ici (change la demande sur la fiche du spectacle).
+- Supprimer une ligne : ligne N/C = elle disparaît ; ligne d'un projecteur = on la vide, avec le choix de retirer aussi le projecteur des projecteurs affectés.
+- Base : table `patch_lines` (écriture uniquement par fonctions), fonctions `set_patch_field`, `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel`.
 - **Supabase** : rejouer `supabase/schema.sql` (aucune fonction Edge à redéployer).
-- À venir : étape 2 (gélatines, ajouter/supprimer une ligne), étape 3 (suggestion d'ID par position), étape 4 (PDF).
+- À venir : suggestion d'ID par position, PDF imprimable.
 
 | Migration | Apporte | Indispensable pour |
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
+| `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
 
 ### Déconnexion fiabilisée et garde-fou de démarrage (v1.18.1)
 - Se déconnecter ne recharge plus la page deux fois (cause probable de l'écran noir sur l'appli installée).

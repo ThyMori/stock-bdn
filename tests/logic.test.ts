@@ -270,11 +270,11 @@ t('calendrier glissant : commence le lundi de la semaine passée', () => {
   assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
 });
 // --- Feuille de patch / focus ---
-const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
+const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
 t('patch : droits par colonne', () => {
-  assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer']);   // technicien
+  assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer', 'gels']);   // technicien
   assert.equal(editableCols(false, false).size, 0);                                // lecture seule
-  assert.ok(editableCols(true, true).has('position') && !editableCols(true, true).has('gels'));
+  assert.ok(editableCols(true, true).has('position') && editableCols(true, true).has('id') && editableCols(true, true).has('gels'));
 });
 t('patch : tri naturel, vides en dernier, égalité par ID', () => {
   const rows = [prow({ key: 'a', itemId: 3, circuit: '10' }), prow({ key: 'b', itemId: 1, circuit: '' }), prow({ key: 'c', itemId: 2, circuit: '2' })];

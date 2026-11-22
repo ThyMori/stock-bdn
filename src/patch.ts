@@ -31,7 +31,7 @@ export interface PatchRow {
   key: string;                // identifiant stable de la ligne (« i12 » pour le projecteur 12, « l<uuid> » pour une ligne N/C)
   lineId: string | null;      // ligne en base (nulle tant que rien n'a été saisi)
   itemId: number | null;
-  circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; accessories: string[]; position: string; focus: boolean; notes: string;
+  circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; gelIds: string[]; auto: boolean; accessories: string[]; position: string; focus: boolean; notes: string;
   updatedAt: string | null; updatedBy: string | null;
 }
 
@@ -45,15 +45,17 @@ export function buildRows(data: Data, showId: string, lines: PatchLine[]): Patch
     const lamp = data.lamps.find((l) => l.id === (si.lamp_id ?? it.lamp_id))?.name;   // lampe requise, sinon lampe montée
     const par = /^PAR/i.test(ds.type?.name ?? '');
     const l = mine.find((x) => x.item_id === si.item_id);
-    rows.push(fromLine(l ?? null, `i${si.item_id}`, si.item_id, `${ds.model?.name ?? '?'}${par && lamp ? ' ' + lamp : ''}`,
-      data.showGels.filter((g) => g.show_id === showId && g.item_id === si.item_id).map((g) => g.ref).sort()));
+    const gl = data.showGels.filter((g) => g.show_id === showId && g.item_id === si.item_id).sort((a, b) => a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
+    const row = fromLine(l ?? null, `i${si.item_id}`, si.item_id, `${ds.model?.name ?? '?'}${par && lamp ? ' ' + lamp : ''}`, gl.map((g) => g.ref));
+    row.gelIds = gl.map((g) => g.id); row.auto = !!si.demand_id;   // gélatines modifiables une à une ; projecteur issu d'une demande = ni retrait ni remplacement par un autre modèle
+    rows.push(row);
   }
   for (const l of mine.filter((x) => x.item_id === null)) rows.push(fromLine(l, `l${l.id}`, null, l.model_text, []));
   return rows;
 }
 function fromLine(l: PatchLine | null, key: string, itemId: number | null, model: string, gels: string[]): PatchRow {
   return {
-    key, lineId: l?.id ?? null, itemId, model, gels,
+    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false,
     circuit: l?.circuit ?? '', dimmer: l?.dimmer ?? '', curve: l?.curve ?? ['lineaire'], dmx: l?.dmx ?? '', accessories: l?.accessories ?? [],
     position: l?.position ?? '', focus: l?.focus ?? false, notes: l?.notes ?? '', updatedAt: l?.updated_at ?? null, updatedBy: l?.updated_by_label ?? null
   };
@@ -89,10 +91,10 @@ export function sortRows(rows: PatchRow[], col: Col, dir: 1 | -1): PatchRow[] {
   });
 }
 
-/** Colonnes qu'on peut modifier selon le rôle : technicien = grada et courbe ; régisseur assigné / RG / admin = tout (gélatines : étape suivante). */
+/** Colonnes qu'on peut modifier selon le rôle : technicien = grada, courbe et gélatines ; régisseur assigné / RG / admin = tout (dont l'ID). */
 export function editableCols(actor: boolean, technician: boolean): Set<Col> {
-  if (actor) return new Set<Col>(['circuit', 'dimmer', 'curve', 'dmx', 'model', 'accessories', 'position', 'focus', 'notes']);
-  return technician ? new Set<Col>(['dimmer', 'curve']) : new Set<Col>();
+  if (actor) return new Set<Col>(['circuit', 'dimmer', 'curve', 'dmx', 'id', 'model', 'gels', 'accessories', 'position', 'focus', 'notes']);
+  return technician ? new Set<Col>(['dimmer', 'curve', 'gels']) : new Set<Col>();
 }
 
 /** Texte lisible des choix multiples (courbe, accessoires). */

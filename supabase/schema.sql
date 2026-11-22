@@ -1529,3 +1529,166 @@ begin
 end $$;
 revoke all on function set_patch_field(uuid, int, uuid, text, jsonb) from public, anon;
 grant execute on function set_patch_field(uuid, int, uuid, text, jsonb) to authenticated;
+
+-- ---------- v1.24 : feuille de patch, cellule ID, gélatines, lignes ----------
+-- Journal + libellé de l'utilisateur courant (petit utilitaire des fonctions ci-dessous).
+create or replace function patch_label() returns text language sql stable security definer set search_path = public as $$
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = auth.uid();
+$$;
+
+-- Change le projecteur d'une ligne de la feuille. Les gélatines appartiennent à la ligne (au circuit) : elles suivent la ligne (choose, new, replace)
+-- sauf avec noid, où elles restent sur le projecteur (une ligne sans projecteur ne peut pas porter de gélatine). La ligne est désignée par p_item (ligne d'un projecteur) ou p_line (ligne N/C).
+--   choose  : prend un projecteur déjà affecté au spectacle (p_target) ; les deux lignes s'échangent leurs projecteurs.
+--   noid    : la ligne devient « sans projecteur » (N/C) ; l'ancien reste affecté, sur une ligne vide.
+--   new     : ajoute au spectacle un projecteur (p_target, lampe p_lamp pour un PAR) et le met sur la ligne ; l'ancien reste affecté, sur une ligne vide.
+--   replace : remplace le projecteur de la ligne par un autre du stock (p_target) ; l'ancien est retiré du spectacle ; les gélatines suivent.
+-- Réservé au régisseur du spectacle, au régisseur général et à l'admin.
+create or replace function patch_set_item(p_show uuid, p_item int, p_line uuid, p_mode text, p_target int default null, p_lamp text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare s shows; cb patch_lines; tb patch_lines; lbl text; res jsonb; oldsi show_items; m1 text; m2 text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  if p_mode not in ('choose', 'noid', 'new', 'replace') then raise exception 'Action inconnue' using errcode = '22023'; end if;
+  select * into s from shows where id = p_show;
+  if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  lbl := patch_label();
+  -- ligne courante
+  if p_item is not null then
+    if not exists (select 1 from show_items where show_id = p_show and item_id = p_item) then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+    select * into cb from patch_lines where show_id = p_show and item_id = p_item;
+  else
+    select * into cb from patch_lines where id = p_line and show_id = p_show and item_id is null;
+    if cb.id is null then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+  end if;
+  if p_mode = 'replace' and p_item is null then raise exception 'Il n''y a pas de projecteur à remplacer sur cette ligne' using errcode = '22023'; end if;
+
+  if p_mode = 'noid' then
+    if p_item is null then return; end if;
+    if cb.id is null then insert into patch_lines (show_id, item_id, updated_by_label) values (p_show, null, lbl);
+    else update patch_lines set item_id = null, model_text = '', updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
+    perform log_event('SPECTACLE', format('« %s » : patch, la ligne du projecteur %s devient « sans projecteur » (il reste affecté)', s.name, p_item));
+    return;
+  end if;
+
+  if p_target is null or p_target = p_item then raise exception 'Choisis un projecteur' using errcode = '22023'; end if;
+  if not exists (select 1 from items where id = p_target) then raise exception 'Projecteur % introuvable', p_target using errcode = '22023'; end if;
+
+  if p_mode = 'choose' then
+    if not exists (select 1 from show_items where show_id = p_show and item_id = p_target) then raise exception 'Le projecteur % n''est pas affecté à ce spectacle', p_target using errcode = '22023'; end if;
+    select * into tb from patch_lines where show_id = p_show and item_id = p_target;
+    if p_item is not null then
+      if cb.id is not null and tb.id is not null then   -- échange complet : on passe par « sans projecteur » pour respecter l'unicité
+        update patch_lines set item_id = null where id = cb.id;
+        update patch_lines set item_id = p_item, updated_at = now(), updated_by_label = lbl where id = tb.id;
+        update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id;
+      elsif cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id;
+      elsif tb.id is not null then update patch_lines set item_id = p_item, updated_at = now(), updated_by_label = lbl where id = tb.id;
+      end if;
+      -- les gélatines appartiennent à la ligne (au circuit) : elles restent en place, donc changent de projecteur
+      update show_gels set item_id = case when item_id = p_item then p_target else p_item end where show_id = p_show and item_id in (p_item, p_target);
+      perform log_event('SPECTACLE', format('« %s » : patch, projecteurs %s et %s échangés de ligne (gélatines et saisie restent sur la ligne)', s.name, p_item, p_target));
+    else   -- ligne N/C qui prend un projecteur affecté ; sa ligne d'origine devient N/C
+      if tb.id is not null then update patch_lines set item_id = null, model_text = '', updated_at = now(), updated_by_label = lbl where id = tb.id; end if;
+      update patch_lines set item_id = p_target, model_text = '', updated_at = now(), updated_by_label = lbl where id = cb.id;
+      perform log_event('SPECTACLE', format('« %s » : patch, une ligne sans projecteur prend le projecteur %s', s.name, p_target));
+    end if;
+    return;
+  end if;
+
+  -- new / replace : le projecteur vient du stock
+  if exists (select 1 from show_items where show_id = p_show and item_id = p_target) then raise exception 'Le projecteur % est déjà affecté à ce spectacle (choisis-le dans la liste)', p_target using errcode = '22023'; end if;
+  if exists (select 1 from faults where item_id = p_target and resolved_at is null) then raise exception 'Le projecteur % est en panne', p_target using errcode = '22023'; end if;
+  if p_mode = 'replace' then
+    select * into oldsi from show_items where show_id = p_show and item_id = p_item;
+    select model_id into m1 from items where id = p_item; select model_id into m2 from items where id = p_target;
+    if oldsi.demand_id is not null and m1 is distinct from m2 then
+      raise exception 'Ce projecteur vient d''une demande de matériel : remplace-le par un projecteur du même modèle, ou change la demande sur la fiche du spectacle' using errcode = '22023';
+    end if;
+  end if;
+  res := assign_items(p_show, array[p_target], p_lamp);   -- mêmes vérifications que partout (dates, prêt / SAV, lampe d'un PAR)
+  if jsonb_array_length(res -> 'skipped') > 0 then raise exception 'Projecteur % : %', p_target, res -> 'skipped' -> 0 ->> 'reason' using errcode = '22023'; end if;
+  delete from patch_lines where show_id = p_show and item_id = p_target;   -- reste d'une ancienne affectation
+  if p_mode = 'new' then
+    if p_item is null then update patch_lines set item_id = p_target, model_text = '', updated_at = now(), updated_by_label = lbl where id = cb.id;
+    elsif cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
+    if p_item is not null then update show_gels set item_id = p_target where show_id = p_show and item_id = p_item; end if;   -- les gélatines suivent la ligne
+    perform log_event('SPECTACLE', format('« %s » : patch, projecteur %s ajouté au spectacle sur une ligne', s.name, p_target));
+  else
+    if oldsi.demand_id is not null then update show_items set demand_id = oldsi.demand_id, pinned = true where show_id = p_show and item_id = p_target; end if;
+    update show_gels set item_id = p_target where show_id = p_show and item_id = p_item;   -- les gélatines restent sur la ligne
+    if cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
+    delete from show_items where show_id = p_show and item_id = p_item;
+    perform log_event('SPECTACLE', format('« %s » : patch, projecteur %s remplacé par %s', s.name, p_item, p_target));
+    perform reallocate_all();
+  end if;
+end $$;
+revoke all on function patch_set_item(uuid, int, uuid, text, int, text) from public, anon;
+grant execute on function patch_set_item(uuid, int, uuid, text, int, text) to authenticated;
+
+-- Ajoute une ligne vide « sans projecteur » (N/C) à la feuille.
+create or replace function patch_add_line(p_show uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r patch_lines;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  if not exists (select 1 from shows where id = p_show) then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  if (select count(*) from patch_lines where show_id = p_show and item_id is null) >= 200 then raise exception 'Trop de lignes sans projecteur (200 maximum)' using errcode = '22023'; end if;
+  insert into patch_lines (show_id, item_id, updated_by_label) values (p_show, null, patch_label()) returning * into r;
+  return to_jsonb(r);
+end $$;
+revoke all on function patch_add_line(uuid) from public, anon;
+grant execute on function patch_add_line(uuid) to authenticated;
+
+-- Supprime une ligne. Ligne d'un projecteur : on vide sa saisie ; avec p_remove, le projecteur est aussi retiré du spectacle
+-- (refusé s'il vient d'une demande de matériel). Ligne N/C : elle disparaît.
+create or replace function patch_delete_line(p_show uuid, p_item int, p_line uuid, p_remove boolean default false) returns void
+language plpgsql security definer set search_path = public as $$
+declare oldsi show_items;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  if p_item is not null then
+    select * into oldsi from show_items where show_id = p_show and item_id = p_item;
+    if not found then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+    if p_remove and oldsi.demand_id is not null then
+      raise exception 'Ce projecteur vient d''une demande de matériel : change la demande sur la fiche du spectacle pour le retirer' using errcode = '22023';
+    end if;
+    delete from patch_lines where show_id = p_show and item_id = p_item;
+    if p_remove then perform unassign_items(p_show, array[p_item]); end if;
+  else
+    delete from patch_lines where id = p_line and show_id = p_show and item_id is null;
+    if not found then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+  end if;
+end $$;
+revoke all on function patch_delete_line(uuid, int, uuid, boolean) from public, anon;
+grant execute on function patch_delete_line(uuid, int, uuid, boolean) to authenticated;
+
+-- Gélatines depuis la feuille : ouvert dès le technicien (sur les projecteurs affectés au spectacle).
+create or replace function patch_add_gel(p_show uuid, p_item int, p_ref text, p_color text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare nm text; gid uuid;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not exists (select 1 from show_items where show_id = p_show and item_id = p_item) then raise exception 'Projecteur non affecté à ce spectacle' using errcode = '22023'; end if;
+  if nullif(trim(p_ref), '') is null or length(trim(p_ref)) > 60 then raise exception 'Référence du gel obligatoire (60 caractères maximum)' using errcode = '22023'; end if;
+  if not (p_color = any (gel_colors())) then raise exception 'Couleur de gel inconnue' using errcode = '22023'; end if;
+  insert into show_gels (show_id, item_id, ref, color, added_by_label) values (p_show, p_item, trim(p_ref), p_color, patch_label()) returning id into gid;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : gel %s (%s) ajouté sur le projecteur %s (feuille de patch)', nm, trim(p_ref), p_color, p_item));
+  return gid;
+end $$;
+revoke all on function patch_add_gel(uuid, int, text, text) from public, anon;
+grant execute on function patch_add_gel(uuid, int, text, text) to authenticated;
+
+create or replace function patch_delete_gel(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare g show_gels; nm text;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into g from show_gels where id = p_id;
+  if not found then return; end if;
+  delete from show_gels where id = p_id;
+  select name into nm from shows where id = g.show_id;
+  perform log_event('SPECTACLE', format('« %s » : gel %s retiré du projecteur %s (feuille de patch)', nm, g.ref, g.item_id));
+end $$;
+revoke all on function patch_delete_gel(uuid) from public, anon;
+grant execute on function patch_delete_gel(uuid) to authenticated;
