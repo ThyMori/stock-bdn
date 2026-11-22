@@ -342,6 +342,15 @@ export const patchView: ViewFactory = ([showId]) => {
         save(root, key, k, k === 'focus' ? (t as HTMLInputElement).checked : t.value.trim());
         if (k === 'focus') tr.classList.toggle('done', (t as HTMLInputElement).checked);
       });
+      // menu des accessoires : posé en « fixed » sous la case (ou au-dessus s'il manque de place), pour ne pas être coupé par la zone de défilement du tableau
+      root.addEventListener('toggle', (e) => {
+        const d = e.target as HTMLDetailsElement; if (!(d instanceof HTMLDetailsElement) || !d.classList.contains('multi') || !d.open) return;
+        const box = d.querySelector<HTMLElement>('.opts'), sm = d.querySelector('summary'); if (!box || !sm) return;
+        const r = sm.getBoundingClientRect();
+        box.style.position = 'fixed'; box.style.left = Math.max(4, Math.min(r.left, window.innerWidth - box.offsetWidth - 4)) + 'px';
+        box.style.top = (r.bottom + box.offsetHeight + 4 > window.innerHeight ? Math.max(4, r.top - box.offsetHeight) : r.bottom) + 'px';   // en haut si le bas de l'écran est trop proche
+      }, true);
+      root.addEventListener('scroll', () => root.querySelectorAll<HTMLDetailsElement>('details.multi[open]').forEach((d) => { d.open = false; }), true);   // défiler ferme le menu (sa place ne suivrait plus)
       // un menu à cases se ferme quand on touche ailleurs
       const repaint = () => paint(root);
       document.addEventListener('click', closeMenus);
