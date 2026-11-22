@@ -1,10 +1,15 @@
 import { esc } from '../logic';
 
+/** Message d'alerte d'un scan : texte rouge en gras et vibration longue (si le téléphone sait vibrer). */
+function alarm(msg: HTMLElement, text: string) { msg.textContent = text; msg.classList.add('scanerr'); navigator.vibrate?.([250, 100, 250, 100, 250]); }
+
 export interface Field {
   name: string; label: string; type?: 'text' | 'date' | 'textarea' | 'select' | 'swatch' | 'number';
   required?: boolean; search?: boolean; value?: string; min?: string; max?: string; hint?: string; options?: [string, string][];
   /** Select seulement : propose de scanner un QR code. Reçoit le texte lu ; renvoie la valeur de l'option à choisir, ou un message d'erreur. */
   scan?: (text: string) => { value: string } | { error: string };
+  /** Après un scan réussi : texte d'alerte (affiché en rouge, avec vibration) si le projecteur lu pose problème mais reste autorisé, sinon null. */
+  scanWarn?: (value: string) => string | null;
 }
 
 /** Petite fenêtre de saisie. Renvoie les valeurs saisies, ou null si on annule. `validate` renvoie un message d'erreur ou null. */
@@ -73,12 +78,14 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
             if (r.data === last && Date.now() - lastAt < 2500) return;
             last = r.data; lastAt = Date.now();
             const res = f.scan!(r.data);
-            if ('error' in res) { msg.textContent = res.error; return; }
+            if ('error' in res) { alarm(msg, res.error); return; }                  // refus : rouge + vibration
             const search = dlg.querySelector<HTMLInputElement>(`[data-search="${f.name}"]`);
             if (search) { search.value = ''; search.dispatchEvent(new Event('input')); }   // on rétablit toute la liste avant de choisir
             sel.value = res.value;
-            navigator.vibrate?.(60);
-            stop(); msg.textContent = `Sélectionné : ${sel.selectedOptions[0]?.textContent ?? res.value}. Valide avec le bouton du bas.`;
+            const warn = f.scanWarn?.(res.value) ?? null;
+            stop();
+            if (warn) alarm(msg, `${warn} Sélectionné : ${sel.selectedOptions[0]?.textContent ?? res.value}. Tu peux valider quand même.`);   // autorisé, mais signalé
+            else { navigator.vibrate?.(60); msg.classList.remove('scanerr'); msg.textContent = `Sélectionné : ${sel.selectedOptions[0]?.textContent ?? res.value}. Valide avec le bouton du bas.`; }
           }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
           scanner = qs;
           await qs.start(); msg.textContent = 'Place le QR code du projecteur dans le cadre.';
@@ -87,6 +94,8 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
     });
     dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
     dlg.showModal();
-    dlg.querySelector<HTMLElement>('input, textarea, select')?.focus();   // un champ de filtre passe en premier
+    // sur téléphone, une fenêtre de scan ne doit pas faire apparaître le clavier : on retire le focus du champ de filtre (il revient si on le touche)
+    if (fields.some((f) => f.scan) && window.matchMedia('(pointer: coarse)').matches) (document.activeElement as HTMLElement | null)?.blur();
+    else dlg.querySelector<HTMLElement>('input, textarea, select')?.focus();   // un champ de filtre passe en premier
   });
 }

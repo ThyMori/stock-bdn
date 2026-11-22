@@ -62,6 +62,13 @@ export const patchView: ViewFactory = ([showId]) => {
     const list = r ? suggest(r) : rankStock(d, show, { modelId: null, lampId: null, par: false, position: '' });
     return list.map((x): [string, string] => [String(x.id), sugLabel(x, true)]);
   };
+  /** Texte d'alerte si le projecteur n'a pas le modèle prévu par la ligne (sinon null). Sert au scan et à la fenêtre de confirmation. */
+  const modelGap = (r: PatchRow, n: number): string | null => {
+    const d = view(), it = d.items.find((i) => i.id === n);
+    if (!r.modelId || !it || it.model_id === r.modelId) return null;
+    const have = d.models.find((m) => m.id === it.model_id)?.name ?? '?', want = d.models.find((m) => m.id === r.modelId)?.name ?? r.model;
+    return `⚠ MODÈLE DIFFÉRENT : la ligne prévoit un ${want}, le projecteur ${n} est un ${have}${similarNames(want, have) ? ' (modèle similaire)' : ''}.`;
+  };
   /** Avertissement bien visible si le projecteur choisi n'est pas du modèle de la ligne (même « similaire »). Renvoie true si on continue : c'est autorisé, mais il faut le confirmer. */
   const warnModel = async (r: PatchRow, n: number): Promise<boolean> => {
     const d = view(), it = d.items.find((i) => i.id === n);
@@ -74,11 +81,11 @@ export const patchView: ViewFactory = ([showId]) => {
   };
   /** Réponse à un QR code lu dans une fenêtre de choix : accepte un projecteur de la liste, sinon explique pourquoi pas. */
   const scanReply = (opts: [string, string][]) => (text: string): { value: string } | { error: string } => {
-    const n = parseScan(text); if (n === null) return { error: `QR non reconnu : « ${text.slice(0, 40)} »` };
+    const n = parseScan(text); if (n === null) return { error: `⚠ QR non reconnu : « ${text.slice(0, 40)} »` };
     if (opts.some(([v]) => v === String(n))) return { value: String(n) };
     const d = view(), show = d.shows.find((x) => x.id === showId);
-    if (!d.items.some((i) => i.id === n)) return { error: `Projecteur n° ${n} introuvable dans la base.` };
-    return { error: `Le n° ${n} n'est pas disponible : ${(show && blockedReason(d, n, show)) || 'indisponible'}.` };
+    if (!d.items.some((i) => i.id === n)) return { error: `⚠ Projecteur n° ${n} introuvable dans la base.` };
+    return { error: `⚠ PROJECTEUR INDISPONIBLE : le n° ${n} n'est pas disponible pendant tout le spectacle (${(show && blockedReason(d, n, show)) || 'indisponible'}).` };
   };
   /** Lampe à demander pour un PAR : celle voulue par la ligne si elle en a une, sinon celle qui est montée sur le projecteur choisi. */
   const lampFor = (n: number, r?: PatchRow): string | null => { const d = view(), it = d.items.find((i) => i.id === n); return it && /^PAR/i.test(describe(d, it).type?.name ?? '') ? (r?.itemId === null && r.lampId ? r.lampId : it.lamp_id) : null; };
@@ -116,7 +123,7 @@ export const patchView: ViewFactory = ([showId]) => {
         const mine = [...inShow].filter((n) => n !== r.itemId).sort((a, b) => a - b).map((n): [string, string] => [String(n), `n° ${n} · déjà dans ce spectacle`]);
         const opts = [...mine, ...candidates(r)];
         const lead: [string, string][] = [['', 'Choisir un projecteur…'], ...(r.itemId !== null ? [['noid', 'noID (ligne sans projecteur)'] as [string, string]] : [])];   // choix de repli quand on ouvre directement le scan
-        const p = openForm('Scanner un projecteur', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: [...lead, ...opts], scan: scanReply(opts), hint: 'Un projecteur déjà dans le spectacle prend la place de celui de la ligne ; un projecteur du stock est ajouté au spectacle.' }], { submit: 'Valider' });
+        const p = openForm('Scanner un projecteur', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: [...lead, ...opts], scan: scanReply(opts), scanWarn: (v) => (v ? modelGap(r, Number(v)) : null), hint: 'Un projecteur déjà dans le spectacle prend la place de celui de la ligne ; un projecteur du stock est ajouté au spectacle.' }], { submit: 'Valider' });
         setTimeout(() => document.querySelector<HTMLElement>('dialog.dlg [data-scan]')?.click(), 150);   // la caméra démarre tout de suite
         const f = await p;
         if (!f) { paintRow(root, key); return; }
@@ -147,7 +154,7 @@ export const patchView: ViewFactory = ([showId]) => {
       const old = r.itemId, opts = candidates(r);
       if (!opts.length) { toast('Aucun projecteur du stock n\'est disponible pendant ce spectacle.'); return; }
       const f = await openForm(`Remplacer le projecteur ${old}`, [
-        { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), hint: r.auto ? 'Ce projecteur vient d\'une demande : choisis le même modèle.' : 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
+        { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), scanWarn: (v) => modelGap(r, Number(v)), hint: r.auto ? 'Ce projecteur vient d\'une demande : choisis le même modèle.' : 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
         { name: 'fault', label: `Déclarer une panne sur le projecteur ${old} ?`, type: 'select', options: [['', 'Non'], ['oui', 'Oui, en même temps']], value: '' },
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea' }], { submit: 'Remplacer' });
       if (!f) return;
