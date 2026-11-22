@@ -512,3 +512,11 @@ dialog.help summary::before { content: "›"; display: inline-block; width: 1em;
 dialog.help details[open] > summary::before { transform: rotate(90deg); }
 dialog.help details > ul { margin: 2px 0 6px; padding-left: 20px; display: grid; gap: 7px; font-size: .92rem; }
 @media (prefers-reduced-motion: reduce) { dialog.help summary::before { transition: none; } }
+
+/* Pastille bleue : projecteur stocké au 3e quand il ne joue pas (couleur fixe, la même partout) */
+.bluedot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #1d6bff; vertical-align: middle; margin-left: 4px; }
+/* Interrupteur monté / démonté en haut d'un spectacle */
+.mountsw { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mountsw .seg button { min-height: 44px; }
+.mountsw .seg { grid-template-columns: repeat(2, minmax(110px, 1fr)); }
+.mountsw .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }   /* état choisi : encre pleine */

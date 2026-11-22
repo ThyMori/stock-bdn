@@ -23,6 +23,8 @@ export interface Model {
 export interface Item {
   id: number; model_id: string; lamp_id: string | null; status: Status; status_at: string;
   last_service: string | null; note: string | null; pending?: boolean;
+  /** Pastille bleue : projecteur stocké au 3e (et non dans les dessous) quand il ne joue pas. */
+  blue_dot?: boolean;
   /** État affiché (calculé) : « utilisé » si assigné à un spectacle en cours et disponible. */
   eff?: DisplayStatus;
 }
@@ -30,7 +32,9 @@ export interface Item {
 export const SHOW_COLORS: [string, string][] = [['#1d4ed8', 'Bleu'], ['#0f766e', 'Sarcelle'], ['#7e22ce', 'Violet'], ['#c2410c', 'Orange'], ['#be185d', 'Rose'],
   ['#4d7c0f', 'Olive'], ['#78350f', 'Brun'], ['#4338ca', 'Indigo'], ['#475569', 'Ardoise'], ['#0e7490', 'Cyan']];
 export const showColor = (s: { color?: string | null }): string => s.color ?? '#475569';
-export interface Show { id: string; name: string; color?: string | null; start_date: string; end_date: string; note: string | null; created_by_label?: string | null }
+export interface Show { id: string; name: string; color?: string | null; start_date: string; end_date: string; note: string | null; created_by_label?: string | null;
+  /** Interrupteur monté / démonté forcé à la main, et moment où il l'a été (voir src/position.ts). */
+  mounted?: boolean; mounted_at?: string | null }
 import type { PatchLine } from './patch';
 export interface ShowRegisseur { show_id: string; user_id: string; label: string | null }
 export interface ShowPost { id: string; show_id: string | null; kind?: 'show' | 'admin' | 'general'; author_id: string | null; author_label: string | null; body: string; created_at: string; edited_at: string | null }

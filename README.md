@@ -157,6 +157,16 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - « Inviter » envoie l'invitation habituelle (`admin-users`) puis marque la demande « invitée » ; « Refuser » l'archive sans e-mail. Les deux sont inscrits au journal.
 - **Supabase** : 1) rejouer `supabase/schema.sql` (table `signup_requests`, fonctions `create_signup_request` et `resolve_signup_request`) ; 2) redéployer la fonction `push-notify` (Verify JWT reste désactivé).
 
+## Positions, pastille bleue et montage (v1.34.0)
+- **Pastille bleue** (`items.blue_dot`) : projecteur stocké au **3e** quand il ne joue pas. Fiche + liste du parc (filtre « Stocké au 3e »). Journal : « PASTILLE ». Pas de notification.
+- **Interrupteur monté / démonté** (`shows.mounted`, `mounted_at`) en haut d'un spectacle : en cours = figé monté ; avant : selon l'interrupteur ; après le dernier jour : démonté automatiquement (sauf forçage « monté » postérieur à la fin). Journal : « MONTAGE ».
+- **Position actuelle** d'un projecteur (fiche) : PRÊT / SAV, sinon position de la feuille de patch du spectacle monté, sinon stock 3e (pastille) ou stock dessous. Logique dans `src/position.ts`.
+- **Propositions d'ID** (feuille de patch) : 1) modèle (même, puis similaire) ; 2) disponible sur toute la durée ; 3) position qu'il avait dans le spectacle juste avant (sinon stock) : 3e / balcon / coupole → déjà là ou stock 3e d'abord ; Px / mezza / allemande / passerelle / sol → déjà là, puis dessous, puis 3e ; corbeille → déjà là, 3e, dessous ; 4) lampe des PAR.
+- **Rapport de démontage** : à stocker dessous, à stocker au 3e, à garder en place, à déplacer, à monter (provenance), + infos lampes PAR et « À rendre ».
+- **Liste de prépa** : sections stock dessous / stock 3e / déjà monté, accessoires et position prévue, prêts et locations en bleu (accessoires des lignes rattachées cumulés).
+- **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
+- Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
+
 ## Feuille de patch / focus (v1.23.0, complétée jusqu'en v1.30.0)
 
 Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « sans projecteur » (N/C : prêté, loué, autre). Colonnes : circuit, grada, courbe (un seul choix : Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines, accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique ; hors ligne = lecture seule.
@@ -203,6 +213,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.34.0) | pastille bleue `items.blue_dot`, `shows.mounted` / `mounted_at`, `set_blue_dot`, `set_show_mounted` | v1.34.0 |
 | `schema.sql` fin de fichier (v1.32.0) | lignes noID rattachées à une location / un prêt : colonne `patch_lines.external_id`, `set_patch_field` (champ `external_id`), `patch_set_item` (détache la ligne) | v1.32.0 |
 | `schema.sql` fin de fichier (v1.30.0) | mode prépa : colonnes `patch_lines.model_id` / `lamp_id`, `set_patch_field` étendue, `patch_item_model`, `patch_set_item` mise à jour, `add_model` | v1.30.0 |
 | `schema.sql` fin de fichier (v1.27.0) | gélatines des lignes sans projecteur : colonne `patch_lines.gels`, `patch_add_line_gel`, `patch_delete_line_gel` | v1.27.0 |

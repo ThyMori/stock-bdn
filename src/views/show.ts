@@ -16,6 +16,7 @@ import { deliverPdf } from '../ui/deliverPdf';
 import { ALL_OPT, notifyPost } from '../push';
 import { fmtDay } from './agenda';
 import { cashBeep } from '../ui/beep';
+import { showMounted } from '../position';
 
 const PAR_LAMPS = ['CP60', 'CP61', 'CP62', 'CP95'];
 type Mode = 'view' | 'pick' | 'scan';
@@ -164,6 +165,13 @@ export const showView: ViewFactory = ([id]) => {
     el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
         ${show.note ? `<div>${esc(show.note)}</div>` : ''}
+        ${(() => {                                                // interrupteur monté / démonté
+          const mounted = showMounted(show, today), running = show.start_date <= today && show.end_date >= today, canMount = can('regisseur_general') && !running;
+          return `<div class="mountsw"><div class="seg" role="group" aria-label="État du montage">
+            <button data-act="mount" data-v="1" aria-pressed="${mounted}" ${canMount ? '' : 'disabled'}>Monté</button>
+            <button data-act="mount" data-v="0" aria-pressed="${!mounted}" ${canMount ? '' : 'disabled'}>Démonté</button></div>
+            <span class="sub">${running ? 'Spectacle en cours : toujours monté.' : canMount ? 'Les projecteurs sont en place (monté) ou rangés en stock (démonté).' : 'Seuls les régisseurs généraux et les administrateurs peuvent le changer.'}</span></div>`;
+        })()}
         <div class="row wrap"><a class="btn patch-btn" href="#/patch/${esc(id)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Patch / Focus</a><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button>
           <button class="btn" data-act="teardown"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10M18 15l2 2 3-4"/></svg>Rapport de démontage</button></div>
         ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
@@ -270,6 +278,7 @@ export const showView: ViewFactory = ([id]) => {
           err(miss > 0 ? `⚠ Impossible de tout fournir : il manque ${miss} projecteur${miss > 1 ? 's' : ''} (à réparer, louer ou emprunter).` : '');
         };
         if (act === 'mode') { mode = v as Mode; msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); if (mode === 'pick') root.querySelector('.picker')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }   // la fenêtre d'ajout s'ouvre en haut de la liste, bien visible
+        else if (act === 'mount') { const r = await rpcCall('set_show_mounted', { p_show: id, p_value: v === '1' }); err(r.error ?? ''); }
         else if (act === 'type') { type = v ?? ''; paint(root); }
         else if (act === 'toggle') {
           const n = Number(v);

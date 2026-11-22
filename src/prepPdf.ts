@@ -2,11 +2,16 @@ import { GEL_COLORS } from './types';
 import type { Data } from './types';
 import { describe } from './ref';
 import { appReference } from './pdfHeader';
-import { externalLabel } from './alerts';
+import { patchPosition, positionBefore } from './position';
+import type { Show } from './types';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
-export interface PrepRow { id: number; model: string; type: string; lamp: string; current: string; sav: boolean; gels: string[] }
+/** Provenance d'un projecteur à préparer : stock des dessous, stock du 3e (pastille bleue) ou déjà monté dans le spectacle d'avant. */
+export type Origin = 'dessous' | 'stock3' | 'monte';
+export const ORIGIN_TITLE: Record<Origin, string> = { dessous: 'Stock dessous', stock3: 'Stock 3e (pastille bleue)', monte: 'Déjà monté (spectacle précédent)' };
+export interface PrepRow { id: number; model: string; type: string; lamp: string; current: string; sav: boolean; gels: string[];
+  origin: Origin; /** d'où il vient (« P2 (Avant) », « stock 3e »…) */ from: string; /** position prévue sur la feuille de patch */ position: string; accessories: string[] }
 export interface GelGroup { title: string; size: string; color: string; ref: string; qty: number; items: number[] }
 
 /** Gélatines du spectacle : une section par « format de projecteur » (PAR64, 613 SX / 614 SX…).
@@ -34,8 +39,30 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
     .sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true }) || rank(a.color) - rank(b.color) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
 }
 
+/** Provenance, position prévue et accessoires (feuille de patch) d'un projecteur du spectacle. */
+function originOf(data: Data, show: Show | undefined, itemId: number): Pick<PrepRow, 'origin' | 'from' | 'position' | 'accessories'> {
+  if (!show) return { origin: 'dessous', from: 'stock dessous', position: '', accessories: [] };
+  const p = positionBefore(data, itemId, show);
+  const line = data.patchLines.find((l) => l.show_id === show.id && l.item_id === itemId);
+  const origin: Origin = p.kind === 'show' ? 'monte' : p.kind === 'stock3' ? 'stock3' : 'dessous';
+  return { origin, from: p.kind === 'show' ? `${p.position || '?'} (${p.show})` : p.kind === 'stock3' ? 'stock 3e' : 'stock dessous', position: patchPosition(data, show.id, itemId), accessories: line?.accessories ?? [] };
+}
+
+/** Prêts / locations du spectacle : « 4 × PAR64 CP62 prêtés par X », dates, et accessoires cumulés des lignes de patch rattachées. */
+export function externalRows(data: Data, showId: string): { kind: 'pret' | 'location'; text: string; dates: string; accessories: string[] }[] {
+  const lamp = (id: string | null) => data.lamps.find((l) => l.id === id)?.name ?? '';
+  return data.showExternals.filter((e) => e.show_id === showId).sort((a, b) => a.delivery_date.localeCompare(b.delivery_date)).map((e) => {
+    const d = data.showDemands.find((x) => x.id === e.demand_id), m = data.models.find((x) => x.id === d?.model_id)?.name ?? '?', l = lamp(d?.lamp_id ?? null);
+    const acc = new Map<string, number>();
+    for (const ln of data.patchLines.filter((x) => x.show_id === showId && x.external_id === e.id)) for (const a of ln.accessories) acc.set(a, (acc.get(a) ?? 0) + 1);
+    return { kind: e.kind, text: `${e.qty} × ${m}${l ? ' ' + l : ''} — ${e.kind === 'pret' ? 'prêté par' : 'loué chez'} ${e.provider}`,
+      dates: `livraison ${DAY(e.delivery_date)}, reprise ${DAY(e.return_date)}`, accessories: [...acc].map(([a, n]) => (n > 1 ? `${n} × ` : '') + a) };
+  });
+}
+
 /** Lignes de la liste de prépa : projecteurs du spectacle, triés par type, modèle puis numéro. */
 export function prepRows(data: Data, showId: string): PrepRow[] {
+  const show = data.shows.find((x) => x.id === showId);
   const name = (id: string | null | undefined) => data.lamps.find((l) => l.id === id)?.name ?? '';
   return data.showItems.filter((s) => s.show_id === showId).map((s) => {
     const it = data.items.find((i) => i.id === s.item_id);
@@ -43,7 +70,8 @@ export function prepRows(data: Data, showId: string): PrepRow[] {
     const isPar = /^PAR/i.test(d?.type?.name ?? '');
     return { id: s.item_id, model: d?.model?.name ?? '?', type: d?.type?.name ?? 'Sans type',
       lamp: isPar ? name(s.lamp_id) || 'à préciser' : '', current: isPar && it ? name(it.lamp_id) : '', sav: !!it && it.status === 'sav',
-      gels: data.showGels.filter((g) => g.show_id === showId && g.item_id === s.item_id).map((g) => g.ref).sort() };
+      gels: data.showGels.filter((g) => g.show_id === showId && g.item_id === s.item_id).map((g) => g.ref).sort(),
+      ...originOf(data, show, s.item_id) };
   }).sort((a, b) => a.type.localeCompare(b.type, 'fr') || a.model.localeCompare(b.model, 'fr', { numeric: true }) || a.id - b.id);
 }
 
@@ -77,12 +105,7 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
     const txt = 'ATTENTION - matériel manquant : ' + miss.map((x) => `${x.missing} x ${data.models.find((m) => m.id === x.model_id)?.name ?? '?'}${x.lamp_id ? ' ' + (data.lamps.find((l) => l.id === x.lamp_id)?.name ?? '') : ''}`).join(', ');
     doc.text(txt, M, y, { maxWidth: W - 2 * M }); y += 5 * Math.ceil(doc.getTextWidth(txt) / (W - 2 * M)); doc.setTextColor(0); doc.setFont('helvetica', 'normal');
   }
-  const exts = data.showExternals.filter((e) => e.show_id === showId);
-  if (exts.length) {
-    y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(29, 107, 255); doc.text('Matériel prêté / loué', M, y); y += 5; doc.setFont('helvetica', 'normal');
-    for (const e of exts) { const t = `${externalLabel(data, e)} - livraison ${DAY(e.delivery_date)}, reprise ${DAY(e.return_date)}`; ensure(6); doc.text(t, M + 2, y, { maxWidth: W - 2 * M - 2 }); y += 5 * Math.ceil(doc.getTextWidth(t) / (W - 2 * M - 2)); }
-    doc.setTextColor(0);
-  }
+  const exts = externalRows(data, showId);
   // récapitulatif par type
   const types = [...new Set(rows.map((r) => r.type))];
   if (types.length) {
@@ -92,25 +115,47 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
   }
   if (!rows.length) { y += 8; doc.text('Aucun projecteur assigné à ce spectacle.', M, y); }
 
-  for (const t of types) {
-    const list = rows.filter((r) => r.type === t);
-    ensure(24);
-    y += 5;
-    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`${t}  (${list.length})`, M + 2, y); doc.setTextColor(0);
-    y += 6; doc.setFontSize(8); doc.setTextColor(110);
-    doc.text('PRÉPARÉ', M + 2, y); doc.text('N°', M + 24, y); doc.text('MODÈLE', M + 40, y); doc.text('LAMPE REQUISE', M + 105, y); doc.text('REMARQUE', M + 140, y);
-    doc.setTextColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.5, W - M, y + 1.5); y += 6;
-    for (const r of list) {
-      ensure(8);
-      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);       // case à cocher
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(String(r.id), M + 24, y);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(r.model, M + 40, y, { maxWidth: 62 });
-      if (r.lamp) { doc.setFont('helvetica', 'bold'); doc.text(r.lamp, M + 105, y); doc.setFont('helvetica', 'normal'); }
-      const rem = [r.sav ? 'EN SAV' : '', r.lamp && r.current && r.current !== r.lamp ? `montée : ${r.current}` : '', r.gels.length ? `gel : ${r.gels.join(', ')}` : ''].filter(Boolean).join(' - ');
-      if (rem) { doc.setFontSize(8); doc.text(rem, M + 140, y - 0.8, { maxWidth: W - M - (M + 140) }); }
-      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
-      y += 7;
+  // sections par provenance (dessous, 3e, déjà monté), puis par type dans chaque section
+  const bar = (title: string, n: number, blue = false) => {
+    ensure(24); y += 5;
+    if (blue) doc.setFillColor(29, 107, 255); else doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`${title}  (${n})`, M + 2, y); doc.setTextColor(0); y += 6;
+  };
+  for (const o of ['dessous', 'stock3', 'monte'] as Origin[]) {
+    const part = rows.filter((r) => r.origin === o);
+    if (!part.length) continue;
+    bar(ORIGIN_TITLE[o], part.length);
+    for (const t of [...new Set(part.map((r) => r.type))]) {
+      const list = part.filter((r) => r.type === t);
+      ensure(20); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(90);
+      doc.text(`${t.toUpperCase()}  (${list.length})`, M + 2, y); doc.setFont('helvetica', 'normal');
+      doc.text('N°', M + 24, y); doc.text('MODÈLE', M + 40, y); doc.text('LAMPE REQUISE', M + 105, y); doc.text('REMARQUE', M + 140, y);
+      doc.setTextColor(0); doc.setLineWidth(0.2); doc.setDrawColor(0); doc.line(M, y + 1.5, W - M, y + 1.5); y += 6;
+      for (const r of list) {
+        ensure(11);
+        doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);       // case à cocher
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(String(r.id), M + 24, y);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(r.model, M + 40, y, { maxWidth: 62 });
+        if (r.lamp) { doc.setFont('helvetica', 'bold'); doc.text(r.lamp, M + 105, y); doc.setFont('helvetica', 'normal'); }
+        const rem = [r.sav ? 'EN SAV' : '', r.lamp && r.current && r.current !== r.lamp ? `montée : ${r.current}` : '', r.gels.length ? `gel : ${r.gels.join(', ')}` : ''].filter(Boolean).join(' - ');
+        if (rem) { doc.setFontSize(8); doc.text(rem, M + 140, y - 0.8, { maxWidth: W - M - (M + 140) }); }
+        // 2e ligne : provenance > position prévue, et accessoires de la feuille de patch
+        const l2 = [o === 'monte' ? `de ${r.from}` : '', r.position ? `à monter : ${r.position}` : '', r.accessories.length ? `accessoires : ${r.accessories.join(', ')}` : ''].filter(Boolean).join('  |  ');
+        let h = 7;
+        if (l2) { doc.setFontSize(8); doc.setTextColor(90); doc.text(l2, M + 40, y + 3.6, { maxWidth: W - 2 * M - 40 }); doc.setTextColor(0); h = 10; }
+        doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y - 4.8 + h, W - M, y - 4.8 + h);
+        y += h;
+      }
+    }
+  }
+  // prêts et locations (pas d'ID : une ligne par prêt / location, en bleu)
+  if (exts.length) {
+    bar(`Prêts et locations`, exts.length, true);
+    for (const e of exts) {
+      ensure(11); doc.setDrawColor(29, 107, 255); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
+      doc.setTextColor(29, 107, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`${e.kind === 'pret' ? 'PRÊT' : 'LOCATION'}  ${e.text}`, M + 14, y, { maxWidth: W - 2 * M - 14 });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(e.dates + (e.accessories.length ? `  |  accessoires : ${e.accessories.join(', ')}` : ''), M + 14, y + 3.6, { maxWidth: W - 2 * M - 14 }); doc.setTextColor(0);
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 5.2, W - M, y + 5.2); y += 10;
     }
   }
   // gélatines : par format (sous-titre), puis couleur

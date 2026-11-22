@@ -2,6 +2,7 @@ import type { Data } from './types';
 import { describe } from './ref';
 import { appReference } from './pdfHeader';
 import { externalLabel } from './alerts';
+import { patchPosition, positionBefore, posLabel } from './position';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
@@ -32,10 +33,37 @@ export function compareShows(data: Data, curId: string, nextId: string): Teardow
   };
 }
 
+/** Une ligne du plan de démontage / remontage : un projecteur et ce qu'on doit en faire. */
+export interface PlanRow extends TdRow { oldPos: string; newPos: string; origin: string }
+/** Plan complet : ce qui part au stock (dessous / 3e), ce qui reste en place, ce qui bouge, ce qui est à monter. */
+export interface Plan { dessous: PlanRow[]; stock3: PlanRow[]; keep: PlanRow[]; move: PlanRow[]; mount: PlanRow[] }
+
+/** Plan de démontage du spectacle en cours (positions de sa feuille de patch) vers le prochain (positions de la sienne).
+ *  - dans l'ancien, pas dans le nouveau : à stocker (3e si pastille bleue, sinon dessous) ;
+ *  - dans les deux, même position : à garder en place (cintres, allemandes, passerelles, sols…) ;
+ *  - dans les deux, position différente : à déplacer ;
+ *  - dans le nouveau seulement : à monter (avec sa provenance : stock dessous, stock 3e, prêt, SAV, ou spectacle d'avant). */
+export function teardownPlan(data: Data, curId: string, nextId: string): Plan {
+  const td = compareShows(data, curId, nextId), next = data.shows.find((s) => s.id === nextId);
+  const lab = (p: string) => p || 'position non renseignée';
+  const ext = (r: TdRow): PlanRow => ({ ...r, oldPos: patchPosition(data, curId, r.id), newPos: patchPosition(data, nextId, r.id), origin: '' });
+  const blue = (id: number) => !!data.items.find((i) => i.id === id)?.blue_dot;
+  const sortPos = (a: PlanRow, b: PlanRow) => lab(a.newPos).localeCompare(lab(b.newPos), 'fr', { numeric: true }) || a.type.localeCompare(b.type, 'fr') || a.model.localeCompare(b.model, 'fr', { numeric: true }) || a.id - b.id;
+  const stored = td.store.map(ext);
+  const both = td.keep.map(ext);
+  return {
+    dessous: stored.filter((r) => !blue(r.id)),
+    stock3: stored.filter((r) => blue(r.id)),
+    keep: both.filter((r) => r.oldPos === r.newPos),
+    move: both.filter((r) => r.oldPos !== r.newPos).sort(sortPos),
+    mount: td.prepare.map(ext).map((r) => ({ ...r, origin: next ? posLabel(positionBefore(data, r.id, next)) : '' })).sort(sortPos)
+  };
+}
+
 export async function buildTeardownPdf(data: Data, curId: string, nextId: string, now = new Date()): Promise<{ blob: Blob; filename: string }> {
   const show = data.shows.find((s) => s.id === curId), next = data.shows.find((s) => s.id === nextId);
   if (!show || !next) throw new Error('Spectacle introuvable');
-  const td = compareShows(data, curId, nextId);
+  const plan = teardownPlan(data, curId, nextId);
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const W = 210, M = 15, H = 297;
@@ -46,7 +74,7 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
       doc.text(`Rapport de démontage - ${show.name} > ${next.name}`, M, H - 8, { maxWidth: W - 2 * M - 25 }); doc.text(`Page ${p} / ${n}`, W - M, H - 8, { align: 'right' }); }
   };
   const ensure = (h: number) => { if (y + h > H - 16) { doc.addPage(); y = M; } };
-  const changes = td.keep.filter((r) => r.change || r.toUnknown);
+  const changes = [...plan.keep, ...plan.move].filter((r) => r.change || r.toUnknown);
 
   doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.text('Rapport de démontage', M, y + 6);
   doc.setFontSize(14); y += 14; doc.text(show.name, M, y);
@@ -55,12 +83,13 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   doc.text(`Prochain spectacle : ${next.name} (du ${DAY(next.start_date)} au ${DAY(next.end_date)})`, M, y, { maxWidth: W - 2 * M }); y += 5;
   doc.setTextColor(110); doc.text(`Générée le ${DAY(now.toISOString())}`, M, y); doc.setTextColor(0); y += 8;
   doc.setFont('helvetica', 'bold'); doc.text('Récapitulatif', M, y); doc.setFont('helvetica', 'normal'); y += 5;
-  doc.text(`À préparer : ${td.prepare.length}     À conserver : ${td.keep.length}     À ranger : ${td.store.length}`, M, y); y += 5;
+  const recap = `Stock dessous : ${plan.dessous.length}   Stock 3e : ${plan.stock3.length}   En place : ${plan.keep.length}   À déplacer : ${plan.move.length}   À monter : ${plan.mount.length}`;
+  doc.text(recap, M, y, { maxWidth: W - 2 * M }); y += 5 * Math.ceil(doc.getTextWidth(recap) / (W - 2 * M));
   if (changes.length) { doc.setTextColor(200, 0, 0); doc.setFont('helvetica', 'bold'); doc.text(`Attention : ${changes.length} PAR à vérifier / changer de lampe`, M, y); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); y += 5; }
 
-  const section = (title: string, sub: string, rows: TdRow[], lampCol: string) => {
+  const section = (title: string, sub: string, rows: PlanRow[], lampCol: string, info: (r: PlanRow) => string, blue = false) => {
     ensure(30); y += 8;
-    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    if (blue) doc.setFillColor(29, 107, 255); else doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
     doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`${title}  (${rows.length})`, M + 2, y);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(sub, W - M - 2, y, { align: 'right' }); doc.setTextColor(0);
     y += 7;
@@ -77,19 +106,25 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
       doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(String(r.id), M + 24, y);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(r.model + (r.sav ? '  (EN SAV)' : ''), M + 40, y, { maxWidth: 62 });
       if (r.isPar && lampCol) {
-        if (title === 'À conserver') {
+        if (title === 'À garder en place' || title === 'À déplacer') {
           if (r.change) { doc.setFont('helvetica', 'bold'); doc.setTextColor(200, 0, 0); doc.text(`CHANGER : ${r.from} > ${r.to}`, M + 105, y); doc.setTextColor(0); }
           else if (r.toUnknown) { doc.setFont('helvetica', 'bold'); doc.setTextColor(200, 0, 0); doc.text(`lampe à préciser (actuelle ${r.from || '?'})`, M + 105, y, { maxWidth: W - M - M - 105 }); doc.setTextColor(0); }
           else { doc.setTextColor(110); doc.text(`${r.to || r.from || '-'} (inchangée)`, M + 105, y); doc.setTextColor(0); }
         } else { doc.setFont('helvetica', 'bold'); doc.text(r.to || 'à préciser', M + 105, y); }
       }
-      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
-      y += 7;
+      const inf = info(r), two = !!inf && r.isPar && !!lampCol;     // PAR : la lampe prend la 1re ligne, l'info passe dessous
+      if (inf) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90); doc.text(inf, M + 105, two ? y + 3.6 : y, { maxWidth: W - M - (M + 105) }); doc.setTextColor(0); }
+      const h = two ? 10 : 7;
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y - 4.8 + h, W - M, y - 4.8 + h + 0);
+      y += h;
     }
   };
-  section('À préparer', 'prévus pour la suite, absents du spectacle en cours', td.prepare, 'LAMPE REQUISE');
-  section('À conserver', 'dans les deux spectacles', td.keep, 'LAMPE');
-  section('À ranger', 'présents sur ce spectacle, absents du suivant', td.store, '');
+  const from = (r: PlanRow) => (r.oldPos ? `était : ${r.oldPos}` : '');
+  section('À stocker dessous', 'projecteurs sans pastille, absents du spectacle suivant', plan.dessous, '', from);
+  section('À stocker au 3e', 'projecteurs à pastille bleue, absents du spectacle suivant', plan.stock3, '', from, true);
+  section('À garder en place', 'même position dans les deux spectacles (cintres, allemandes, passerelles, sols…)', plan.keep, 'LAMPE', (r) => r.newPos);
+  section('À déplacer', 'dans les deux spectacles, à une autre position', plan.move, 'LAMPE', (r) => `${r.oldPos || '?'} > ${r.newPos || '?'}`);
+  section('À monter', 'nouveaux pour le spectacle suivant, avec leur provenance', plan.mount, 'LAMPE REQUISE', (r) => `${r.newPos || 'position ?'}  (de : ${r.origin})`);
   const exts = data.showExternals.filter((e) => e.show_id === curId).sort((a, b) => a.return_date.localeCompare(b.return_date));
   if (exts.length) {
     ensure(30); y += 8;

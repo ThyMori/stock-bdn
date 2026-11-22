@@ -1809,3 +1809,37 @@ grant execute on function add_model(text, text) to authenticated;
 
 -- v1.32.0 : lignes sans projecteur rattachées à une location / un prêt du spectacle (information : compteur « placées / quantité »)
 alter table patch_lines add column if not exists external_id uuid references show_externals(id) on delete set null;
+
+-- v1.34.0 : pastille bleue (projecteur stocké au 3e quand il ne joue pas) et interrupteur monté / démonté d'un spectacle
+alter table items add column if not exists blue_dot boolean not null default false;
+alter table shows add column if not exists mounted boolean not null default false;      -- « monté » forcé à la main
+alter table shows add column if not exists mounted_at timestamptz;                      -- quand il a été forcé (sert à savoir si c'est avant ou après l'exploitation)
+
+-- Met ou retire la pastille bleue d'un projecteur (régisseur général ou admin).
+create or replace function set_blue_dot(p_item int, p_value boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare v boolean := coalesce(p_value, false);
+begin
+  if not has_role('regisseur_general') then raise exception 'Seuls les régisseurs généraux et les administrateurs peuvent changer la pastille bleue' using errcode = '42501'; end if;
+  if not exists (select 1 from items where id = p_item) then raise exception 'Projecteur introuvable' using errcode = '22023'; end if;
+  update items set blue_dot = v where id = p_item and blue_dot is distinct from v;
+  if found then perform log_event('PASTILLE', format('#%s : pastille bleue %s (stocké au 3e)', p_item, case when v then 'ajoutée' else 'retirée' end)); end if;
+end $$;
+revoke all on function set_blue_dot(int, boolean) from public, anon;
+grant execute on function set_blue_dot(int, boolean) to authenticated;
+
+-- Force un spectacle « monté » ou « démonté » (régisseur général ou admin). Pendant l'exploitation il est figé monté.
+-- Après le dernier jour, il redevient démonté tout seul, sauf s'il a été forcé monté après cette date (voir src/position.ts).
+create or replace function set_show_mounted(p_show uuid, p_value boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare s shows; v boolean := coalesce(p_value, false); today date := (now() at time zone 'Europe/Paris')::date;
+begin
+  if not has_role('regisseur_general') then raise exception 'Seuls les régisseurs généraux et les administrateurs peuvent changer cet interrupteur' using errcode = '42501'; end if;
+  select * into s from shows where id = p_show;
+  if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  if today between s.start_date and s.end_date then raise exception 'Spectacle en cours : il est toujours monté' using errcode = '22023'; end if;
+  update shows set mounted = v, mounted_at = now() where id = p_show;
+  perform log_event('MONTAGE', format('« %s » noté %s', s.name, case when v then 'monté' else 'démonté' end));
+end $$;
+revoke all on function set_show_mounted(uuid, boolean) from public, anon;
+grant execute on function set_show_mounted(uuid, boolean) to authenticated;

@@ -9,7 +9,7 @@ import type { DisplayStatus } from '../types';
 // Les filtres survivent à la navigation (on revient de la fiche sur la même liste).
 const store = { get: (): string | null => { try { return localStorage.getItem('stockbdn.chart'); } catch { return null; } },
   set: (v: string) => { try { localStorage.setItem('stockbdn.chart', v); } catch { /* stockage indisponible : sans conséquence */ } } };
-const f = { chart: store.get() === 'pie', q: '', status: '' as '' | DisplayStatus, type: '', model: '', mode: 'units' as 'units' | 'models' };
+const f = { chart: store.get() === 'pie', q: '', status: '' as '' | DisplayStatus, type: '', model: '', mode: 'units' as 'units' | 'models', blue: false };
 
 export const listView: ViewFactory = (_p, query) => ({
   mount(root) {
@@ -33,6 +33,7 @@ export const listView: ViewFactory = (_p, query) => ({
       if (act === 'status') f.status = (f.status === v ? '' : v) as DisplayStatus | '';
       if (act === 'chart') { f.chart = v === 'pie'; store.set(v ?? 'tiles'); }
       if (act === 'type') { f.type = v ?? ''; f.model = ''; }
+      if (act === 'blue') f.blue = !f.blue;
       if (act === 'mode') f.mode = v as 'units' | 'models';
       if (act === 'model') { f.model = v ?? ''; f.mode = 'units'; }
       if (act === 'clearmodel') f.model = '';
@@ -113,10 +114,11 @@ function paint(root: HTMLElement) {
   root.querySelector('#modes')!.innerHTML =
     `<button class="chip" data-act="mode" data-v="units" aria-pressed="${f.mode === 'units'}">Projecteurs</button>` +
     `<button class="chip" data-act="mode" data-v="models" aria-pressed="${f.mode === 'models'}">Par modèle</button>` +
+    `<button class="chip" data-act="blue" aria-pressed="${f.blue}"><span class="bluedot"></span> Stocké au 3e</button>` +
     (f.model ? `<button class="chip" data-act="clearmodel" aria-pressed="true">${esc(modelName)} ✕</button>` : '');
 
   const out = root.querySelector('#results')!;
-  const withStatus = base.filter((r) => !f.status || (r.i.eff ?? r.i.status) === f.status);
+  const withStatus = base.filter((r) => (!f.status || (r.i.eff ?? r.i.status) === f.status) && (!f.blue || r.i.blue_dot));
 
   if (f.mode === 'models') {
     const groups = new Map<string, typeof rows>();
@@ -138,7 +140,7 @@ function paint(root: HTMLElement) {
   out.innerHTML = shown.length ? shown.map((r) => `
     <a class="item" href="#/item/${r.i.id}">
       <div class="num">${r.i.id}</div>
-      <div class="grow"><div class="t">${esc(r.d.model?.name)}${r.open ? '<span class="dot" title="Panne en cours"></span>' : ''}</div>
+      <div class="grow"><div class="t">${esc(r.d.model?.name)}${r.i.blue_dot ? ' <span class="bluedot" title="Stocké au 3e"></span>' : ''}${r.open ? '<span class="dot" title="Panne en cours"></span>' : ''}</div>
         <div class="s">${esc([r.d.type?.name, r.d.lamp?.name].filter(Boolean).join(' · '))}${r.i.pending ? ' <span class="pending">en attente</span>' : ''}${r.show ? `<br>Spectacle${r.show.who ? ' · ' + esc(r.show.who) : ''}${r.show.end_date ? ' · jusqu’au ' + fmtDay(r.show.end_date) : ''}` : ''}${r.im ? `<br>${r.im.kind === 'pret' ? 'Prêté' + (r.im.who ? ' à ' + esc(r.im.who) : '') : 'SAV'}${r.im.end_date ? ' · ' + (r.im.kind === 'pret' ? 'retour' : 'fin') + ' ' + fmtDay(r.im.end_date) : ''}${immoState(r.im, today) === 'late' ? ' <span class="tag late">en retard</span>' : ''}` : ''}</div></div>
       <span class="badge ${r.i.eff ?? r.i.status}">${DISPLAY_LABEL[r.i.eff ?? r.i.status]}</span>
     </a>`).join('') : `<div class="empty">Aucun projecteur ne correspond</div>`;

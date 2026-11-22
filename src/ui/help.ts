@@ -21,6 +21,8 @@ const SECTIONS: Section[] = [
     '<b>Liste</b> : recherche par numéro ou modèle (sans accents ni majuscules), filtre par état (disponible, utilisé, SAV, en prêt) et par type.',
     '<b>États</b> (mêmes couleurs partout) : <b>vert</b> disponible, <b>vert hachuré</b> utilisé (affecté à un spectacle en cours), <b>jaune</b> en prêt, <b>rouge</b> SAV.',
     '<b>Fiche</b> : état, lampe montée, historique, <b>agenda</b> (frise de 3 mois : libre, prêt, SAV), spectacles où il est affecté.',
+    '<b>Position actuelle</b> : sur la fiche, où est le projecteur aujourd\'hui (position de la feuille de patch d\'un spectacle monté, stock dessous, stock 3e, PRÊT ou SAV).',
+    '<b>Pastille bleue</b> : projecteur stocké au <b>3e</b> quand il ne joue pas. Seuls les régisseurs généraux et les admins la mettent ou l\'enlèvent (bouton sur la fiche). Filtre « Stocké au 3e » dans la liste.',
     '<b>PAR</b> : quatre boutons <b>CP62 · CP61 · CP60 · CP95</b> changent la lampe montée d\'un seul geste (technicien et plus).',
     '<b>Prêt / SAV</b> (régisseur général et admin) : on indique à qui, depuis quand, retour prévu. Repasser « Disponible » clôt la période.'
   ] },
@@ -37,6 +39,8 @@ const SECTIONS: Section[] = [
   ] },
   { title: 'Spectacles', items: [
     '<b>Liste, mois, semaine</b> : le calendrier est glissant (1 semaine passée, 3 à venir). Le spectacle en cours brille, les passés sont ternis, chacun a sa couleur. Ceux où tu ne peux pas agir sont grisés.',
+    '<b>Monté / Démonté</b> (en haut d\'un spectacle) : en cours = toujours monté ; le lendemain du dernier jour = démonté tout seul. Un régisseur général ou un admin peut le forcer avant ou après.',
+    '<b>Rapport de démontage</b> : à stocker dessous, à stocker au 3e, à garder en place, à déplacer, à monter (avec provenance). <b>Liste de prépa</b> : classée par provenance (stock dessous, stock 3e, déjà monté), avec accessoires, et prêts / locations en bleu.',
     '<b>Fiche d\'un spectacle</b> : mur, régisseurs, <b>Matériel demandé</b> (partie automatique) et <b>Projecteurs affectés</b> (partie manuelle). Les deux sont repliés au départ.',
     '<b>Matériel demandé</b> : tu donnes modèle + lampe (PAR) + quantité ; l\'appli choisit seule les projecteurs et s\'adapte aux pannes, prêts et changements de lampe. S\'il en manque : « Gérer » pour un <b>prêt</b> ou une <b>location</b>.',
     '<b>Projecteurs affectés</b> : « Affecter manuellement » (liste avec filtre par type, ou scan QR en continu). Pour un PAR, la lampe montée est pré-sélectionnée. Un projecteur ne peut pas être dans deux spectacles qui se chevauchent, ni pendant un prêt ou un SAV.',

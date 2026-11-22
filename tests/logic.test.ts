@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
-import { prepRows, gelGroups } from '../src/prepPdf';
+import { prepRows, gelGroups, externalRows } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
-import { compareShows } from '../src/teardown';
+import { compareShows, teardownPlan } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan, sortShows, isShowOver } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
@@ -11,7 +11,8 @@ import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
 import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount } from '../src/patch';
 import type { PatchRow } from '../src/patch';
-import { rankStock, similarNames, lastPositions, lastPositionOf } from '../src/patchSuggest';
+import { rankStock, similarNames } from '../src/patchSuggest';
+import { showMounted, positionNow, positionBefore, previousShow, positionTier, posLabel } from '../src/position';
 
 let n = 0;
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name); };
@@ -298,36 +299,61 @@ t('patch : une ligne sans projecteur porte ses gélatines', () => {
   assert.deepEqual(rows[0].gelIds, ['R80', 'L201']);   // retrait par référence
   assert.equal(rows[0].itemId, null);
 });
-// --- Mode prépa : suggestions d'ID ---
-const prepData = (): Data => ({ ...EMPTY_DATA,
+// --- Position des projecteurs et mode prépa ---
+t('position : spectacle monté (interrupteur, en cours figé, démontage automatique)', () => {
+  const sh = (o: object) => ({ id: 's', name: 'S', start_date: '2026-11-10', end_date: '2026-11-15', note: null, ...o }) as Data['shows'][0];
+  assert.equal(showMounted(sh({}), '2026-11-12'), true, 'en cours = monté, même sans interrupteur');
+  assert.equal(showMounted(sh({ mounted: false }), '2026-11-12'), true, 'en cours : figé monté');
+  assert.equal(showMounted(sh({}), '2026-11-05'), false, 'avant : selon l\'interrupteur');
+  assert.equal(showMounted(sh({ mounted: true, mounted_at: '2026-11-05T10:00:00' }), '2026-11-05'), true, 'forcé monté avant');
+  assert.equal(showMounted(sh({ mounted: true, mounted_at: '2026-11-05T10:00:00' }), '2026-11-16'), false, 'le lendemain du dernier jour : démonté tout seul');
+  assert.equal(showMounted(sh({ mounted: true, mounted_at: '2026-11-17T10:00:00' }), '2026-11-18'), true, 'forcé monté après : reste monté');
+});
+const posData = (): Data => ({ ...EMPTY_DATA,
   types: [{ id: 't-par', name: 'PAR' }, { id: 't-dec', name: 'Découpe' }],
   models: [{ id: 'm-par', name: 'PAR64', type_id: 't-par' }, { id: 'm-a', name: '614SX', type_id: 't-dec' }, { id: 'm-b', name: '614S', type_id: 't-dec' }, { id: 'm-c', name: '713', type_id: 't-dec' }] as Data['models'],
   lamps: [{ id: 'l1', name: 'CP60' }, { id: 'l2', name: 'CP62' }] as Data['lamps'],
   items: [
     { id: 1, model_id: 'm-par', lamp_id: 'l2', status: 'dispo' }, { id: 2, model_id: 'm-par', lamp_id: 'l1', status: 'dispo' },
-    { id: 3, model_id: 'm-a', lamp_id: null, status: 'dispo' }, { id: 4, model_id: 'm-b', lamp_id: null, status: 'dispo' }, { id: 5, model_id: 'm-c', lamp_id: null, status: 'dispo' }
+    { id: 3, model_id: 'm-a', lamp_id: null, status: 'dispo' }, { id: 4, model_id: 'm-b', lamp_id: null, status: 'dispo', blue_dot: true }, { id: 5, model_id: 'm-a', lamp_id: null, status: 'dispo', blue_dot: true },
+    { id: 6, model_id: 'm-a', lamp_id: null, status: 'dispo' }
   ] as unknown as Data['items'],
-  shows: [{ id: 's0', name: 'Ancien', start_date: '2026-01-10', end_date: '2026-01-12' }, { id: 's1', name: 'Courant', start_date: '2026-12-01', end_date: '2026-12-05' }, { id: 's2', name: 'Récent', start_date: '2026-06-01', end_date: '2026-06-03' }] as Data['shows'],
-  patchLines: [
-    { id: 'a', show_id: 's0', item_id: 3, position: 'P1', updated_at: '2026-09-01T00:00:00Z' }, { id: 'b', show_id: 's2', item_id: 3, position: '3e', updated_at: '2026-01-01T00:00:00Z' },
-    { id: 'c', show_id: 's2', item_id: 1, position: 'P2', updated_at: '2026-06-01T00:00:00Z' }] as unknown as Data['patchLines'] });
+  shows: [{ id: 'sA', name: 'Avant', start_date: '2026-06-01', end_date: '2026-06-10' }, { id: 'sB', name: 'Courant', start_date: '2026-12-01', end_date: '2026-12-05' }] as Data['shows'],
+  showItems: [{ show_id: 'sA', item_id: 3 }, { show_id: 'sA', item_id: 6 }] as unknown as Data['showItems'],
+  patchLines: [{ id: 'a', show_id: 'sA', item_id: 3, position: 'P2' }, { id: 'b', show_id: 'sA', item_id: 6, position: '3e' }] as unknown as Data['patchLines'] });
+t('position : actuelle et au moment de préparer un spectacle', () => {
+  const d = posData();
+  assert.equal(posLabel(positionNow(d, 3, '2026-06-05')), 'P2 (Avant)', 'spectacle en cours : position de la feuille');
+  assert.equal(posLabel(positionNow(d, 3, '2026-11-22')), 'stock dessous', 'spectacle démonté : stock');
+  assert.equal(posLabel(positionNow(d, 4, '2026-11-22')), 'stock 3e', 'pastille bleue : stock 3e');
+  assert.equal(posLabel(positionNow({ ...d, immos: [{ id: 'i', item_id: 1, kind: 'pret', start_date: '2026-11-01', end_date: null, closed_date: null }] as unknown as Data['immos'] }, 1, '2026-11-22')), 'PRÊT');
+  assert.equal(previousShow(d, d.shows[1])?.id, 'sA');
+  assert.equal(posLabel(positionBefore(d, 3, d.shows[1])), 'P2 (Avant)', 'juste avant : sa position dans le spectacle précédent');
+  assert.equal(posLabel(positionBefore(d, 5, d.shows[1])), 'stock 3e');
+});
+t('position : préférences selon la position voulue', () => {
+  const st3 = { kind: 'stock3', position: '', show: '' } as const, des = { kind: 'dessous', position: '', show: '' } as const, at = (p: string) => ({ kind: 'show', position: p, show: 'X' }) as const;
+  assert.equal(positionTier(st3, '3e').tier, 0); assert.equal(positionTier(st3, 'balcon').tier, 0); assert.equal(positionTier(st3, 'coupole').tier, 0);
+  assert.ok(positionTier(st3, 'P3').tier > positionTier(des, 'P3').tier, 'Px : dessous avant stock 3e');
+  assert.equal(positionTier(at('P3'), 'P3').tier, 0, 'déjà à cette position');
+  assert.equal(positionTier(at('balcon'), '3e').tier, 1, 'autre position haute');
+  assert.ok(positionTier(st3, 'corbeille').tier < positionTier(des, 'corbeille').tier, 'corbeille : stock 3e avant dessous');
+  assert.equal(positionTier(des, '').tier, 0, 'pas de position voulue : aucun critère');
+});
 t('prépa : modèles similaires', () => {
   assert.ok(similarNames('614SX', '614S') && similarNames('ETC 25-50', '613') && similarNames('329HPC', '329HPB') && similarNames('310HPC', '306HPC'));
   assert.ok(!similarNames('614SX', '713'));
 });
-t('prépa : dernière position = spectacle le plus récent (chronologie, pas date de saisie)', () => {
-  const d = prepData();
-  assert.equal(lastPositionOf(d, 3, '2026-11-22')?.position, '3e');   // « Récent » (juin) passe avant « Ancien » même si saisi plus tôt
-  assert.equal(lastPositionOf(d, 3, '2026-03-01')?.position, 'P1');   // à cette date, seul « Ancien » a eu lieu
-  assert.equal(lastPositionOf(d, 5, '2026-11-22'), null);
-  assert.equal(lastPositions(d, 's2', '2026-12-01').get(3)?.position, 'P1');   // le spectacle préparé lui-même est ignoré
-});
-t('prépa : classement même modèle, similaire, autres ; lampe et position', () => {
-  const d = prepData(), show = d.shows[1];
+t('prépa : classement modèle > position > lampe', () => {
+  const d = posData(), show = d.shows[1];
+  // ligne 614 SX à monter au 3e : même modèle d'abord ; déjà au 3e, stock 3e, puis le reste ; le modèle similaire passe après
   const r = rankStock(d, show, { modelId: 'm-a', lampId: null, par: false, position: '3e' });
-  assert.deepEqual(r.map((x) => [x.id, x.group]), [[3, 'same'], [4, 'similar'], [1, 'other'], [2, 'other'], [5, 'other']]);
+  assert.deepEqual(r.map((x) => [x.id, x.group]).slice(0, 4), [[6, 'same'], [5, 'same'], [3, 'same'], [4, 'similar']]);   // 6 : déjà au 3e ; 5 : stock 3e ; 3 : à P2
+  // ligne PAR en P2 : la position (stock dessous) passe avant la lampe
   const p = rankStock(d, show, { modelId: 'm-par', lampId: 'l1', par: true, position: 'P2' });
-  assert.deepEqual(p.slice(0, 2).map((x) => x.id), [2, 1]);   // la lampe voulue passe avant la position
+  assert.deepEqual(p.slice(0, 2).map((x) => x.id), [2, 1], 'même position (dessous) : la lampe départage');
+  const q = rankStock(d, show, { modelId: 'm-a', lampId: null, par: false, position: 'P2' });
+  assert.deepEqual(q.slice(0, 3).map((x) => x.id), [3, 5, 6], 'P2 : déjà à P2, puis stock 3e, puis une autre position');
 });
 t('patch : lignes rattachées à une location, compteur informatif', () => {
   const d = { ...EMPTY_DATA, models: [{ id: 'm1', name: 'PAR64' }] as Data['models'], showDemands: [{ id: 'd1', show_id: 's1', model_id: 'm1', lamp_id: null, qty: 2, missing: 0 }] as Data['showDemands'],
@@ -338,5 +364,35 @@ t('patch : lignes rattachées à une location, compteur informatif', () => {
   assert.equal(extCount(externalStatus(d, 's1', [ln('a', 'e1'), ln('b', 'e1'), ln('c', 'e1')])[0]), '3/2 · 1 en trop');
   assert.equal(buildRows(d, 's1', [ln('a', 'e1')])[0].extNote, 'loué chez Loueur');
   assert.equal(buildRows({ ...d, showExternals: [] }, 's1', [ln('a', 'e1')])[0].extNote, '', 'location supprimée : plus de mention');
+});
+t('plan de démontage : stock dessous / 3e, en place, à déplacer, à monter avec provenance', () => {
+  const sh = (id: string, a: string, b: string) => ({ id, name: id, start_date: a, end_date: b });
+  const pl = (show: string, item: number, position: string) => ({ show_id: show, item_id: item, position, accessories: [] });
+  const d = { ...EMPTY_DATA, models: [{ id: 'm', name: '614', type_id: null }] as Data['models'],
+    items: [1, 2, 3, 4, 5, 6].map((id) => ({ id, model_id: 'm', lamp_id: null, status: 'dispo', blue_dot: id === 2 })) as unknown as Data['items'],
+    shows: [sh('a', '2026-01-01', '2026-01-05'), sh('b', '2026-02-01', '2026-02-05')] as unknown as Data['shows'],
+    showItems: [1, 2, 3, 4].map((i) => ({ show_id: 'a', item_id: i, lamp_id: null })).concat([3, 4, 5, 6].map((i) => ({ show_id: 'b', item_id: i, lamp_id: null }))) as unknown as Data['showItems'],
+    patchLines: [pl('a', 1, 'P1'), pl('a', 2, '3e'), pl('a', 3, 'P2'), pl('a', 4, 'P3'), pl('b', 3, 'P2'), pl('b', 4, 'balcon'), pl('b', 5, '3e'), pl('b', 6, 'P1')] as unknown as Data['patchLines'] } as Data;
+  const p = teardownPlan(d, 'a', 'b');
+  assert.deepEqual(p.dessous.map((r) => r.id), [1], 'sans pastille, absent du suivant : dessous');
+  assert.deepEqual(p.stock3.map((r) => r.id), [2], 'pastille bleue : stock 3e');
+  assert.deepEqual(p.keep.map((r) => r.id), [3], 'même position : reste en place');
+  assert.deepEqual(p.move.map((r) => [r.id, r.oldPos, r.newPos]), [[4, 'P3', 'balcon']]);
+  assert.deepEqual(p.mount.map((r) => [r.id, r.origin]), [[5, 'stock dessous'], [6, 'stock dessous']], 'trié par position voulue');
+});
+t('liste de prépa : provenance, position et accessoires ; prêts et locations sans ID', () => {
+  const sh = (id: string, a: string, b: string) => ({ id, name: id, start_date: a, end_date: b });
+  const d = { ...EMPTY_DATA, models: [{ id: 'm', name: '614', type_id: null }] as Data['models'], lamps: [{ id: 'l', name: 'CP62' }] as Data['lamps'],
+    items: [1, 2, 3].map((id) => ({ id, model_id: 'm', lamp_id: null, status: 'dispo', blue_dot: id === 2 })) as unknown as Data['items'],
+    shows: [sh('a', '2026-01-01', '2026-01-05'), sh('b', '2026-02-01', '2026-02-05')] as unknown as Data['shows'],
+    showItems: [{ show_id: 'a', item_id: 3, lamp_id: null }, ...[1, 2, 3].map((i) => ({ show_id: 'b', item_id: i, lamp_id: null }))] as unknown as Data['showItems'],
+    patchLines: [{ show_id: 'a', item_id: 3, position: 'P2', accessories: [] }, { show_id: 'b', item_id: 1, position: 'P1', accessories: ['Volets'] }, { show_id: 'b', item_id: 9, position: '', accessories: ['Iris', 'Iris'], external_id: 'e1' }] as unknown as Data['patchLines'],
+    showDemands: [{ id: 'd', show_id: 'b', model_id: 'm', lamp_id: 'l', qty: 2, missing: 0 }] as Data['showDemands'],
+    showExternals: [{ id: 'e1', show_id: 'b', demand_id: 'd', kind: 'location', provider: 'X', qty: 2, delivery_date: '2026-01-30', return_date: '2026-02-06' }] as Data['showExternals'] } as Data;
+  const r = prepRows(d, 'b');
+  assert.deepEqual(r.map((x) => [x.id, x.origin]), [[1, 'dessous'], [2, 'stock3'], [3, 'monte']]);
+  assert.deepEqual([r[0].position, r[0].accessories, r[2].from], ['P1', ['Volets'], 'P2 (a)']);
+  const e = externalRows(d, 'b');
+  assert.deepEqual([e[0].kind, e[0].text, e[0].accessories], ['location', '2 × 614 CP62 — loué chez X', ['2 × Iris']]);
 });
 console.log(`\n${n} tests OK`);

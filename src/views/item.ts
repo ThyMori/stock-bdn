@@ -1,4 +1,4 @@
-import { lastPositionOf } from '../patchSuggest';
+import { positionNow, posLabel } from '../position';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
@@ -48,6 +48,10 @@ export const itemView: ViewFactory = ([idStr], query) => {
         if (act === 'status') void changeStatus(el.dataset.v as 'dispo' | 'sav' | 'en_pret');
         if (act === 'agenda-nav') { offset = el.dataset.v === '0' ? 0 : offset + Number(el.dataset.v); paintAgenda(root); }
         if (act === 'lamp') setLamp(id, el.dataset.v!);
+        if (act === 'bluedot') {                                   // bascule la pastille bleue (réservé RG / admin, vérifié aussi par la base)
+          const b = root.querySelector('#berr'); if (b) b.textContent = '';
+          void rpcCall('set_blue_dot', { p_item: id, p_value: el.dataset.v === '1' }).then((r) => { if (r.error && b) b.textContent = r.error; });
+        }
         if (act === 'show-assign') void assignToShow(root);
         if (act === 'show-remove') { const sid = el.dataset.v!; if (window.confirm('Retirer ce projecteur du spectacle ?')) void rpcCall('unassign_items', { p_show: sid, p_items: [id] }); }
         if (act === 'immo-add') void immoForm(root);
@@ -180,7 +184,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
     dyn.innerHTML = `
       <div class="card stack">
         <div class="row"><div class="big">${id}</div>
-          <div class="grow"><h1>${esc(d.model?.name)}</h1><div class="sub">${esc([d.type?.name, d.family?.name].filter(Boolean).join(' · '))}</div></div></div>
+          <div class="grow"><h1>${esc(d.model?.name)}${item.blue_dot ? ' <span class="bluedot" title="Stocké au 3e quand il ne joue pas" role="img" aria-label="Pastille bleue : stocké au 3e"></span>' : ''}</h1><div class="sub">${esc([d.type?.name, d.family?.name].filter(Boolean).join(' · '))}</div></div></div>
         <div class="seg">${STATUSES.map((s) => `<button class="${s}" data-act="status" data-v="${s}" aria-pressed="${item.status === s}" ${canStatus ? '' : 'disabled'}>${STATUS_LABEL[s]}</button>`).join('')}</div>
         ${curInfo}
         ${item.pending ? '<div><span class="pending">En attente de synchronisation</span></div>' : ''}
@@ -190,7 +194,8 @@ export const itemView: ViewFactory = ([idStr], query) => {
           <dt>Lampe</dt><dd>${d.lamp ? esc(d.lamp.name) + (d.lamp.power_w ? ` · ${d.lamp.power_w} W` : '') : '—'}</dd>
           <dt>Douille</dt><dd>${esc(d.socket?.name ?? '—')}</dd>
           <dt>Porte-filtre</dt><dd>${d.filter ? `${esc(d.filter.label)} <span class="muted">(${d.filter.sheets_lee ?? '–'} / feuille LEE · ${d.filter.sheets_rosco ?? '–'} / feuille Rosco)</span>` : '—'}</dd>
-          <dt>Dernière position</dt><dd>${(() => { const lp = lastPositionOf(data, id, today); return lp ? `${esc(lp.position)} <span class="muted">· à jouer sur ${esc(lp.show)}</span>` : '—'; })()}</dd>
+          <dt>Position actuelle</dt><dd>${esc(posLabel(positionNow(data, id, today)))}${item.blue_dot ? ' <span class="muted">(stocké au 3e quand il ne joue pas)</span>' : ''}</dd>
+          <dt>Pastille bleue</dt><dd>${canStatus ? `<button class="btn" data-act="bluedot" data-v="${item.blue_dot ? '0' : '1'}">${item.blue_dot ? 'Enlever la pastille' : 'Mettre la pastille'}</button>` : esc(item.blue_dot ? 'Oui' : 'Non')}<div class="sub" id="berr" role="alert"></div></dd>
           <dt>Dernier SAV</dt><dd>${fmtDate(item.last_service)}</dd>
           <dt>Notice</dt><dd>${d.model?.notice_url ? `<a href="${esc(d.model.notice_url)}" target="_blank" rel="noopener">Ouvrir la fiche technique</a>` : '—'}</dd>
         </dl>
