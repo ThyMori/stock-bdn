@@ -312,7 +312,11 @@ export const patchView: ViewFactory = ([showId]) => {
   /** Redessine une seule ligne (changement de courbe : la colonne DMX s'active / se vide ; ou erreur : retour à la valeur enregistrée). */
   function paintRow(root: HTMLElement, key: string) {
     const r = rowsNow().find((x) => x.key === key), tr = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === key);
-    if (r && tr) tr.outerHTML = rowHtml(r, edSet());
+    if (r && tr) {
+      const ae = document.activeElement as HTMLElement | null, k = ae && tr.contains(ae) ? ae.dataset?.k : null;   // le curseur était dans cette ligne ?
+      tr.outerHTML = rowHtml(r, edSet());
+      if (k) [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === key)?.querySelector<HTMLElement>(`[data-k="${k}"]`)?.focus({ preventScroll: true });   // on le remet au même champ
+    }
   }
   const setStat = (root: HTMLElement, t: string, err = false) => { stat = t; statErr = err; const e = root.querySelector('#pstat'); if (e) { e.textContent = t; e.className = 'sub' + (err ? ' warn' : ''); } };
 
@@ -382,21 +386,24 @@ export const patchView: ViewFactory = ([showId]) => {
         e.preventDefault(); e.stopImmediatePropagation(); sel.blur();
         const key = sel.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (key) void act(root, key, 'id', 'scan');
       }, true);
-      // Entrée dans un champ de saisie : on enregistre, la ligne se range à sa place (tri), puis on la remontre et on remet le curseur dans le même champ
+      // Entrée dans un champ de saisie : on enregistre, puis le curseur descend sur le même champ de la ligne suivante (Tab, lui, passe à la colonne suivante : réglage normal du navigateur).
+      // L'ordre des lignes ne bouge pas pendant la saisie : « la ligne suivante » est celle qu'on voit juste dessous.
       root.addEventListener('keydown', (e) => {
         const t = e.target as HTMLInputElement;
         if (e.key !== 'Enter' || e.isComposing || !(t instanceof HTMLInputElement) || t.type === 'checkbox' || !t.classList.contains('pin')) return;
         const tr = t.closest<HTMLElement>('tr[data-key]'), k = t.dataset.k; if (!tr || !k) return;
         e.preventDefault();
-        const key = tr.dataset.key!, pos = t.selectionStart;
-        skipChange = t;                                                           // évite un 2e enregistrement quand le champ perdra le curseur au redessin
+        const key = tr.dataset.key!;
+        skipChange = t;                                                           // évite un 2e enregistrement quand le champ perdra le curseur
         save(root, key, k, t.value.trim());
+        const next = tr.nextElementSibling as HTMLElement | null;                 // ligne juste en dessous (déjà à l'écran)
+        if (!next) { t.blur(); return; }                                          // dernière ligne : on valide et on pose le clavier
+        const nk = next.dataset.key!;
         queue = queue.then(() => {
-          resort(); paint(root);                                                  // la ligne prend sa place dans l'ordre choisi
-          const row = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === key);
-          row?.scrollIntoView({ block: 'center' });                              // on la remontre, même si elle a changé de place
-          const inp = row?.querySelector<HTMLInputElement>(`input.pin[data-k="${k}"]`);
-          inp?.focus({ preventScroll: true }); if (inp && pos !== null) inp.setSelectionRange(inp.value.length, inp.value.length);
+          const row = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === nk);
+          const inp = row?.querySelector<HTMLInputElement>(`input.pin[data-k="${k}"]`) ?? row?.querySelector<HTMLInputElement>('input.pin');   // même colonne, sinon le 1er champ de la ligne
+          inp?.focus(); inp?.select();                                            // le curseur arrive en sélectionnant le contenu : on peut taper par-dessus
+          inp?.scrollIntoView({ block: 'nearest' });
         });
       });
       root.addEventListener('change', (e) => {

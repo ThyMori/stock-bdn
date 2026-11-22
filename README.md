@@ -167,6 +167,9 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
+## Feuille de patch : clavier (v1.35.5)
+**Tab** = colonne suivante (ordre normal du navigateur) ; **Entrée** = enregistre et descend au même champ de la ligne suivante (contenu sélectionné) ; sur la dernière ligne, Entrée valide et ferme le clavier. L'ordre des lignes ne bouge pas pendant la saisie. Le curseur n'est plus perdu quand une ligne est redessinée (courbe, modèle).
+
 ## Feuille de patch / focus (v1.23.0, complétée jusqu'en v1.30.0)
 
 Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « sans projecteur » (N/C : prêté, loué, autre). Colonnes : circuit, grada, courbe (un seul choix : Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines, accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique ; hors ligne = lecture seule.
