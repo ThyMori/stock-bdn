@@ -6,6 +6,7 @@ import { ROLE_LABEL, fullName } from '../types';
 import { supabase } from '../supabase';
 import { canInstall, promptInstall } from '../install';
 import { shareApp } from '../share';
+import { leavePresence } from '../presence';
 import { disablePush, enablePush, forgetPushOnLogout, pushStatus, testPush } from '../push';
 import type { PushStatus } from '../push';
 
@@ -75,7 +76,7 @@ export const moreView: ViewFactory = () => ({
       if (el.dataset.act === 'logout') {
         if (state.pending.length && !window.confirm(`${state.pending.length} action(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return;
         try { sessionStorage.setItem('logging-out', '1'); } catch { /* ignore */ }   // évite un 2e rechargement par l'écouteur SIGNED_OUT
-        await Promise.race([forgetPushOnLogout().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);   // jamais bloqué par le réseau
+        await Promise.race([Promise.all([forgetPushOnLogout().catch(() => {}), leavePresence()]), new Promise((r) => setTimeout(r, 3000))]);   // jamais bloqué par le réseau
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});   // déconnecte cet appareil
         await clearLocal();
         try { sessionStorage.removeItem('logging-out'); } catch { /* ignore */ }
@@ -113,7 +114,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.20.0</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.21.0</div></div>`;
 }
 
 function pushCard(): string {

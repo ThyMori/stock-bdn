@@ -31,6 +31,7 @@ import { toast } from './ui/toast';
 import { initInstall, installBannerWanted, installButtonLabel, promptInstall, snoozeInstall } from './install';
 import { initUpdates } from './updates';
 import { startWatchdog } from './watchdog';
+import { onlineNames, startPresence } from './presence';
 
 initUpdates();
 const app = document.getElementById('app')!;
@@ -77,13 +78,17 @@ function nowBanner(): string {
     + (on.length > 2 ? `<a class="banner now" href="#/shows">+ ${on.length - 2} autre${on.length > 3 ? 's' : ''} spectacle${on.length > 3 ? 's' : ''} en cours ›</a>` : '');
 }
 
+let onlineOpen = false;   // liste des personnes en ligne dépliée ?
 function paintStatus() {
   const el = document.getElementById('status');
   if (!el) return;
   const wait = state.pending.length;
   const label = state.syncing ? 'Synchronisation…' : !navigator.onLine ? `Hors ligne${wait ? ` · ${wait} en attente` : ''}` : wait ? `${wait} en attente` : 'À jour';
-  el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span>
-      <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></div>
+  const on = onlineNames();   // personnes en ligne : pastille verte avec leur nombre, un appui affiche les noms
+  el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span><span class="row" style="gap:8px">
+      ${on.length ? `<button class="online" id="onlineBtn" aria-expanded="${onlineOpen}" aria-label="${on.length} personne${on.length > 1 ? 's' : ''} en ligne"><i></i>${on.length}</button>` : ''}
+      <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></span></div>
+    ${onlineOpen && on.length ? `<div class="banner online-list" role="status"><b>En ligne</b> · ${on.map(esc).join(', ')}</div>` : ''}
     ${showAlerts(view(), todayStr()).slice(0, 3).map((a) => `<a class="banner alarm" href="#/show/${a.show.id}" role="alert"><b>⚠ ALERTE MATÉRIEL · ${esc(a.show.name)}</b><br>${esc(alertText(a))} — à réparer, louer ou emprunter</a>`).join('')}
     ${nowBanner()}
     ${installBannerWanted() ? `<div class="banner install" role="region" aria-label="Installer l'application"><img src="${import.meta.env.BASE_URL}icon-192.png" alt="" width="40" height="40"><span class="grow"><b>Installe Stock BdN</b><br>Un accès en un geste depuis ton écran d'accueil, en plein écran, comme une vraie appli.</span><span class="row"><button class="btn primary" data-act="inst-now">${installButtonLabel()}</button><button class="btn" data-act="inst-later">Plus tard</button></span></div>` : ''}
@@ -91,6 +96,7 @@ function paintStatus() {
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
     ${state.error && navigator.onLine ? `<div class="banner">Synchro en échec : ${state.error}</div>` : ''}`;
   el.querySelector('#syncBtn')?.addEventListener('click', () => void sync());
+  el.querySelector('#onlineBtn')?.addEventListener('click', () => { onlineOpen = !onlineOpen; paintStatus(); });
   el.querySelector('[data-act=inst-now]')?.addEventListener('click', () => void promptInstall());
   el.querySelector('[data-act=inst-later]')?.addEventListener('click', () => snoozeInstall());
   el.querySelector('[data-act=notif-later]')?.addEventListener('click', () => { snoozeNotifBanner(); notifBanner = false; paintStatus(); });
@@ -145,7 +151,7 @@ function startApp() {
   route();
   void sync();
   listenPushNavigation();
-  if (state.session) void syncPush(state.session.user.id);
+  if (state.session) { void syncPush(state.session.user.id); startPresence(); }
   void refreshNotifBanner();
 }
 
@@ -153,7 +159,8 @@ window.addEventListener('online', () => { setOnline(true); void sync(); });
 window.addEventListener('offline', () => setOnline(false));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { void sync(); void refreshNotifBanner(); } });
 window.addEventListener('push-changed', () => void refreshNotifBanner());
-window.addEventListener('install-changed', () => paintStatus());   // installée / reportée : le bandeau suit
+window.addEventListener('install-changed', () => paintStatus());
+window.addEventListener('presence-changed', () => paintStatus());   // la pastille « en ligne » suit   // installée / reportée : le bandeau suit
 initInstall();   // activé / désactivé depuis Plus ou depuis le bandeau
 
 async function boot() {

@@ -57,8 +57,8 @@ function weekHtml(first: string, shows: Show[], mine: (id: string) => boolean, t
   }).join('');
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(first, i), n = Number(d.slice(8));
-    const label = n === 1 ? `1 ${new Date(d + 'T00:00:00Z').toLocaleDateString('fr-FR', { month: 'short', timeZone: 'UTC' })}` : String(n);   // le 1er du mois affiche le mois
-    return `<div class="cday${d < today ? ' pastday' : ''}${d === today ? ' today' : ''}" style="grid-column:${i + 1};grid-row:1 / span ${Math.max(lanes.length, tall ? 3 : 1) + 1}">${label}</div>`;
+    const num = n === 1 ? `1 ${new Date(d + 'T00:00:00Z').toLocaleDateString('fr-FR', { month: 'short', timeZone: 'UTC' })}` : String(n);   // le 1er du mois affiche le mois
+    return `<div class="cday${d < today ? ' pastday' : ''}${d === today ? ' today' : ''}" style="grid-column:${i + 1};grid-row:1 / span ${Math.max(lanes.length, tall ? 3 : 1) + 1}"><span class="dn">${num}</span></div>`;
   }).join('');
   return `<div class="cweek${tall ? ' tall' : ''}">${days}${bars}</div>`;
 }

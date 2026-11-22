@@ -1379,3 +1379,78 @@ begin
 end $$;
 revoke all on function resolve_signup_request(uuid, text) from public, anon;
 grant execute on function resolve_signup_request(uuid, text) to authenticated;
+
+-- ---------- v1.21 : personnes en ligne + connexions / départs au journal ----------
+-- L'appli envoie un signe de vie (presence_ping) toutes les minutes tant qu'elle est ouverte et visible.
+--   - « en ligne » = signe de vie reçu il y a moins de 2 min 30 ;
+--   - une session se termine après 5 min sans signe de vie : « départ » écrit au journal à l'heure du dernier signe de vie ;
+--   - le départ est détecté au prochain signe de vie de n'importe qui (aucune tâche planifiée nécessaire) ;
+--   - une déconnexion volontaire (presence_leave) écrit le départ tout de suite.
+create table if not exists presence (
+  user_id   uuid primary key references profiles(id) on delete cascade,
+  last_seen timestamptz not null default now(),
+  is_open   boolean not null default false
+);
+alter table presence enable row level security;   -- aucune politique : tout passe par les fonctions ci-dessous
+revoke all on presence from anon, authenticated;
+
+create or replace function person_label(p_id uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = p_id
+$$;
+revoke all on function person_label(uuid) from public, anon, authenticated;
+
+create or replace function presence_ping() returns void
+language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); r presence;
+begin
+  if me is null or not has_role('technicien') then return; end if;
+  -- les autres sessions restées sans signe de vie plus de 5 min se terminent : départ daté du dernier signe de vie
+  with gone as (
+    update presence set is_open = false where is_open and last_seen < now() - interval '5 minutes' and user_id <> me
+    returning user_id, last_seen)
+  insert into app_log (at, actor, actor_label, kind, message)
+  select g.last_seen, g.user_id, person_label(g.user_id), 'CONNEXION', 'départ de l''application' from gone g;
+  insert into presence (user_id, last_seen, is_open) values (me, now() - interval '1 day', false) on conflict do nothing;
+  select * into r from presence where user_id = me for update;
+  if r.is_open and r.last_seen >= now() - interval '5 minutes' then
+    update presence set last_seen = now() where user_id = me;                     -- session en cours : simple signe de vie
+  else
+    if r.is_open then   -- l'ancienne session était terminée sans départ noté
+      insert into app_log (at, actor, actor_label, kind, message) values (r.last_seen, me, person_label(me), 'CONNEXION', 'départ de l''application');
+    end if;
+    update presence set is_open = true, last_seen = now() where user_id = me;
+    perform log_event('CONNEXION', 'connexion à l''application');
+  end if;
+end $$;
+revoke all on function presence_ping() from public, anon;
+grant execute on function presence_ping() to authenticated;
+
+-- Déconnexion volontaire : départ écrit tout de suite.
+create or replace function presence_leave() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return; end if;
+  update presence set is_open = false, last_seen = now() where user_id = auth.uid() and is_open;
+  if found then perform log_event('CONNEXION', 'départ de l''application (déconnexion)'); end if;
+end $$;
+revoke all on function presence_leave() from public, anon;
+grant execute on function presence_leave() to authenticated;
+
+-- Personnes en ligne (visibles par tous les comptes actifs).
+create or replace function online_users() returns table(user_id uuid, label text)
+language sql stable security definer set search_path = public as $$
+  select pr.user_id, person_label(pr.user_id) from presence pr join profiles p on p.id = pr.user_id
+   where has_role('technicien') and p.active and pr.is_open and pr.last_seen > now() - interval '150 seconds'
+   order by 2
+$$;
+revoke all on function online_users() from public, anon;
+grant execute on function online_users() to authenticated;
+
+-- La connexion par mot de passe passe désormais par le même signe de vie (évite les doublons au journal).
+create or replace function log_login() returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform presence_ping();
+end $$;
+revoke all on function log_login() from public;
+grant execute on function log_login() to authenticated;

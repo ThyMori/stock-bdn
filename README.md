@@ -112,6 +112,13 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### Personnes en ligne, connexions et départs au journal (v1.21.0)
+- **Pastille verte** en haut à droite, visible de tous les comptes : nombre de personnes en ligne ; un appui affiche leurs noms. « En ligne » = app ouverte et visible (un signe de vie par minute, `src/presence.ts`).
+- **Journal (admins seulement)** : une ligne « connexion » à l'ouverture de l'app, une ligne « départ » quand la personne ne donne plus signe de vie depuis 5 min (heure du dernier signe de vie) ou se déconnecte. Une absence de moins de 5 minutes ne fait pas de bruit.
+- Le départ est détecté au signe de vie suivant de n'importe qui (aucune tâche planifiée). Si plus personne n'ouvre l'app, il apparaît à la prochaine ouverture.
+- Supabase : rejouer `supabase/schema.sql` (table `presence`, fonctions `presence_ping`, `presence_leave`, `online_users`, `log_login` remplacée). Aucune fonction serveur à redéployer.
+- Calendrier : le spectacle en cours a un halo ; aujourd'hui est une colonne teintée avec le numéro sur pastille rouge.
+
 ### Calendrier glissant (v1.20.0)
 Spectacles → « 4 semaines » remplace « Mois » : 1 semaine passée, la semaine en cours et 3 semaines à venir, qui glissent d'une semaine à chaque flèche (« Auj. » revient à aujourd'hui). Les spectacles terminés et les jours passés sont ternis ; le spectacle en cours est mis en emphase (contour + gras). Le mode « Semaine » reçoit le même traitement.
 
