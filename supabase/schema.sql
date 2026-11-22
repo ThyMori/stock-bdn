@@ -1505,6 +1505,14 @@ begin
   if p_field = 'external_id' and r.item_id is not null then raise exception 'Une location ne se rattache qu''à une ligne sans projecteur' using errcode = '22023'; end if;
   if p_field in ('model_text', 'model_id', 'lamp_id') and r.item_id is not null then raise exception 'Le modèle d''un projecteur vient de sa fiche' using errcode = '22023'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  -- ligne « à louer / à emprunter » (besoin) : elle l'abandonne si elle change de modèle, ou se rattache à une location d'une autre demande
+  if r.need_demand_id is not null and p_field in ('model_text', 'model_id', 'external_id') then
+    txt := nullif(trim(coalesce(p_value #>> '{}', '')), '');
+    if p_field = 'external_id' and txt is null then null;   -- simple détachement : le besoin reste
+    elsif p_field = 'external_id' and (select demand_id from show_externals where id = txt::uuid) = r.need_demand_id then
+      update patch_lines set need_demand_id = null where id = r.id;   -- la location saisie couvre justement ce besoin : la quantité demandée reste telle quelle
+    else perform demand_dec(r.need_demand_id); update patch_lines set need_demand_id = null where id = r.id; end if;
+  end if;
   if p_field in ('circuit', 'dimmer', 'dmx', 'model_text', 'position', 'notes') then
     txt := trim(coalesce(p_value #>> '{}', ''));
     if p_field = 'dmx' then
@@ -1608,6 +1616,9 @@ begin
     if cb.id is null then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
   end if;
   if p_mode = 'replace' and p_item is null then raise exception 'Il n''y a pas de projecteur à remplacer sur cette ligne' using errcode = '22023'; end if;
+  if cb.id is not null and cb.need_demand_id is not null and p_mode <> 'noid' then   -- un vrai projecteur prend la ligne : le besoin « à louer » disparaît
+    perform demand_dec(cb.need_demand_id); update patch_lines set need_demand_id = null where id = cb.id;
+  end if;
 
   if p_mode = 'noid' then
     if p_item is null then return; end if;
@@ -1701,7 +1712,7 @@ grant execute on function patch_add_line(uuid) to authenticated;
 -- (la demande de matériel dont il vient baisse de 1). Ligne N/C : elle disparaît.
 create or replace function patch_delete_line(p_show uuid, p_item int, p_line uuid, p_remove boolean default false) returns void
 language plpgsql security definer set search_path = public as $$
-declare oldsi show_items;
+declare oldsi show_items; nd uuid;
 begin
   if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   if p_item is not null then
@@ -1710,8 +1721,10 @@ begin
     delete from patch_lines where show_id = p_show and item_id = p_item;
     if p_remove then perform demand_detach(p_show, p_item); perform unassign_items(p_show, array[p_item]); end if;   -- la demande baisse de 1 avec lui
   else
+    select need_demand_id into nd from patch_lines where id = p_line and show_id = p_show and item_id is null;
     delete from patch_lines where id = p_line and show_id = p_show and item_id is null;
     if not found then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+    if nd is not null then perform demand_dec(nd); perform reallocate_all(); end if;   -- le besoin « à louer » de la ligne disparaît avec elle
   end if;
 end $$;
 revoke all on function patch_delete_line(uuid, int, uuid, boolean) from public, anon;
@@ -1866,20 +1879,56 @@ begin
 end $$;
 revoke all on function demand_attach(uuid, int) from public, anon, authenticated;
 
--- Inverse : un projecteur issu d'une demande quitte le spectacle, la demande baisse de 1 (jamais sous les prêts / locations déjà saisis ; supprimée à 0).
+-- Une unité de moins sur une demande (jamais sous les prêts / locations déjà saisis ; la demande est supprimée à 0).
+create or replace function demand_dec(p_demand uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare ext int; nq int;
+begin
+  select coalesce(sum(qty), 0)::int into ext from show_externals where demand_id = p_demand;
+  select greatest(qty - 1, ext) into nq from show_demands where id = p_demand;
+  if nq is null then return; end if;
+  if nq <= 0 then delete from show_demands where id = p_demand;   -- plus rien demandé : la quantité 0 n'existe pas
+  else update show_demands set qty = nq where id = p_demand; end if;
+end $$;
+revoke all on function demand_dec(uuid) from public, anon, authenticated;
+
+-- Inverse de demand_attach : un projecteur issu d'une demande quitte le spectacle, la demande baisse de 1.
 create or replace function demand_detach(p_show uuid, p_item int) returns void
 language plpgsql security definer set search_path = public as $$
-declare did uuid; ext int; nq int;
+declare did uuid;
 begin
   select demand_id into did from show_items where show_id = p_show and item_id = p_item;
   if did is null then return; end if;
-  select coalesce(sum(qty), 0)::int into ext from show_externals where demand_id = did;
   update show_items set demand_id = null, pinned = false where show_id = p_show and item_id = p_item;   -- il n'appartient plus à la demande (il va être retiré ou remplacé)
-  select greatest(qty - 1, ext) into nq from show_demands where id = did;
-  if nq <= 0 then delete from show_demands where id = did;   -- plus rien demandé : la demande disparaît (la quantité 0 n'existe pas)
-  else update show_demands set qty = nq where id = did; end if;
+  perform demand_dec(did);
 end $$;
 revoke all on function demand_detach(uuid, int) from public, anon, authenticated;
+
+-- v1.37.0 : ligne sans projecteur « à louer / à emprunter » : la demande monte de 1 (donc un manque, donc l'alarme) jusqu'à ce qu'une location ou un projecteur la couvre.
+alter table patch_lines add column if not exists need_demand_id uuid references show_demands(id) on delete set null;
+create or replace function patch_need_set(p_show uuid, p_line uuid, p_model text, p_lamp text) returns void
+language plpgsql security definer set search_path = public as $$
+declare l patch_lines; ispar boolean; d show_demands; nm text; mn text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  select * into l from patch_lines where id = p_line and show_id = p_show and item_id is null;
+  if l.id is null then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+  select m.name, exists (select 1 from item_types t where t.id = m.type_id and t.name ilike 'PAR%') into mn, ispar from models m where m.id = p_model;
+  if mn is null then raise exception 'Modèle inconnu' using errcode = '22023'; end if;
+  if ispar then
+    if p_lamp is null or not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe requise pour un PAR' using errcode = '22023'; end if;
+  else p_lamp := null; end if;
+  if l.need_demand_id is not null then perform demand_dec(l.need_demand_id); end if;   -- un ancien besoin de cette ligne est remplacé
+  select * into d from show_demands where show_id = p_show and model_id = p_model and coalesce(lamp_id, '') = coalesce(p_lamp, '');
+  if not found then insert into show_demands (show_id, model_id, lamp_id, qty, added_by_label) values (p_show, p_model, p_lamp, 1, patch_label()) returning * into d;
+  else update show_demands set qty = qty + 1 where id = d.id; end if;
+  update patch_lines set need_demand_id = d.id, model_id = p_model, lamp_id = p_lamp, model_text = '', external_id = null, updated_at = now(), updated_by_label = patch_label() where id = l.id;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : patch, une ligne est à louer / à emprunter (%s)', nm, mn));
+  perform reallocate_all();
+end $$;
+revoke all on function patch_need_set(uuid, uuid, text, text) from public, anon;
+grant execute on function patch_need_set(uuid, uuid, text, text) to authenticated;
 
 -- Reprise de l'existant : les projecteurs déjà affectés à la main aux spectacles en cours ou à venir rejoignent le matériel demandé.
 do $$ declare r record;

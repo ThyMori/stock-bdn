@@ -205,7 +205,7 @@ export const patchView: ViewFactory = ([showId]) => {
   const extMode = new Set<string>();   // lignes dont on a choisi « Location / prêt » sans avoir encore désigné laquelle
   const modelCell = (r: PatchRow): string => {
     const d = view(), exts = externalStatus(d, showId, lines);   // locations / prêts du spectacle
-    const inExt = !!r.externalId || extMode.has(r.key);            // ligne en mode « Location / prêt » : on ne montre plus le modèle ni la lampe
+    const inExt = !!r.externalId || !!r.needId || extMode.has(r.key);            // ligne en mode « Location / prêt » : on ne montre plus le modèle ni la lampe
     const modelId = inExt ? null : r.modelId, types = [...d.types].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     const groups = [...types.map((t) => ({ label: t.name, id: t.id as string | null })), { label: 'Sans type', id: null }].map((g) => {
       const ms = d.models.filter((m) => (m.type_id ?? null) === g.id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
@@ -216,7 +216,11 @@ export const patchView: ViewFactory = ([showId]) => {
     const model = d.models.find((m) => m.id === r.modelId);
     const lamps = d.lamps.filter((l) => !model?.socket_id || !l.socket_id || l.socket_id === model.socket_id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     const lampSel = r.par ? `<select class="pin" data-k="lamp_pick" aria-label="Lampe du PAR"><option value="">Lampe ?</option>${lamps.map((l) => `<option value="${esc(l.id)}" ${l.id === r.lampId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>` : '';
-    const extSel = inExt ? `<select class="pin extsel${r.externalId ? ' linked' : ''}" data-k="ext_pick" aria-label="Quelle location ou quel prêt"><option value="">— laquelle ? —</option>${exts.map((x) => `<option value="${esc(x.id)}" ${x.id === r.externalId ? 'selected' : ''}>${esc(x.short)} (${x.placed}/${x.qty})</option>`).join('')}</select>` : '';
+    const needTxt = r.needId ? `À louer : ${esc(r.model)}` : '';
+    const extOpts = exts.map((x) => `<option value="${esc(x.id)}" ${x.id === r.externalId ? 'selected' : ''}>${esc(x.short)} (${x.placed}/${x.qty})</option>`).join('');
+    const extSel = inExt ? `<select class="pin extsel${r.externalId ? ' linked' : ''}${r.needId ? ' need' : ''}" data-k="ext_pick" aria-label="Quelle location ou quel prêt">${
+      r.needId ? `<option value="__keepneed" selected>${needTxt} (à saisir)</option><option value="__cancel">Annuler le besoin</option>${extOpts}`
+               : `<option value="" ${r.externalId ? '' : 'selected'}>— laquelle ? —</option>${extOpts}<option value="__need">+ À louer / à emprunter…</option>`}</select>` : '';
     return inExt ? sel + extSel : sel + lampSel;
   };
   /** Largeur (en caractères) d'une cellule étroite : celle de son contenu, avec un minimum. */
@@ -253,6 +257,22 @@ export const patchView: ViewFactory = ([showId]) => {
   const rowHtml = (r: PatchRow, ed: Set<Col>): string => `<tr data-key="${esc(r.key)}" class="${r.focus ? 'done' : ''}" ${r.updatedAt ? `title="Modifié ${esc(fmtDateTime(r.updatedAt))}${r.updatedBy ? ' par ' + esc(r.updatedBy) : ''}"` : ''}>${COLS.map((c) => `<td data-label="${c.label}" data-c="${c.k}">${cell(r, c.k, ed)}</td>`).join('')}<td class="rowact" data-c="act">${ed.has('id') ? `<button class="btn mini" data-act="line-del" aria-label="Supprimer la ligne">Suppr.</button>` : ''}</td></tr>`;
 
   /** Choix du modèle d'une ligne sans projecteur : catalogue, texte libre, ou nouveau modèle ajouté au catalogue. */
+  /** « + À louer / à emprunter… » : on choisit le modèle (et la lampe d'un PAR) ; la demande de matériel monte de 1 et l'alarme « manque » joue si le stock ne suffit pas. */
+  async function needForm(root: HTMLElement, key: string) {
+    const d = view(), r = rowsNow().find((x) => x.key === key);
+    const models = [...d.models].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    const f = await openForm('À louer / à emprunter', [
+      { name: 'm', label: 'Modèle', type: 'select', search: true, required: true, options: models.map((m): [string, string] => [m.id, m.name]) },
+      { name: 'l', label: 'Lampe (PAR seulement)', type: 'select', options: [['', '—'], ...[...d.lamps].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true })).map((l): [string, string] => [l.id, l.name])] }
+    ], { submit: 'Ajouter au matériel demandé' });
+    if (!f || !r?.lineId) { paintRow(root, key); return; }
+    const m = d.models.find((x) => x.id === f.m), par = /^PAR/i.test(d.types.find((t) => t.id === m?.type_id)?.name ?? '');
+    if (par && !f.l) { toast('Choisis la lampe du PAR.'); paintRow(root, key); return; }
+    busy++; setStat(root, 'Enregistrement…');
+    const res = await rpcCall('patch_need_set', { p_show: showId, p_line: r.lineId, p_model: f.m, p_lamp: par ? f.l : null }); busy--; seed();
+    if (res.error) { setStat(root, res.error, true); toast(res.error); paintRow(root, key); return; }
+    extMode.delete(key); setStat(root, 'Ajouté au matériel demandé ✓'); paint(root);
+  }
   async function pickModel(root: HTMLElement, key: string, v: string) {
     if (v === '__keep') return;                                   // texte libre déjà en place : rien à faire
     if (v === '__ext') { extMode.add(key); paintRow(root, key); return; }   // « Location / prêt… » : la 2e liste apparaît pour choisir laquelle
@@ -419,6 +439,9 @@ export const patchView: ViewFactory = ([showId]) => {
         if (k === 'id') { void act(root, key, 'id', t.value); return; }
         if (k === 'model_pick') { void pickModel(root, key, t.value); return; }   // modèle d'une ligne sans projecteur
         if (k === 'lamp_pick') { save(root, key, 'lamp_id', t.value); return; }
+        if (k === 'ext_pick' && t.value === '__keepneed') return;                    // besoin déjà en place : rien à faire
+        if (k === 'ext_pick' && t.value === '__cancel') { extMode.delete(key); save(root, key, 'model_id', ''); queue = queue.then(() => paintRow(root, key)); return; }   // abandonne le besoin
+        if (k === 'ext_pick' && t.value === '__need') { void needForm(root, key); return; }   // « + À louer / à emprunter… »
         if (k === 'ext_pick') { save(root, key, 'external_id', t.value); queue = queue.then(() => paint(root)); return; }   // rattachement à une location : le compteur et le modèle sont mis à jour   // cellule ID : changement de projecteur
         save(root, key, k, k === 'focus' ? (t as HTMLInputElement).checked : t.value.trim());
         if (k === 'focus') tr.classList.toggle('done', (t as HTMLInputElement).checked);

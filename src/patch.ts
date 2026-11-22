@@ -6,6 +6,7 @@ import { describe } from './ref';
 export interface PatchLine {
   id: string; show_id: string; item_id: number | null; circuit: string; dimmer: string; curve: string[]; dmx: string;
   model_text: string; accessories: string[]; position: string; focus: boolean; notes: string; updated_at: string; updated_by_label: string | null;
+  need_demand_id?: string | null;   // ligne « à louer / à emprunter » : demande de matériel que la ligne fait monter de 1 tant que rien ne la couvre
   external_id?: string | null;   // ligne N/C rattachée à une location / un prêt du spectacle
   model_id?: string | null; lamp_id?: string | null;   // ligne N/C préparée : modèle du catalogue (et lampe voulue pour un PAR)
   gels?: { ref: string; color: string }[];   // gélatines d'une ligne N/C (celles d'un projecteur affecté sont dans show_gels)
@@ -36,6 +37,7 @@ export interface PatchRow {
   itemId: number | null;
   circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; gelIds: string[]; auto: boolean; accessories: string[]; position: string; focus: boolean; notes: string;
   updatedAt: string | null; updatedBy: string | null;
+  needId: string | null;   // ligne « à louer / à emprunter » (pas encore de location saisie)
   externalId: string | null; extNote: string;   // location / prêt auquel la ligne est rattachée, et sa mention (« loué chez X »)
   modelId: string | null; lampId: string | null; par: boolean;   // modèle et lampe voulus (projecteur affecté : ceux du spectacle ; ligne N/C : ceux choisis)
 }
@@ -64,13 +66,14 @@ export function buildRows(data: Data, showId: string, lines: PatchLine[]): Patch
     row.modelId = m?.id ?? null; row.par = par; row.lampId = par ? l.lamp_id ?? null : null;
     const ex = data.showExternals.find((e) => e.id === l.external_id && e.show_id === showId);   // location supprimée : la ligne reste, sans mention
     if (ex) { row.externalId = ex.id; row.extNote = `${ex.kind === 'pret' ? 'prêté par' : 'loué chez'} ${ex.provider}`; }
+    row.needId = data.showDemands.some((d) => d.id === l.need_demand_id) ? l.need_demand_id ?? null : null;   // demande supprimée : plus de besoin
     rows.push(row);
   }
   return rows;
 }
 function fromLine(l: PatchLine | null, key: string, itemId: number | null, model: string, gels: string[]): PatchRow {
   return {
-    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false, externalId: null, extNote: '', modelId: null, lampId: null, par: false,
+    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false,
     circuit: l?.circuit ?? '', dimmer: l?.dimmer ?? '', curve: l?.curve ?? ['lineaire'], dmx: l?.dmx ?? '', accessories: l?.accessories ?? [],
     position: l?.position ?? '', focus: l?.focus ?? false, notes: l?.notes ?? '', updatedAt: l?.updated_at ?? null, updatedBy: l?.updated_by_label ?? null
   };

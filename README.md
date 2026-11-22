@@ -174,6 +174,12 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - Reprise de l'existant : les projecteurs déjà affectés à la main aux spectacles en cours ou à venir rejoignent le matériel demandé (au rejeu du SQL).
 - Droits et notifications inchangés (assignés au spectacle) ; le journal garde une ligne. L'alarme « manque » est celle du matériel demandé, recalculée tout de suite.
 
+## Ligne « à louer / à emprunter » (v1.37.0)
+- Sur une ligne sans ID : modèle **« Location / prêt… »** → 2e liste → **« + À louer / à emprunter… »** → on choisit le modèle (et la lampe d'un PAR). La demande de matériel monte de 1 : si le stock ne suffit pas, le **manque** déclenche l'alarme habituelle ; sinon un projecteur du stock est réservé par la demande.
+- Seules ces lignes comptent : le matériel du décor ou de la Cie (lignes normales, texte libre) n'entre jamais dans le matériel demandé.
+- Le besoin disparaît (demande −1) si la ligne change de modèle, est supprimée, prend un vrai ID, ou se rattache à une location d'une autre demande. Rattachée à une location de la même demande : la quantité reste, la location couvre le besoin.
+- Colonne `patch_lines.need_demand_id`, fonction `patch_need_set`.
+
 ## Feuille de patch : clavier (v1.35.5)
 **Tab** = colonne suivante (ordre normal du navigateur) ; **Entrée** = enregistre et descend au même champ de la ligne suivante (contenu sélectionné) ; sur la dernière ligne, Entrée valide et ferme le clavier. L'ordre des lignes ne bouge pas pendant la saisie. Le curseur n'est plus perdu quand une ligne est redessinée (courbe, modèle).
 
@@ -223,6 +229,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |
 | `schema.sql` fin de fichier (v1.36.0) | `demand_attach`, `demand_detach`, `patch_set_item` et `patch_delete_line` modifiées, reprise de l'existant | v1.36.0 |
 | `schema.sql` (v1.35.2) | position « pont coupole » acceptée par `set_patch_field` (liste des positions) | v1.35.2 |
 | `schema.sql` fin de fichier (v1.34.0) | pastille bleue `items.blue_dot`, `shows.mounted` / `mounted_at`, `set_blue_dot`, `set_show_mounted` | v1.34.0 |

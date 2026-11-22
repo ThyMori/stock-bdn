@@ -534,3 +534,4 @@ dialog.help details > ul { margin: 2px 0 6px; padding-left: 20px; display: grid;
 button.bluebtn { cursor: pointer; }
 .bluebtn.on { background: #1d6bff; border: 3px solid #1d6bff; }
 @media (prefers-reduced-motion: reduce) { .bluebtn { transition: none; } }
+.extsel.need { font-weight: 700; }

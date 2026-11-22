@@ -272,7 +272,7 @@ t('calendrier glissant : commence le lundi de la semaine passée', () => {
   assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
 });
 // --- Feuille de patch / focus ---
-const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, externalId: null, extNote: '', modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
+const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
 t('patch : droits par colonne', () => {
   assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer', 'gels']);   // technicien
   assert.equal(editableCols(false, false).size, 0);                                // lecture seule
