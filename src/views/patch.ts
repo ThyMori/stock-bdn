@@ -435,7 +435,12 @@ export const patchView: ViewFactory = ([showId]) => {
         const tr = t.closest<HTMLElement>('tr[data-key]'); if (!tr) return;
         const key = tr.dataset.key!;
         const multi = t.closest<HTMLElement>('details.multi');
-        if (multi) { save(root, key, multi.dataset.k!, [...multi.querySelectorAll<HTMLInputElement>('input[type=checkbox]:checked')].map((x) => x.dataset.v!)); return; }
+        if (multi) {
+          const vals = [...multi.querySelectorAll<HTMLInputElement>('input[type=checkbox]:checked')].map((x) => x.dataset.v!);   // cases cochées
+          const sm = multi.querySelector('summary');   // texte affiché dans la cellule : mis à jour tout de suite (le menu reste ouvert, la ligne n'est pas redessinée)
+          if (sm) { sm.textContent = labelsOf(ACCESSORIES, vals); if (!vals.length) { const i = document.createElement('i'); i.className = 'muted'; i.textContent = '—'; sm.replaceChildren(i); } }
+          save(root, key, multi.dataset.k!, vals); return;
+        }
         const k = (t as HTMLElement).dataset.k; if (!k) return;
         if (k === 'curve') { save(root, key, 'curve', [t.value]); return; }   // courbe : un seul choix
         if (k === 'id') { void act(root, key, 'id', t.value); return; }
