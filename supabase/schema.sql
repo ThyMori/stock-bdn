@@ -1517,6 +1517,7 @@ begin
     select coalesce(array_agg(distinct v), '{}') into arr from jsonb_array_elements_text(p_value) v;
     ok := case p_field when 'curve' then array['lineaire','onoff','autre','direct'] else array['iris','gobo','volets','autre'] end;
     if not (arr <@ ok) then raise exception 'Choix inconnu' using errcode = '22023'; end if;
+    if p_field = 'curve' and cardinality(arr) <> 1 then raise exception 'Une courbe ne peut avoir qu''un seul choix' using errcode = '22023'; end if;
     if p_field = 'curve' and not ('direct' = any (arr)) then   -- plus de DIRECT : l'adresse DMX n'a plus de sens
       update patch_lines set dmx = '' where id = r.id;
     end if;
@@ -1696,3 +1697,8 @@ grant execute on function patch_delete_gel(uuid) to authenticated;
 -- v1.24.3 : les positions « allemande » sont réduites à Jardin et Cour (anciennes valeurs 1 / 2 regroupées)
 update patch_lines set position = 'allemande J' where position in ('allemande J1', 'allemande J2');
 update patch_lines set position = 'allemande C' where position in ('allemande C1', 'allemande C2');
+
+-- v1.26.1 : une courbe n'a qu'un seul choix (les anciennes saisies multiples gardent DIRECT, sinon Off/On, sinon Autre, sinon Linéaire)
+update patch_lines set curve = case when 'direct' = any (curve) then '{direct}'::text[] when 'onoff' = any (curve) then '{onoff}'::text[]
+                                    when 'autre' = any (curve) then '{autre}'::text[] else '{lineaire}'::text[] end
+ where cardinality(curve) <> 1;

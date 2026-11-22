@@ -135,14 +135,16 @@ export const patchView: ViewFactory = ([showId]) => {
     const can_ = ed.has(c);
     switch (c) {
       case 'circuit': case 'dimmer': return can_ ? `<input class="pin num" data-k="${c}" value="${esc(r[c])}" maxlength="30" autocomplete="off" aria-label="${c === 'circuit' ? 'Circuit' : 'Grada'}">` : `<span class="num">${esc(r[c]) || '<i class="muted">—</i>'}</span>`;
-      case 'curve': case 'accessories': {
-        const list = c === 'curve' ? CURVES : ACCESSORIES, vals = r[c];
-        const txt = c === 'curve' && vals.includes('direct')
-          ? list.filter((x) => vals.includes(x.k)).map((x) => (x.k === 'direct' ? `<b class="direct">DIRECT</b>` : esc(x.label))).join(' · ')
-          : esc(labelsOf(list, vals));
+      case 'curve': {   // un seul choix possible
+        const v = r.curve[0] ?? 'lineaire';
+        if (!can_) return v === 'direct' ? '<b class="direct">DIRECT</b>' : `<span>${esc(labelsOf(CURVES, r.curve)) || '<i class="muted">—</i>'}</span>`;
+        return `<select class="pin${v === 'direct' ? ' direct' : ''}" data-k="curve" aria-label="Courbe">${CURVES.map((x) => `<option value="${x.k}" ${x.k === v ? 'selected' : ''}>${x.k === 'direct' ? 'DIRECT' : esc(x.label)}</option>`).join('')}</select>`;
+      }
+      case 'accessories': {
+        const list = ACCESSORIES, vals = r.accessories, txt = esc(labelsOf(list, vals));
         if (!can_) return `<span>${txt || '<i class="muted">—</i>'}</span>`;
-        return `<details class="multi" data-k="${c}"><summary>${txt || '<i class="muted">—</i>'}</summary><div class="opts">${list.map((x) =>
-          `<label><input type="checkbox" data-v="${x.k}" ${vals.includes(x.k) ? 'checked' : ''}> ${x.k === 'direct' ? '<b class="direct">DIRECT</b>' : esc(x.label)}</label>`).join('')}</div></details>`;
+        return `<details class="multi" data-k="accessories"><summary>${txt || '<i class="muted">—</i>'}</summary><div class="opts">${list.map((x) =>
+          `<label><input type="checkbox" data-v="${x.k}" ${vals.includes(x.k) ? 'checked' : ''}> ${esc(x.label)}</label>`).join('')}</div></details>`;
       }
       case 'dmx': return can_ && r.curve.includes('direct') ? `<input class="pin num" data-k="dmx" value="${esc(r.dmx)}" placeholder="1-120" maxlength="7" inputmode="numeric" autocomplete="off" aria-label="Adresse DMX, univers-adresse">`
         : r.curve.includes('direct') ? `<span class="num">${esc(r.dmx) || '<i class="muted">—</i>'}</span>` : '<i class="muted">—</i>';
@@ -246,6 +248,7 @@ export const patchView: ViewFactory = ([showId]) => {
         const multi = t.closest<HTMLElement>('details.multi');
         if (multi) { save(root, key, multi.dataset.k!, [...multi.querySelectorAll<HTMLInputElement>('input[type=checkbox]:checked')].map((x) => x.dataset.v!)); return; }
         const k = (t as HTMLElement).dataset.k; if (!k) return;
+        if (k === 'curve') { save(root, key, 'curve', [t.value]); return; }   // courbe : un seul choix
         if (k === 'id') { void act(root, key, 'id', t.value); return; }   // cellule ID : changement de projecteur
         save(root, key, k, k === 'focus' ? (t as HTMLInputElement).checked : t.value.trim());
         if (k === 'focus') tr.classList.toggle('done', (t as HTMLInputElement).checked);

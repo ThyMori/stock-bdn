@@ -159,7 +159,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 
 ## Feuille de patch / focus (v1.23.0, complétée en v1.24.0)
 
-Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « sans projecteur » (N/C : prêté, loué, autre). Colonnes : circuit, grada, courbe (Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines, accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique ; hors ligne = lecture seule.
+Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/patch/<id>`). Une ligne par projecteur affecté, plus les lignes « sans projecteur » (N/C : prêté, loué, autre). Colonnes : circuit, grada, courbe (un seul choix : Linéaire par défaut, Off/On, Autre, DIRECT), DMX (seulement si DIRECT, `univers-adresse`), ID, modèle (lampe pour les PAR), gélatines, accessoires, position, focus, notes. Clic sur un en-tête = tri (vides toujours en dernier). Enregistrement automatique ; hors ligne = lecture seule.
 
 | Qui | Droit sur la feuille |
 |---|---|
@@ -187,6 +187,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.26.1) | courbe à choix unique (anciennes saisies multiples ramenées à un choix) | v1.26.1 |
 | `schema.sql` fin de fichier (v1.24.3) | positions « allemande J / C » (au lieu de J1, J2, C1, C2) et « passerelle J / C » | v1.24.4 |
 
 ### Déconnexion fiabilisée et garde-fou de démarrage (v1.18.1)
