@@ -386,8 +386,10 @@ export const patchView: ViewFactory = ([showId]) => {
         if (t.closest('[data-act="pdf"]')) {   // PDF horodaté, dans l'ordre affiché à l'écran
           void (async () => {
             try {
-              const { buildPatchPdf } = await import('../patchPdf'); const { deliverPdf } = await import('../ui/deliverPdf');
-              const { blob, filename } = await buildPatchPdf(view(), showId, ordered());
+              const { buildPatchPdf, PDF_KINDS } = await import('../patchPdf'); const { deliverPdf } = await import('../ui/deliverPdf');
+              const f = await openForm('Quel PDF ?', [{ name: 'k', label: 'Contenu', type: 'select', options: PDF_KINDS, value: 'all' }], { submit: 'Générer le PDF' });   // choix du classement / des listes
+              if (!f) return;   // annulé
+              const { blob, filename } = await buildPatchPdf(view(), showId, ordered(), new Date(), f.k as import('../patchPdf').PatchPdfKind);
               await deliverPdf(blob, filename, 'Feuille de patch prête');
             } catch (e) { toast('Impossible de générer le PDF : ' + String(e)); }
           })();

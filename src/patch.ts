@@ -88,7 +88,7 @@ function fromLine(l: PatchLine | null, key: string, itemId: number | null, model
 }
 
 /** Comparaison « naturelle » : 2 avant 10, G7 avant G12. */
-const nat = (a: string, b: string): number => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' });
+export const nat = (a: string, b: string): number => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' });
 /** Adresse DMX « univers-adresse » en nombre comparable (univers d'abord). */
 export const dmxRank = (s: string): number => { const m = /^(\d+)-(\d+)$/.exec(s); return m ? Number(m[1]) * 1000 + Number(m[2]) : Infinity; };
 

@@ -5,6 +5,8 @@ import type { Data } from './types';
 import { gelColorOf } from './gels';
 import { ACCESSORIES, CURVES, labelsOf } from './patch';
 import type { PatchRow } from './patch';
+import { sortRows } from './patch';
+import { accessoryList, gelList, positionGroups } from './patchLists';
 import { appReference } from './pdfHeader';
 import { HAND, addHandFont } from './pdfFonts';
 import { noise, wobblePoints } from './handwriting';
@@ -14,8 +16,16 @@ const HOUR = (d: Date) => `${String(d.getHours()).padStart(2, '0')}h${String(d.g
 const ISO_DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 const stamp = (d: Date) => `${DAY(d)} à ${HOUR(d)}`;
 
+/** Quel PDF : l'ordre de l'écran, un classement précis, les listes à préparer, ou tout dans un seul fichier. */
+export type PatchPdfKind = 'screen' | 'circuit' | 'dimmer' | 'position' | 'lists' | 'all';
+export const PDF_KINDS: [PatchPdfKind, string][] = [
+  ['screen', 'Feuille comme à l\'écran'], ['circuit', 'Circuit → Grada (classée par circuits)'], ['dimmer', 'Grada → Circuits (classée par grada)'],
+  ['position', 'Par position (avec les zones)'], ['lists', 'Gélatines à couper et accessoires'], ['all', 'Toutes, dans un seul PDF']
+];
+type PCol = { k: string; label: string; w: number };
+
 /** Colonnes du tableau (largeurs en mm, total = 277 = page A4 paysage moins 2 marges de 10). */
-const COLS: { k: string; label: string; w: number }[] = [
+const COLS: PCol[] = [
   { k: 'circuit', label: 'CIRCUIT', w: 18 }, { k: 'dimmer', label: 'GRADA', w: 16 }, { k: 'curve', label: 'COURBE', w: 24 }, { k: 'dmx', label: 'DMX', w: 16 },
   { k: 'id', label: 'ID', w: 14 }, { k: 'model', label: 'MODÈLE', w: 44 }, { k: 'gels', label: 'GÉLATINES', w: 40 }, { k: 'accessories', label: 'ACCESSOIRES', w: 30 },
   { k: 'position', label: 'POSITION', w: 28 }, { k: 'focus', label: 'FOCUS', w: 12 }, { k: 'notes', label: 'NOTES', w: 35 }
@@ -23,7 +33,7 @@ const COLS: { k: string; label: string; w: number }[] = [
 
 /** Génère le PDF dans l'ordre des lignes reçues (celui de l'écran). jsPDF est chargé à la demande.
  *  Look cahier : papier crème, lignes bleues (une ligne du tableau = une ligne du cahier), marge rouge, écriture manuscrite bleue, traits tremblés. */
-export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[], now = new Date()): Promise<{ blob: Blob; filename: string }> {
+export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[], now = new Date(), kind: PatchPdfKind = 'screen'): Promise<{ blob: Blob; filename: string }> {
   const show = data.shows.find((s) => s.id === showId);
   if (!show) throw new Error('Spectacle introuvable');
   const { jsPDF } = await import('jspdf');
@@ -57,6 +67,7 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     doc.setDrawColor(214, 92, 92); doc.setLineWidth(0.3);
     const mx = M - 3; pen(mx, 0, mx, H, 0.1, 25); pen(mx + 1.3, 0, mx + 1.3, H, 0.1, 25);   // double marge rouge, à gauche du texte
   };
+  let cur: { title: string; cols: PCol[] } = { title: '', cols: COLS };   // section en cours : titre (à droite de l'en-tête) et colonnes
   const header = () => {   // titre complet sur chaque page : on doit toujours savoir de quand date la feuille
     color(PENCIL); font(true, 22); write('Patch / Focus', M, 20);
     const tw = doc.getTextWidth('Patch / Focus ');
@@ -66,63 +77,118 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     color(RED); font(true, 11); write(`Générée le ${generated}`, M, 34);
     if (last) { const gw = doc.getTextWidth(`Générée le ${generated}`); color(PENCIL); font(false, 11);
       write(`   -   dernière modification de la feuille le ${stamp(new Date(last.updatedAt!))}${last.updatedBy ? ' par ' + last.updatedBy : ''}`, M + gw + 1, 34); }
+    if (cur.title) { color(INK); font(true, 15); write(cur.title, W - M - doc.getTextWidth(cur.title), 28); }   // nom de la feuille, en haut à droite
     font(true, 10); color(PENCIL);                                  // titres de colonnes, écrits à la main
-    let x = M; for (const c of COLS) { write(c.label, x + 1.5, TOP - 2); x += c.w; }
+    let x = M; for (const c of cur.cols) { write(c.label, x + 1.5, TOP - 2); x += c.w; }
     doc.setDrawColor(...PENCIL); doc.setLineWidth(0.45); pen(M, TOP, W - M, TOP, 0.2, 8);   // trait sous les titres
   };
-  const newPage = (first: boolean) => { if (!first) doc.addPage(); paper(); header(); };
   const gelRgb = (c: string): [number, number, number] => {
     const hex = GEL_COLORS.find(([n]) => n === c)?.[1] ?? '#8d6e63';
     return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
   };
   const gelColor = (ref: string) => data.showGels.find((g) => g.show_id === showId && g.ref === ref)?.color ?? gelColorOf(ref);   // ligne sans projecteur : couleur déduite de la référence
 
-  let y = TOP;                                                  // haut de la ligne en cours
-  newPage(true);
-  if (!rows.length) { color(INK); font(false, 12); write('Aucun projecteur affecté à ce spectacle.', M + 2, y + 5); }
-  for (const r of rows) {
-    // texte de chaque cellule, découpé à la largeur de la colonne (calculé avec la police et la taille réellement utilisées)
-    font(false, 10);
-    const cells: Record<string, string[]> = {
-      circuit: [r.circuit], dimmer: [r.dimmer], curve: [labelsOf(CURVES, r.curve)], dmx: [r.curve.includes('direct') ? r.dmx : ''],
-      id: [r.itemId === null ? 'N/C' : String(r.itemId)], model: doc.splitTextToSize((r.model || '') + (r.extNote ? ` (${r.extNote})` : ''), COLS[5].w - 3) as string[], gels: [],
-      accessories: doc.splitTextToSize(labelsOf(ACCESSORIES, r.accessories), COLS[7].w - 3) as string[], position: [r.position], focus: [''],
-      notes: doc.splitTextToSize(r.notes || '', COLS[10].w - 3) as string[]
-    };
-    const gelRows = Math.max(1, Math.ceil(r.gels.length / 2));   // gélatines : deux par ligne (pastille de couleur + référence)
-    const lines = Math.max(1, ...Object.values(cells).map((c) => c.length), gelRows);
-    const h = Math.max(1, Math.ceil((lines * 4.2 + 2.8) / R)) * R;   // hauteur = un nombre entier de lignes du cahier
-    if (y + h > H - 14) { newPage(false); y = TOP; }
-    if (r.focus) {   // focus fait : coup de surligneur jaune-vert (transparent : les lignes du cahier restent visibles)
-      doc.setGState(doc.GState({ opacity: 0.4 })); doc.setFillColor(200, 232, 120); doc.rect(M, y + 0.6, W - 2 * M, h - 1.2, 'F'); doc.setGState(doc.GState({ opacity: 1 }));
-    }
-    const base = y + 5;                                           // les écritures reposent sur la ligne du cahier
-    let x = M;
-    for (const c of COLS) {
-      const cx = x + 1.5;
-      if (c.k === 'gels') {
-        r.gels.forEach((g, i) => {
-          const gx = x + 1.5 + (i % 2) * 19, gy = base + Math.floor(i / 2) * 4.2;
-          doc.setFillColor(...gelRgb(gelColor(g))); doc.rect(gx, gy - 2.8, 3, 3, 'F');
-          doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); box(gx, gy - 2.8, 3, 3);
-          color(INK); font(false, 10); write(g, gx + 4, gy);
-        });
-      } else if (c.k === 'focus') {
-        doc.setDrawColor(...PENCIL); doc.setLineWidth(0.35); box(cx + 1, base - 3.6, 4.2, 4.2);
-        if (r.focus) { doc.setDrawColor(20, 130, 60); doc.setLineWidth(0.7); pen(cx + 1.4, base - 1.2, cx + 2.8, base + 0.3, 0.1, 4); pen(cx + 2.8, base + 0.3, cx + 5.4, base - 4, 0.1, 4); }
-      } else if (c.k === 'curve' && r.curve.includes('direct')) {
-        font(true, 9.5); doc.setTextColor(29, 107, 255);   // DIRECT en bleu vif, comme à l'écran
-        const others = labelsOf(CURVES.filter((q) => q.k !== 'direct'), r.curve);
-        write(others ? ['DIRECT', others] : 'DIRECT', cx, base); color(INK);
-      } else {
-        const bold = c.k === 'circuit' || c.k === 'dimmer' || c.k === 'id';
-        font(bold, bold ? 11 : 10); color(r.itemId === null && c.k === 'id' ? PENCIL : INK);
-        write(cells[c.k], cx, base);
+  let y = TOP, started = false;                                 // haut de la ligne en cours ; une page a-t-elle déjà été créée ?
+  const newPage = (first: boolean) => { if (!first) doc.addPage(); paper(); header(); };
+  /** Commence une feuille sur une nouvelle page. */
+  const begin = (title: string, cols: PCol[]) => { cur = { title, cols }; newPage(!started); started = true; y = TOP; };
+  /** Titre d'une zone (« CINTRES »…) : une ligne de cahier, écrite en gras, soulignée en rouge. */
+  const band = (label: string) => {
+    if (y + 2 * R > H - 14) { newPage(false); y = TOP; }
+    color(INK); font(true, 13); write(label.toUpperCase(), M + 1.5, y + 5);
+    doc.setDrawColor(...RED); doc.setLineWidth(0.5); pen(M + 1, y + 6, M + 3 + doc.getTextWidth(label.toUpperCase()), y + 6, 0.25, 6);
+    y += R;
+  };
+  /** Tableau de la feuille de patch, dans l'ordre reçu ; `groups` ajoute un titre de zone avant chaque paquet de lignes. */
+  const patchTable = (title: string, cols: PCol[], groups: { label: string; rows: PatchRow[] }[]) => {
+    begin(title, cols);
+    const wOf = (k: string) => cols.find((c) => c.k === k)!.w;
+    if (!groups.some((g) => g.rows.length)) { color(INK); font(false, 12); write('Aucun projecteur affecté à ce spectacle.', M + 2, y + 5); }
+    for (const g of groups) {
+      if (g.label) band(g.label);
+      for (const r of g.rows) {
+        // texte de chaque cellule, découpé à la largeur de la colonne (calculé avec la police et la taille réellement utilisées)
+        font(false, 10);
+        const cells: Record<string, string[]> = {
+          circuit: [r.circuit], dimmer: [r.dimmer], curve: [labelsOf(CURVES, r.curve)], dmx: [r.curve.includes('direct') ? r.dmx : ''],
+          id: [r.itemId === null ? 'N/C' : String(r.itemId)], model: doc.splitTextToSize((r.model || '') + (r.extNote ? ` (${r.extNote})` : ''), wOf('model') - 3) as string[], gels: [],
+          accessories: doc.splitTextToSize(labelsOf(ACCESSORIES, r.accessories), wOf('accessories') - 3) as string[], position: [r.position], focus: [''],
+          notes: doc.splitTextToSize(r.notes || '', wOf('notes') - 3) as string[]
+        };
+        const gelRows = Math.max(1, Math.ceil(r.gels.length / 2));   // gélatines : deux par ligne (pastille de couleur + référence)
+        const lines = Math.max(1, ...Object.values(cells).map((c) => c.length), gelRows);
+        const h = Math.max(1, Math.ceil((lines * 4.2 + 2.8) / R)) * R;   // hauteur = un nombre entier de lignes du cahier
+        if (y + h > H - 14) { newPage(false); y = TOP; }
+        if (r.focus) {   // focus fait : coup de surligneur jaune-vert (transparent : les lignes du cahier restent visibles)
+          doc.setGState(doc.GState({ opacity: 0.4 })); doc.setFillColor(200, 232, 120); doc.rect(M, y + 0.6, W - 2 * M, h - 1.2, 'F'); doc.setGState(doc.GState({ opacity: 1 }));
+        }
+        const base = y + 5;                                           // les écritures reposent sur la ligne du cahier
+        let x = M;
+        for (const c of cols) {
+          const cx = x + 1.5;
+          if (c.k === 'gels') {
+            r.gels.forEach((g, i) => {
+              const gx = x + 1.5 + (i % 2) * 19, gy = base + Math.floor(i / 2) * 4.2;
+              doc.setFillColor(...gelRgb(gelColor(g))); doc.rect(gx, gy - 2.8, 3, 3, 'F');
+              doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); box(gx, gy - 2.8, 3, 3);
+              color(INK); font(false, 10); write(g, gx + 4, gy);
+            });
+          } else if (c.k === 'focus') {
+            doc.setDrawColor(...PENCIL); doc.setLineWidth(0.35); box(cx + 1, base - 3.6, 4.2, 4.2);
+            if (r.focus) { doc.setDrawColor(20, 130, 60); doc.setLineWidth(0.7); pen(cx + 1.4, base - 1.2, cx + 2.8, base + 0.3, 0.1, 4); pen(cx + 2.8, base + 0.3, cx + 5.4, base - 4, 0.1, 4); }
+          } else if (c.k === 'curve' && r.curve.includes('direct')) {
+            font(true, 9.5); doc.setTextColor(29, 107, 255);   // DIRECT en bleu vif, comme à l'écran
+            const others = labelsOf(CURVES.filter((q) => q.k !== 'direct'), r.curve);
+            write(others ? ['DIRECT', others] : 'DIRECT', cx, base); color(INK);
+          } else {
+            const bold = c.k === 'circuit' || c.k === 'dimmer' || c.k === 'id';
+            font(bold, bold ? 11 : 10); color(r.itemId === null && c.k === 'id' ? PENCIL : INK);
+            write(cells[c.k], cx, base);
+          }
+          x += c.w;
+        }
+        y += h;
       }
-      x += c.w;
     }
-    y += h;
-  }
+  };
+  /** Liste simple (gélatines, accessoires) : une ligne par entrée, texte découpé à la largeur de chaque colonne ; `swatch` = couleur d'une pastille devant la première colonne. */
+  const listTable = (title: string, cols: PCol[], items: { cells: string[]; swatch?: [number, number, number] }[], empty: string) => {
+    begin(title, cols);
+    if (!items.length) { color(INK); font(false, 12); write(empty, M + 2, y + 5); return; }
+    for (const it of items) {
+      font(false, 10);
+      const wrapped = it.cells.map((t, i) => doc.splitTextToSize(t, cols[i].w - 3 - (i === 0 && it.swatch ? 5 : 0)) as string[]);
+      const h = Math.max(1, Math.ceil((Math.max(1, ...wrapped.map((w) => w.length)) * 4.2 + 2.8) / R)) * R;
+      if (y + h > H - 14) { newPage(false); y = TOP; }
+      let x = M; const base = y + 5;
+      wrapped.forEach((w, i) => {
+        let cx = x + 1.5;
+        if (i === 0 && it.swatch) { doc.setFillColor(...it.swatch); doc.rect(cx, base - 3.2, 3.6, 3.6, 'F'); doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); box(cx, base - 3.2, 3.6, 3.6); cx += 5; }
+        const bold = i === 0 || cols[i].k === 'qty';
+        font(bold, bold ? 11 : 10); color(INK); write(w, cx, base);
+        x += cols[i].w;
+      });
+      y += h;
+    }
+  };
+
+  // colonnes du tableau : la clé de classement passe en premier (grada avant circuit pour « Grada → Circuits »)
+  const swap = (first: string): PCol[] => [COLS.find((c) => c.k === first)!, ...COLS.filter((c) => c.k !== first)];
+  const sheetCircuit = () => patchTable('Circuit -> Grada', swap('circuit'), [{ label: '', rows: sortRows(rows, 'circuit', 1) }]);
+  const sheetDimmer = () => patchTable('Grada -> Circuits', swap('dimmer'), [{ label: '', rows: sortRows(rows, 'dimmer', 1) }]);
+  const sheetPosition = () => patchTable('Par position', COLS, positionGroups(rows));
+  const sheetGels = () => listTable('Gélatines à couper', [{ k: 'ref', label: 'RÉFÉRENCE', w: 30 }, { k: 'color', label: 'COULEUR', w: 52 }, { k: 'qty', label: 'QTÉ', w: 14 }, { k: 'models', label: 'MODÈLES', w: 90 }, { k: 'circuits', label: 'CIRCUITS', w: 91 }],
+    gelList(rows).map((g) => ({ cells: [g.ref, gelColor(g.ref), String(g.qty), g.models, g.circuits], swatch: gelRgb(gelColor(g.ref)) })), 'Aucune gélatine sur cette feuille.');
+  const sheetAcc = () => {
+    let last = '';   // le modèle n'est écrit qu'à sa première ligne
+    listTable('Accessoires par modèle', [{ k: 'model', label: 'MODÈLE', w: 80 }, { k: 'acc', label: 'ACCESSOIRE', w: 50 }, { k: 'qty', label: 'QTÉ', w: 14 }, { k: 'circuits', label: 'CIRCUITS', w: 133 }],
+      accessoryList(rows).map((a) => { const first = a.model !== last; last = a.model; return { cells: [first ? a.model : '', a.accessory, String(a.qty), a.circuits] }; }), 'Aucun accessoire sur cette feuille.');
+  };
+  if (kind === 'screen') patchTable('', COLS, [{ label: '', rows }]);
+  if (kind === 'circuit' || kind === 'all') sheetCircuit();
+  if (kind === 'dimmer' || kind === 'all') sheetDimmer();
+  if (kind === 'position' || kind === 'all') sheetPosition();
+  if (kind === 'lists' || kind === 'all') { sheetGels(); sheetAcc(); }
   // pied de page de chaque page : spectacle, date et heure de génération, numéro de page
   const n = doc.getNumberOfPages();
   for (let p = 1; p <= n; p++) {
@@ -132,5 +198,5 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
   }
   const safe = show.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'spectacle';
   const d2 = (v: number) => String(v).padStart(2, '0');
-  return { blob: doc.output('blob'), filename: `patch-${safe}-${now.getFullYear()}${d2(now.getMonth() + 1)}${d2(now.getDate())}-${d2(now.getHours())}${d2(now.getMinutes())}.pdf` };
+  return { blob: doc.output('blob'), filename: `patch${kind === 'screen' ? '' : '-' + kind}-${safe}-${now.getFullYear()}${d2(now.getMonth() + 1)}${d2(now.getDate())}-${d2(now.getHours())}${d2(now.getMinutes())}.pdf` };
 }
