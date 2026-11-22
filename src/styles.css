@@ -452,3 +452,18 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
   table.patch td[data-c="id"] { order: -2; } table.patch td[data-c="model"] { order: -1; }
   table.patch tbody tr:hover td { background: transparent; }
 }
+
+/* ---------- aide intégrée (bouton « i ») ---------- */
+.info-btn { font-weight: 800; font-style: italic; font-family: Georgia, serif; min-width: 44px; }
+dialog.help { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 0 16px 16px; width: min(94vw, 640px); max-height: 88dvh; overflow-y: auto; }
+dialog.help::backdrop { background: rgba(0,0,0,.6); }
+.help-head { position: sticky; top: 0; background: var(--paper); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0 8px; z-index: 1; }   /* bouton Fermer toujours visible en haut */
+.help-head h3 { margin: 0; }
+.help-close { min-width: 44px; min-height: 44px; flex: none; }
+dialog.help details.help-section { margin-top: 6px; border-bottom: 1px solid color-mix(in srgb, var(--ink) 25%, transparent); padding-bottom: 6px; }
+dialog.help summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 10px 2px; font-weight: 700; font-size: 1rem; min-height: 44px; }
+dialog.help summary::-webkit-details-marker { display: none; }
+dialog.help summary::before { content: "›"; display: inline-block; width: 1em; text-align: center; font-size: 1.3em; line-height: 1; transition: transform .15s; }
+dialog.help details[open] > summary::before { transform: rotate(90deg); }
+dialog.help details > ul { margin: 2px 0 6px; padding-left: 20px; display: grid; gap: 7px; font-size: .92rem; }
+@media (prefers-reduced-motion: reduce) { dialog.help summary::before { transition: none; } }

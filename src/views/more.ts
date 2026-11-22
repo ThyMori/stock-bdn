@@ -8,6 +8,8 @@ import { canInstall, promptInstall } from '../install';
 import { shareApp } from '../share';
 import { leavePresence } from '../presence';
 import { checkUpdateNow } from '../updates';
+import { APP_VERSION } from '../version';
+import { openHelp } from '../ui/help';
 import { toast } from '../ui/toast';
 import { disablePush, enablePush, forgetPushOnLogout, pushStatus, testPush } from '../push';
 import type { PushStatus } from '../push';
@@ -36,7 +38,8 @@ export const moreView: ViewFactory = () => ({
     root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
-      if (el.dataset.act === 'sync') void sync();
+      if (el.dataset.act === 'help') openHelp();
+      else if (el.dataset.act === 'sync') void sync();
       else if (el.dataset.act === 'check-update') {   // force la recherche d'une nouvelle version de l'appli
         const b = el as HTMLButtonElement; b.disabled = true;
         void checkUpdateNow().then((r) => {
@@ -101,7 +104,7 @@ export const moreView: ViewFactory = () => ({
 
 function paint(root: HTMLElement) {
   const p = state.profile;
-  root.innerHTML = `<div class="page"><div class="row"><h1 class="grow">Plus</h1><button class="btn" data-act="share" aria-label="Partager l'application" title="Partager l'application"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg></button></div>
+  root.innerHTML = `<div class="page"><div class="row"><h1 class="grow">Plus</h1><button class="btn info-btn" data-act="help" aria-label="Informations : toutes les fonctions de Stock BdN" title="Informations">i</button><button class="btn" data-act="share" aria-label="Partager l'application" title="Partager l'application"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg></button></div>
     <div class="card stack">
       <div><div class="t">${esc(p ? fullName(p) : '—')}</div><div class="sub">${p ? ROLE_LABEL[p.role] + (fullName(p) !== p.email ? ' · ' + esc(p.email) : '') : ''}</div></div>
       <div class="row wrap"><button class="btn" data-act="rename" ${state.online ? '' : 'disabled'}>Modifier mon nom</button><button class="btn" data-act="chmail" ${state.online ? '' : 'disabled'}>Changer mon e-mail</button></div><div id="profErr" class="sub warn" role="alert"></div>
@@ -126,7 +129,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.28.1</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v${APP_VERSION}</div></div>`;
 }
 
 function pushCard(): string {

@@ -191,6 +191,12 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` fin de fichier (v1.26.1) | courbe à choix unique (anciennes saisies multiples ramenées à un choix) | v1.26.1 |
 | `schema.sql` fin de fichier (v1.24.3) | positions « allemande J / C » (au lieu de J1, J2, C1, C2) et « passerelle J / C » | v1.24.4 |
 
+### Aide intégrée, bouton « i » (v1.29.0)
+
+Dans l'onglet **Plus**, le bouton **i** (à côté du bouton Partager) ouvre « Tout ce que fait Stock BdN » : une fenêtre avec le bouton **Fermer** toujours visible en haut, les rubriques **repliées au départ** et dépliables, fermée aussi par la touche Retour du téléphone ou en touchant le fond. Les rubriques « Gestion du parc et des accès » (régisseur général et admin) et « Administration » (admin) ne s'affichent que pour ces rôles.
+- Le texte est dans `src/ui/help.ts` : **à mettre à jour à chaque nouvelle fonction**.
+- Le numéro de version est dans `src/version.ts` (affiché dans Plus et dans l'aide) **et** `package.json` : les deux changent ensemble à chaque livraison.
+
 ### Déconnexion fiabilisée et garde-fou de démarrage (v1.18.1)
 - Se déconnecter ne recharge plus la page deux fois (cause probable de l'écran noir sur l'appli installée).
 - Si l'écran reste vide 8 s au démarrage : message + bouton « Réinitialiser et recharger » (`src/watchdog.ts`).
