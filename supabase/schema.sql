@@ -1493,7 +1493,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare r patch_lines; lbl text; txt text; arr text[]; ok text[];
 begin
   if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
-  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'model_id', 'lamp_id', 'accessories', 'position', 'focus', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
+  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'model_id', 'lamp_id', 'external_id', 'accessories', 'position', 'focus', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
   if p_field not in ('dimmer', 'curve') and not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   -- ligne existante, ou création pour un projecteur affecté
   if p_line is not null then select * into r from patch_lines where id = p_line and show_id = p_show;
@@ -1502,6 +1502,7 @@ begin
     if p_item is null or not exists (select 1 from show_items where show_id = p_show and item_id = p_item) then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
     insert into patch_lines (show_id, item_id) values (p_show, p_item) returning * into r;
   end if;
+  if p_field = 'external_id' and r.item_id is not null then raise exception 'Une location ne se rattache qu''à une ligne sans projecteur' using errcode = '22023'; end if;
   if p_field in ('model_text', 'model_id', 'lamp_id') and r.item_id is not null then raise exception 'Le modèle d''un projecteur vient de sa fiche' using errcode = '22023'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
   if p_field in ('circuit', 'dimmer', 'dmx', 'model_text', 'position', 'notes') then
@@ -1516,6 +1517,16 @@ begin
     end if;
     execute format('update patch_lines set %I = $1, updated_at = now(), updated_by_label = $2 where id = $3', p_field) using txt, lbl, r.id;
     if p_field = 'model_text' and txt <> '' then update patch_lines set model_id = null, lamp_id = null where id = r.id; end if;   -- texte libre ou modèle du catalogue, pas les deux
+  elsif p_field = 'external_id' then   -- rattache la ligne sans projecteur à une location / un prêt du spectacle (ou la détache)
+    txt := nullif(trim(coalesce(p_value #>> '{}', '')), '');
+    if txt is null then update patch_lines set external_id = null, updated_at = now(), updated_by_label = lbl where id = r.id;
+    else
+      if not exists (select 1 from show_externals where id = txt::uuid and show_id = p_show) then raise exception 'Location ou prêt inconnu pour ce spectacle' using errcode = '22023'; end if;
+      -- la ligne prend le modèle (et la lampe d'un PAR) de la demande liée à la location
+      update patch_lines set external_id = txt::uuid, model_text = '', updated_at = now(), updated_by_label = lbl,
+             model_id = (select d.model_id from show_externals e join show_demands d on d.id = e.demand_id where e.id = txt::uuid),
+             lamp_id = (select d.lamp_id from show_externals e join show_demands d on d.id = e.demand_id where e.id = txt::uuid) where id = r.id;
+    end if;
   elsif p_field in ('model_id', 'lamp_id') then
     txt := nullif(trim(coalesce(p_value #>> '{}', '')), '');
     if p_field = 'model_id' then
@@ -1605,7 +1616,7 @@ begin
     delete from show_gels where show_id = p_show and item_id = p_item;
     select m_id, l_id into pm, pl from patch_item_model(p_show, p_item);   -- la ligne garde le modèle (et la lampe voulue) du projecteur qu'elle quitte
     if cb.id is null then insert into patch_lines (show_id, item_id, gels, model_id, lamp_id, updated_by_label) values (p_show, null, gj, pm, pl, lbl);
-    else update patch_lines set item_id = null, model_text = '', gels = gj, model_id = pm, lamp_id = pl, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
+    else update patch_lines set item_id = null, model_text = '', gels = gj, model_id = pm, lamp_id = pl, external_id = null, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     perform log_event('SPECTACLE', format('« %s » : patch, la ligne du projecteur %s devient « sans projecteur » (il reste affecté)', s.name, p_item));
     return;
   end if;
@@ -1631,10 +1642,10 @@ begin
       select coalesce(jsonb_agg(jsonb_build_object('ref', ref, 'color', color) order by ref), '[]'::jsonb) into gj from show_gels where show_id = p_show and item_id = p_target;
       delete from show_gels where show_id = p_show and item_id = p_target;   -- les gélatines de l'ancienne ligne du projecteur passent à la ligne qui devient N/C
       select m_id, l_id into pm, pl from patch_item_model(p_show, p_target);
-      if tb.id is not null then update patch_lines set item_id = null, model_text = '', gels = gj, model_id = pm, lamp_id = pl, updated_at = now(), updated_by_label = lbl where id = tb.id;
+      if tb.id is not null then update patch_lines set item_id = null, model_text = '', gels = gj, model_id = pm, lamp_id = pl, external_id = null, updated_at = now(), updated_by_label = lbl where id = tb.id;
       elsif jsonb_array_length(gj) > 0 then insert into patch_lines (show_id, item_id, gels, model_id, lamp_id, updated_by_label) values (p_show, null, gj, pm, pl, lbl); end if;
       perform patch_gels_to_item(p_show, p_target, cb.gels, lbl);   -- celles de la ligne N/C passent au projecteur
-      update patch_lines set item_id = p_target, model_text = '', model_id = null, lamp_id = null, gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
+      update patch_lines set item_id = p_target, model_text = '', model_id = null, lamp_id = null, external_id = null, gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
       perform log_event('SPECTACLE', format('« %s » : patch, une ligne sans projecteur prend le projecteur %s', s.name, p_target));
     end if;
     return;
@@ -1656,7 +1667,7 @@ begin
   if p_mode = 'new' then
     if p_item is null then
       perform patch_gels_to_item(p_show, p_target, cb.gels, lbl);   -- les gélatines de la ligne passent au projecteur ajouté
-      update patch_lines set item_id = p_target, model_text = '', model_id = null, lamp_id = null, gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
+      update patch_lines set item_id = p_target, model_text = '', model_id = null, lamp_id = null, external_id = null, gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
     elsif cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     if p_item is not null then update show_gels set item_id = p_target where show_id = p_show and item_id = p_item; end if;   -- les gélatines suivent la ligne
     perform log_event('SPECTACLE', format('« %s » : patch, projecteur %s ajouté au spectacle sur une ligne', s.name, p_target));
@@ -1795,3 +1806,6 @@ begin
 end $$;
 revoke all on function add_model(text, text) from public, anon;
 grant execute on function add_model(text, text) to authenticated;
+
+-- v1.32.0 : lignes sans projecteur rattachées à une location / un prêt du spectacle (information : compteur « placées / quantité »)
+alter table patch_lines add column if not exists external_id uuid references show_externals(id) on delete set null;

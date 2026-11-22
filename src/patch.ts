@@ -6,6 +6,7 @@ import { describe } from './ref';
 export interface PatchLine {
   id: string; show_id: string; item_id: number | null; circuit: string; dimmer: string; curve: string[]; dmx: string;
   model_text: string; accessories: string[]; position: string; focus: boolean; notes: string; updated_at: string; updated_by_label: string | null;
+  external_id?: string | null;   // ligne N/C rattachée à une location / un prêt du spectacle
   model_id?: string | null; lamp_id?: string | null;   // ligne N/C préparée : modèle du catalogue (et lampe voulue pour un PAR)
   gels?: { ref: string; color: string }[];   // gélatines d'une ligne N/C (celles d'un projecteur affecté sont dans show_gels)
 }
@@ -35,6 +36,7 @@ export interface PatchRow {
   itemId: number | null;
   circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; gelIds: string[]; auto: boolean; accessories: string[]; position: string; focus: boolean; notes: string;
   updatedAt: string | null; updatedBy: string | null;
+  externalId: string | null; extNote: string;   // location / prêt auquel la ligne est rattachée, et sa mention (« loué chez X »)
   modelId: string | null; lampId: string | null; par: boolean;   // modèle et lampe voulus (projecteur affecté : ceux du spectacle ; ligne N/C : ceux choisis)
 }
 
@@ -60,13 +62,15 @@ export function buildRows(data: Data, showId: string, lines: PatchLine[]): Patch
     const row = fromLine(l, `l${l.id}`, null, m ? `${m.name}${lampName ? ' ' + lampName : ''}` : l.model_text, (l.gels ?? []).map((g) => g.ref));
     row.gelIds = row.gels;   // pour une ligne N/C, une gélatine se retire par sa référence
     row.modelId = m?.id ?? null; row.par = par; row.lampId = par ? l.lamp_id ?? null : null;
+    const ex = data.showExternals.find((e) => e.id === l.external_id && e.show_id === showId);   // location supprimée : la ligne reste, sans mention
+    if (ex) { row.externalId = ex.id; row.extNote = `${ex.kind === 'pret' ? 'prêté par' : 'loué chez'} ${ex.provider}`; }
     rows.push(row);
   }
   return rows;
 }
 function fromLine(l: PatchLine | null, key: string, itemId: number | null, model: string, gels: string[]): PatchRow {
   return {
-    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false, modelId: null, lampId: null, par: false,
+    key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false, externalId: null, extNote: '', modelId: null, lampId: null, par: false,
     circuit: l?.circuit ?? '', dimmer: l?.dimmer ?? '', curve: l?.curve ?? ['lineaire'], dmx: l?.dmx ?? '', accessories: l?.accessories ?? [],
     position: l?.position ?? '', focus: l?.focus ?? false, notes: l?.notes ?? '', updatedAt: l?.updated_at ?? null, updatedBy: l?.updated_by_label ?? null
   };
@@ -110,3 +114,17 @@ export function editableCols(actor: boolean, technician: boolean): Set<Col> {
 
 /** Texte lisible des choix multiples (courbe, accessoires). */
 export const labelsOf = (list: { k: string; label: string }[], vals: string[]): string => list.filter((x) => vals.includes(x.k)).map((x) => x.label).join(' · ');
+
+/** Locations / prêts du spectacle avec leur compteur : « 3 lignes placées sur 4 ». Information seulement (rien n'est bloqué). */
+export interface ExtStatus { id: string; label: string; short: string; tag: string; qty: number; placed: number }
+export function externalStatus(data: Data, showId: string, lines: PatchLine[]): ExtStatus[] {
+  return data.showExternals.filter((e) => e.show_id === showId).map((e) => {
+    const d = data.showDemands.find((x) => x.id === e.demand_id);
+    const model = data.models.find((m) => m.id === d?.model_id)?.name ?? '?', lamp = data.lamps.find((l) => l.id === d?.lamp_id)?.name;
+    const short = `${model}${lamp ? ' ' + lamp : ''} · ${e.kind === 'pret' ? 'prêté par' : 'loué chez'} ${e.provider}`;
+    const placed = lines.filter((l) => l.show_id === showId && l.item_id === null && l.external_id === e.id).length;
+    return { id: e.id, label: short, short, tag: `${e.kind === 'pret' ? 'Prêt' : 'Loc.'} ${e.provider}`, qty: e.qty, placed };
+  }).sort((a, b) => a.short.localeCompare(b.short, 'fr', { numeric: true }));
+}
+/** Texte du compteur d'une location : « 3/4 », avec « il en manque 1 » ou « 1 en trop ». */
+export const extCount = (x: ExtStatus): string => `${x.placed}/${x.qty}${x.placed < x.qty ? ` · il en manque ${x.qty - x.placed}` : x.placed > x.qty ? ` · ${x.placed - x.qty} en trop` : ' ✓'}`;

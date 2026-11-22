@@ -185,6 +185,14 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 - **Sur téléphone (écran tactile), toucher la cellule ID ouvre directement le scan de QR code** (v1.31.1) : la caméra démarre, et la même fenêtre propose « Choisir un projecteur… », noID (ligne avec projecteur) et la liste d'ID. Sur ordinateur, la liste déroulante habituelle. Détection : `matchMedia('(pointer: coarse)')` dans `src/views/patch.ts`.
 - **Scan sur téléphone (v1.31.2)** : à l'ouverture d'une fenêtre de scan sur écran tactile, le clavier est masqué (il revient si on touche le champ de filtre). Un projecteur scanné d'un **autre modèle** (affiché en rouge, mais sélectionnable) ou **indisponible pendant tout le spectacle** / QR non reconnu (refusé) déclenche un message rouge en gras et une vibration longue (`alarm` dans `src/ui/dialog.ts`, champ `scanWarn`).
 - **Garde « indisponible » (v1.31.3)** : tout ID choisi ou scanné est contrôlé avec `blockedReason` (autre spectacle aux mêmes dates, prêt / SAV qui chevauche le spectacle, panne ouverte), **y compris un projecteur déjà affecté au spectacle** (avant, seuls les projecteurs du stock étaient contrôlés). Refus : fenêtre rouge « ⛔ PROJECTEUR INDISPONIBLE » avec la raison, vibration, bouton Annuler seul ; le contrôle d'indisponibilité passe avant l'avertissement « modèle différent ».
+- **Lignes noID rattachées à une location / un prêt (v1.32.0)** : sur une ligne sans projecteur, un menu « Loc./prêt » (visible seulement si la fiche du spectacle a des locations ou prêts) la rattache à l'une d'elles ; la ligne prend alors le modèle (et la lampe d'un PAR) de la demande liée. L'en-tête affiche un compteur par location : « PAR64 CP62 · loué chez X **3/4 · il en manque 1** » (orange si le nombre ne correspond pas, « ✓ » sinon). **Purement informatif : rien n'est bloqué.** Le PDF ajoute « (loué chez X) » au modèle. Une ligne qui reçoit un projecteur du stock quitte la location (le compteur baisse) ; si la location est supprimée sur la fiche du spectacle, les lignes restent, sans mention. Base : colonne `patch_lines.external_id` (clé étrangère vers `show_externals`, `on delete set null`), valeur écrite par `set_patch_field`.
+
+| Qui | Droit |
+|---|---|
+| Tout le monde | voir le rattachement et le compteur |
+| Régisseur du spectacle, RG, admin | rattacher / détacher une ligne (comme la cellule ID) |
+| Technicien | lecture seule sur ce point |
+
 - **Modèles « similaires »** (liste `SIMILAR` dans `src/patchSuggest.ts`) : ETC 25-50 / 613 · 614 SX / 614 S · 714 SX / 714 · 329 HPC / 329 HPB · 310 HPC / 306 HPC.
 - **Dernière position (v1.30.0)** : calculée d'après la chronologie des spectacles (le plus récent qui a une position pour ce projecteur), pas d'après la date de saisie. Affichée dans la fiche du projecteur (« Dernière position · à jouer sur <spectacle> ») et utilisée pour classer les suggestions (spectacles commencés avant celui qu'on prépare).
 - **Toujours en tableau (v1.30.7)** : plus d'affichage « fiche » sur téléphone. Le tableau défile de côté et de haut en bas dans sa propre zone ; l'en-tête, les titres de colonnes et, à gauche, les colonnes **Circuit** et **Modèle** (placé juste après Circuit) restent fixes. CSS dans `src/styles.css` (section « Feuille toujours en tableau »), hauteur du tableau calculée par `fitTable` (`src/views/patch.ts`).
@@ -194,6 +202,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.32.0) | lignes noID rattachées à une location / un prêt : colonne `patch_lines.external_id`, `set_patch_field` (champ `external_id`), `patch_set_item` (détache la ligne) | v1.32.0 |
 | `schema.sql` fin de fichier (v1.30.0) | mode prépa : colonnes `patch_lines.model_id` / `lamp_id`, `set_patch_field` étendue, `patch_item_model`, `patch_set_item` mise à jour, `add_model` | v1.30.0 |
 | `schema.sql` fin de fichier (v1.27.0) | gélatines des lignes sans projecteur : colonne `patch_lines.gels`, `patch_add_line_gel`, `patch_delete_line_gel` | v1.27.0 |
 | `schema.sql` fin de fichier (v1.26.1) | courbe à choix unique (anciennes saisies multiples ramenées à un choix) | v1.26.1 |

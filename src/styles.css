@@ -226,6 +226,11 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .tag { display: inline-block; padding: 1px 6px; border: 1.5px solid var(--ink); font-size: .72rem; font-weight: 700; text-transform: uppercase; }
 .tag.late { background: var(--red); border-color: var(--red); color: #fff; } .tag.run { background: var(--yellow); border-color: var(--yellow); color: #000; }
 .scanerr { color: #fff !important; background: var(--red); font-weight: 800; padding: 8px 10px; }   /* alerte de scan : rouge bien visible */
+/* locations / prêts : compteur informatif (orange quand les nombres ne correspondent pas) */
+.extinfo .extwarn { color: #b45f00; font-weight: 700; }
+:root[data-theme="dark"] .extinfo .extwarn { color: #ffb15c; }
+@media (prefers-color-scheme: dark) { .extinfo .extwarn { color: #ffb15c; } }
+.extsel.linked { font-style: italic; }
 .dlg.danger { border: 5px solid var(--red); } .dlg.danger h2 { background: var(--red); color: #fff; margin: -16px -16px 10px; padding: 12px 16px; }   /* avertissement : cadre et titre rouges */
 .dlg { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 16px; width: min(92vw, 420px); }
 .dlg::backdrop { background: rgba(0,0,0,.6); }

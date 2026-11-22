@@ -9,7 +9,7 @@ import { EMPTY_DATA } from '../src/types';
 import { rollingStart } from '../src/views/calendar';
 import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
-import { buildRows, sortRows, editableCols, dmxRank } from '../src/patch';
+import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount } from '../src/patch';
 import type { PatchRow } from '../src/patch';
 import { rankStock, similarNames, lastPositions, lastPositionOf } from '../src/patchSuggest';
 
@@ -271,7 +271,7 @@ t('calendrier glissant : commence le lundi de la semaine passée', () => {
   assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
 });
 // --- Feuille de patch / focus ---
-const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
+const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, externalId: null, extNote: '', modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
 t('patch : droits par colonne', () => {
   assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer', 'gels']);   // technicien
   assert.equal(editableCols(false, false).size, 0);                                // lecture seule
@@ -328,5 +328,15 @@ t('prépa : classement même modèle, similaire, autres ; lampe et position', ()
   assert.deepEqual(r.map((x) => [x.id, x.group]), [[3, 'same'], [4, 'similar'], [1, 'other'], [2, 'other'], [5, 'other']]);
   const p = rankStock(d, show, { modelId: 'm-par', lampId: 'l1', par: true, position: 'P2' });
   assert.deepEqual(p.slice(0, 2).map((x) => x.id), [2, 1]);   // la lampe voulue passe avant la position
+});
+t('patch : lignes rattachées à une location, compteur informatif', () => {
+  const d = { ...EMPTY_DATA, models: [{ id: 'm1', name: 'PAR64' }] as Data['models'], showDemands: [{ id: 'd1', show_id: 's1', model_id: 'm1', lamp_id: null, qty: 2, missing: 0 }] as Data['showDemands'],
+    showExternals: [{ id: 'e1', show_id: 's1', demand_id: 'd1', kind: 'location', provider: 'Loueur', qty: 2, delivery_date: '2026-11-01', return_date: '2026-11-02' }] as Data['showExternals'] };
+  const ln = (id: string, ext: string | null) => ({ id, show_id: 's1', item_id: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model_text: '', accessories: [], position: '', focus: false, notes: '', updated_at: '', updated_by_label: null, external_id: ext });
+  assert.equal(extCount(externalStatus(d, 's1', [ln('a', 'e1')])[0]), '1/2 · il en manque 1');
+  assert.equal(extCount(externalStatus(d, 's1', [ln('a', 'e1'), ln('b', 'e1')])[0]), '2/2 ✓');
+  assert.equal(extCount(externalStatus(d, 's1', [ln('a', 'e1'), ln('b', 'e1'), ln('c', 'e1')])[0]), '3/2 · 1 en trop');
+  assert.equal(buildRows(d, 's1', [ln('a', 'e1')])[0].extNote, 'loué chez Loueur');
+  assert.equal(buildRows({ ...d, showExternals: [] }, 's1', [ln('a', 'e1')])[0].extNote, '', 'location supprimée : plus de mention');
 });
 console.log(`\n${n} tests OK`);

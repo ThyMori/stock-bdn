@@ -61,7 +61,7 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     doc.setFontSize(8); doc.setFont('helvetica', 'normal');
     const cells: Record<string, string[]> = {
       circuit: [r.circuit], dimmer: [r.dimmer], curve: [labelsOf(CURVES, r.curve).replace('DIRECT', 'DIRECT')], dmx: [r.curve.includes('direct') ? r.dmx : ''],
-      id: [r.itemId === null ? 'N/C' : String(r.itemId)], model: doc.splitTextToSize(r.model || '', COLS[5].w - 3) as string[], gels: [],
+      id: [r.itemId === null ? 'N/C' : String(r.itemId)], model: doc.splitTextToSize((r.model || '') + (r.extNote ? ` (${r.extNote})` : ''), COLS[5].w - 3) as string[], gels: [],
       accessories: doc.splitTextToSize(labelsOf(ACCESSORIES, r.accessories), COLS[7].w - 3) as string[], position: [r.position], focus: [''],
       notes: doc.splitTextToSize(r.notes || '', COLS[10].w - 3) as string[]
     };

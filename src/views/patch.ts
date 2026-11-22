@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
 import { gelColorOf } from '../gels';
-import { ACCESSORIES, COLS, CURVES, POSITIONS, buildRows, editableCols, labelsOf, sortRows } from '../patch';
+import { ACCESSORIES, COLS, CURVES, POSITIONS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows } from '../patch';
 import type { Col, PatchLine, PatchRow } from '../patch';
 import { fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
@@ -209,10 +209,12 @@ export const patchView: ViewFactory = ([showId]) => {
     }).join('');
     const free = !r.modelId && r.model ? `<option value="__keep" selected>${esc(r.model)} (texte libre)</option>` : '';
     const sel = `<select class="pin" data-k="model_pick" aria-label="Modèle du projecteur"><option value="" ${!r.modelId && !r.model ? 'selected' : ''}>—</option>${free}${groups}<option value="__text">Autre (texte libre)…</option>${can('regisseur_general') ? '<option value="__add">+ Ajouter un modèle au catalogue…</option>' : ''}</select>`;
-    if (!r.par) return sel;
     const model = d.models.find((m) => m.id === r.modelId);
     const lamps = d.lamps.filter((l) => !model?.socket_id || !l.socket_id || l.socket_id === model.socket_id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
-    return `${sel}<select class="pin" data-k="lamp_pick" aria-label="Lampe du PAR"><option value="">Lampe ?</option>${lamps.map((l) => `<option value="${esc(l.id)}" ${l.id === r.lampId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>`;
+    const lampSel = r.par ? `<select class="pin" data-k="lamp_pick" aria-label="Lampe du PAR"><option value="">Lampe ?</option>${lamps.map((l) => `<option value="${esc(l.id)}" ${l.id === r.lampId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>` : '';
+    const exts = externalStatus(d, showId, lines);   // locations / prêts du spectacle : la ligne peut y être rattachée (information)
+    const extSel = exts.length ? `<select class="pin extsel${r.externalId ? ' linked' : ''}" data-k="ext_pick" aria-label="Rattacher à une location ou un prêt"><option value="">Loc./prêt : aucun</option>${exts.map((x) => `<option value="${esc(x.id)}" ${x.id === r.externalId ? 'selected' : ''}>${esc(x.tag)} ${x.placed}/${x.qty}</option>`).join('')}</select>` : '';
+    return sel + lampSel + extSel;
   };
   /** Largeur (en caractères) d'une cellule étroite : celle de son contenu, avec un minimum. */
   const wch = (v: string, min = 3): number => Math.max(min, v.length + 1);
@@ -276,12 +278,14 @@ export const patchView: ViewFactory = ([showId]) => {
     const show = view().shows.find((s) => s.id === showId);
     const host = root.querySelector('#phost')!;
     if (!show) { host.innerHTML = '<div class="card empty">Spectacle introuvable.<br><a href="#/shows">Retour aux spectacles</a></div>'; return; }
-    const ed = edSet(), rows = ordered();
+    const ed = edSet(), rows = ordered(), exts = externalStatus(view(), showId, lines);
+    const pt = host.querySelector<HTMLElement>('.ptable'), keepTop = pt?.scrollTop ?? 0, keepLeft = pt?.scrollLeft ?? 0;   // on garde la position de défilement au redessin
     const last = rows.filter((r) => r.updatedAt).sort((a, b) => b.updatedAt!.localeCompare(a.updatedAt!))[0];
     const arrow = (c: Col) => (sortCol === c ? (dir === 1 ? ' ▲' : ' ▼') : '');
     host.innerHTML = `<div class="phead"><a href="#/show/${esc(showId)}" class="sub">‹ ${esc(show.name)}</a>
       <div class="row wrap"><h1 class="grow">Patch / Focus</h1><span id="pstat" class="sub ${statErr ? 'warn' : ''}" role="status">${esc(stat)}</span></div>
       <div class="sub">${esc(show.name)} · du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)} · ${rows.length} ligne${rows.length > 1 ? 's' : ''} · focus ${rows.filter((r) => r.focus).length}/${rows.length}${last ? ` · dernière modification ${esc(fmtDateTime(last.updatedAt!))}${last.updatedBy ? ' par ' + esc(last.updatedBy) : ''}` : ''}</div>
+      ${exts.length ? `<div class="sub extinfo">Locations / prêts : ${exts.map((x) => `<span class="${x.placed === x.qty ? '' : 'extwarn'}">${esc(x.short)} <b>${esc(extCount(x))}</b></span>`).join(' · ')}</div>` : ''}
       ${!navigator.onLine ? '<div class="banner">Hors ligne : la feuille est en lecture seule.</div>' : ed.size === 0 ? '<div class="sub">Consultation seulement : tu n\'es pas assigné à ce spectacle.</div>'
         : !canActShow(showId) ? '<div class="sub">Tu peux modifier la grada, la courbe et les gélatines.</div>' : ''}
       <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div></div>
@@ -290,6 +294,7 @@ export const patchView: ViewFactory = ([showId]) => {
       <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
         <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
     fitTable(root);
+    const nt = host.querySelector<HTMLElement>('.ptable'); if (nt) { nt.scrollTop = keepTop; nt.scrollLeft = keepLeft; }
   }
   /** Toujours en tableau (ordinateur et téléphone) : l'en-tête (titre, boutons, titres de colonnes) reste en place, seules les lignes défilent dans le tableau. */
   const fitTable = (root: HTMLElement) => {
@@ -379,7 +384,8 @@ export const patchView: ViewFactory = ([showId]) => {
         if (k === 'curve') { save(root, key, 'curve', [t.value]); return; }   // courbe : un seul choix
         if (k === 'id') { void act(root, key, 'id', t.value); return; }
         if (k === 'model_pick') { void pickModel(root, key, t.value); return; }   // modèle d'une ligne sans projecteur
-        if (k === 'lamp_pick') { save(root, key, 'lamp_id', t.value); return; }   // cellule ID : changement de projecteur
+        if (k === 'lamp_pick') { save(root, key, 'lamp_id', t.value); return; }
+        if (k === 'ext_pick') { save(root, key, 'external_id', t.value); queue = queue.then(() => paint(root)); return; }   // rattachement à une location : le compteur et le modèle sont mis à jour   // cellule ID : changement de projecteur
         save(root, key, k, k === 'focus' ? (t as HTMLInputElement).checked : t.value.trim());
         if (k === 'focus') tr.classList.toggle('done', (t as HTMLInputElement).checked);
       });
