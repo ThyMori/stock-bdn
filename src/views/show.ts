@@ -27,6 +27,7 @@ export const showView: ViewFactory = ([id]) => {
   let composer: HTMLElement | null = null;
   let gref = '';
   const rsel = new Set<number>();
+  let modelFilter = '';   // modèle affiché dans la liste des projecteurs ('' = tous) : un filtre, pas une sélection
 
   /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
   const makeComposer = (): HTMLElement => {
@@ -76,11 +77,13 @@ export const showView: ViewFactory = ([id]) => {
     const sels = canAssign ? mine : [];
     for (const n of [...rsel]) if (!sels.some((s) => s.item_id === n)) rsel.delete(n);
     const modelOf = (n: number) => d.items.find((i) => i.id === n)?.model_id ?? '';
-    const selModels = [...new Set(sels.map((s) => modelOf(s.item_id)))].map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', ids: sels.filter((s) => modelOf(s.item_id) === m).map((s) => s.item_id) }))
+    const selModels = [...new Set(mine.map((s) => modelOf(s.item_id)))].map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', ids: mine.filter((s) => modelOf(s.item_id) === m).map((s) => s.item_id) }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    if (modelFilter && !selModels.some((m) => m.id === modelFilter)) modelFilter = '';   // plus aucun projecteur de ce modèle : on retire le filtre
+    const shown = modelFilter ? mine.filter((s) => modelOf(s.item_id) === modelFilter) : mine;   // lignes affichées
     const origin = (s: (typeof mine)[number]) => (s.demand_id ? ` <span class="tag auto">${s.pinned ? 'choisi' : 'auto'}</span>` : '')
       + (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
-    const assigned = mine.map((s) => {
+    const assigned = shown.map((s) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
       return `<div class="item">${canAssign ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
@@ -149,8 +152,8 @@ export const showView: ViewFactory = ([id]) => {
         ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       ${demandCard}
       <div class="card"><div class="row"><h2 class="grow">Projecteurs (${mine.length})</h2>${canAssign && mode === 'view' ? '<button class="btn" data-act="mode" data-v="pick">+ Choisir à la main</button>' : ''}</div>
-        ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${rsel.size === sels.length ? 'Tout décocher' : 'Tout cocher'}</button>
-          ${selModels.length > 1 ? selModels.map((m) => `<button class="chip" data-act="rmodel" data-v="${esc(m.id)}" aria-pressed="${m.ids.every((n) => rsel.has(n))}">${esc(m.name)} (${m.ids.length})</button>`).join('') : ''}
+        ${selModels.length > 1 ? `<div class="selbar" role="group" aria-label="Filtrer par type de projecteur">${selModels.map((m) => `<button class="chip" data-act="rmodel" data-v="${esc(m.id)}" aria-pressed="${modelFilter === m.id}">${esc(m.name)} (${m.ids.length})</button>`).join('')}</div>` : ''}
+        ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${shown.length && shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'}${modelFilter ? ` (${shown.length})` : ''}</button>
           ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div></div>${picker}`;
     if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
@@ -370,14 +373,13 @@ export const showView: ViewFactory = ([id]) => {
         }
         else if (act === 'rtoggle') { const n = Number(v); if (rsel.has(n)) rsel.delete(n); else rsel.add(n); paint(root); }
         else if (act === 'rall') {
-          const all = view().showItems.filter((r) => r.show_id === id).map((r) => r.item_id);
-          if (rsel.size === all.length) rsel.clear(); else all.forEach((n) => rsel.add(n));
+          const dd = view();   // « Tout cocher » agit sur les lignes affichées (donc sur le type filtré, s'il y en a un)
+          const all = dd.showItems.filter((r) => r.show_id === id && (!modelFilter || dd.items.find((i) => i.id === r.item_id)?.model_id === modelFilter)).map((r) => r.item_id);
+          if (all.length && all.every((n) => rsel.has(n))) all.forEach((n) => rsel.delete(n)); else all.forEach((n) => rsel.add(n));
           paint(root);
         }
         else if (act === 'rmodel') {
-          const dd = view();
-          const ids = dd.showItems.filter((r) => r.show_id === id && dd.items.find((i) => i.id === r.item_id)?.model_id === v).map((r) => r.item_id);
-          if (ids.every((n) => rsel.has(n))) ids.forEach((n) => rsel.delete(n)); else ids.forEach((n) => rsel.add(n));
+          modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui filtre la liste sur ce type ; un second appui retire le filtre
           paint(root);
         }
         else if (act === 'gel-sel') {

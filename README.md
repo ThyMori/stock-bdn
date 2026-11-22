@@ -112,6 +112,9 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### Filtre par type dans la liste des projecteurs (v1.13.2)
+Sur la page d'un spectacle, un appui sur un type (« 614 SX (4) ») filtre la liste des projecteurs assignés ; un second appui retire le filtre. Rien n'est coché par ce geste : « Tout cocher » agit ensuite sur les lignes affichées (donc sur le type filtré), et les cases déjà cochées restent cochées quand on change de filtre.
+
 ### Référence à l'appli dans les PDF (v1.13.1)
 Chaque page des PDF générés (liste de prépa, rapport de démontage) porte en haut à droite « Stock BdN - stock-bdn.thierry-morin.com », cliquable (`src/pdfHeader.ts`). Si l'adresse de l'appli change, modifier `APP_URL` et `APP_LABEL` dans ce fichier.
 
