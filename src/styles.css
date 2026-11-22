@@ -528,3 +528,9 @@ dialog.help details > ul { margin: 2px 0 6px; padding-left: 20px; display: grid;
 .switch[aria-checked="true"] .knob { left: 35px; }
 .switch:disabled { cursor: default; opacity: .75; }
 @media (prefers-reduced-motion: reduce) { .switch, .switch .knob { transition: none; } }
+/* Pastille bleue cliquable de la fiche : disque bleu plein = posée, cercle pointillé vide = pas de pastille */
+.bluerow { display: flex; align-items: center; gap: 12px; }
+.bluebtn { flex: none; width: 44px; height: 44px; border-radius: 50%; border: 3px dashed var(--ink); background: transparent; padding: 0; display: inline-block; transition: background .2s, border-color .2s; }
+button.bluebtn { cursor: pointer; }
+.bluebtn.on { background: #1d6bff; border: 3px solid #1d6bff; }
+@media (prefers-reduced-motion: reduce) { .bluebtn { transition: none; } }

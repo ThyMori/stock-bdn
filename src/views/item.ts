@@ -195,7 +195,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
           <dt>Douille</dt><dd>${esc(d.socket?.name ?? '—')}</dd>
           <dt>Porte-filtre</dt><dd>${d.filter ? `${esc(d.filter.label)} <span class="muted">(${d.filter.sheets_lee ?? '–'} / feuille LEE · ${d.filter.sheets_rosco ?? '–'} / feuille Rosco)</span>` : '—'}</dd>
           <dt>Position actuelle</dt><dd>${esc(posLabel(positionNow(data, id, today)))}${item.blue_dot ? ' <span class="muted">(stocké au 3e quand il ne joue pas)</span>' : ''}</dd>
-          <dt>Pastille bleue</dt><dd>${canStatus ? `<button class="btn" data-act="bluedot" data-v="${item.blue_dot ? '0' : '1'}">${item.blue_dot ? 'Enlever la pastille' : 'Mettre la pastille'}</button>` : esc(item.blue_dot ? 'Oui' : 'Non')}<div class="sub" id="berr" role="alert"></div></dd>
+          <dt>Pastille bleue</dt><dd><div class="bluerow">${canStatus ? `<button class="bluebtn${item.blue_dot ? ' on' : ''}" role="switch" aria-checked="${!!item.blue_dot}" aria-label="Pastille bleue : stocké au 3e quand il ne joue pas" data-act="bluedot" data-v="${item.blue_dot ? '0' : '1'}"></button>` : `<span class="bluebtn${item.blue_dot ? ' on' : ''}" role="img" aria-label="${item.blue_dot ? 'Pastille bleue' : 'Pas de pastille'}"></span>`}<span class="sub">${item.blue_dot ? 'Stocké au 3e quand il ne joue pas' : 'Stocké dessous quand il ne joue pas'}</span></div><div class="sub warn" id="berr" role="alert"></div></dd>
           <dt>Dernier SAV</dt><dd>${fmtDate(item.last_service)}</dd>
           <dt>Notice</dt><dd>${d.model?.notice_url ? `<a href="${esc(d.model.notice_url)}" target="_blank" rel="noopener">Ouvrir la fiche technique</a>` : '—'}</dd>
         </dl>
