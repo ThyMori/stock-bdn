@@ -473,6 +473,10 @@ table.patch td[data-c="model"] .pin { min-width: 8em; }
 /* téléphone (portrait) et écran bas : tout est plus compact, bandeaux d'installation / notifications / spectacle en cours masqués */
 @media (max-width: 1000px), (orientation: landscape) and (max-height: 520px) {
   table.patch { --cw: 44px; font-size: .78rem; margin-top: 6px; }   /* Circuit plus étroite sur téléphone */
+  /* circuit + modèle (colonnes fixes) : jamais plus d'1/3 de la largeur de l'écran ; le modèle garde le reste et se coupe proprement */
+  table.patch th[data-c="model"], table.patch td[data-c="model"] { width: calc(100vw / 3 - var(--cw)); min-width: calc(100vw / 3 - var(--cw)); max-width: calc(100vw / 3 - var(--cw)); box-sizing: border-box; overflow: hidden; }
+  table.patch td[data-c="model"] .pin, table.patch td[data-c="model"] select, table.patch td[data-c="model"] > * { min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box; text-overflow: ellipsis; }
+  table.patch td[data-c="model"] > span { display: block; overflow-wrap: anywhere; }
   table.patch td[data-c="circuit"] .pin { padding-left: 2px; padding-right: 2px; font-size: 15px; }
   table.patch th[data-c="circuit"] button { padding-left: 2px; padding-right: 2px; font-size: .56rem; letter-spacing: 0; }
   table.patch th button { padding: 8px 4px; min-height: 36px; font-size: .66rem; letter-spacing: .03em; }
