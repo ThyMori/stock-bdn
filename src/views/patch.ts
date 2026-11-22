@@ -115,10 +115,12 @@ export const patchView: ViewFactory = ([showId]) => {
         const inShow = new Set(view().showItems.filter((x) => x.show_id === showId).map((x) => x.item_id));
         const mine = [...inShow].filter((n) => n !== r.itemId).sort((a, b) => a - b).map((n): [string, string] => [String(n), `n° ${n} · déjà dans ce spectacle`]);
         const opts = [...mine, ...candidates(r)];
-        const p = openForm('Scanner un projecteur', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), hint: 'Un projecteur déjà dans le spectacle prend la place de celui de la ligne ; un projecteur du stock est ajouté au spectacle.' }], { submit: 'Valider' });
+        const lead: [string, string][] = [['', 'Choisir un projecteur…'], ...(r.itemId !== null ? [['noid', 'noID (ligne sans projecteur)'] as [string, string]] : [])];   // choix de repli quand on ouvre directement le scan
+        const p = openForm('Scanner un projecteur', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: [...lead, ...opts], scan: scanReply(opts), hint: 'Un projecteur déjà dans le spectacle prend la place de celui de la ligne ; un projecteur du stock est ajouté au spectacle.' }], { submit: 'Valider' });
         setTimeout(() => document.querySelector<HTMLElement>('dialog.dlg [data-scan]')?.click(), 150);   // la caméra démarre tout de suite
         const f = await p;
         if (!f) { paintRow(root, key); return; }
+        if (f.to === 'noid') { await structural(root, 'patch_set_item', { ...who, p_mode: 'noid' }, 'Ligne sans projecteur'); return; }
         const n = Number(f.to);
         if (!(await warnModel(r, n))) { paintRow(root, key); return; }          // modèle différent : on demande confirmation
         if (inShow.has(n)) await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`);
@@ -340,6 +342,15 @@ export const patchView: ViewFactory = ([showId]) => {
       root.addEventListener('input', (e) => {   // la colonne s'élargit / se resserre pendant la frappe
         const t = e.target as HTMLInputElement; if (t.tagName === 'INPUT' && t.classList.contains('num')) t.style.setProperty('--w', Math.max(t.dataset.k === 'dmx' ? 5 : 3, t.value.length + 1) + 'ch');
       });
+      // téléphone (écran tactile) : toucher la cellule ID ouvre directement le scan de QR code (la liste d'ID reste dans la fenêtre, avec noID)
+      const coarse = () => window.matchMedia('(pointer: coarse)').matches;
+      const phoneId = (e: Event): HTMLElement | null => (coarse() && edSet().has('id') ? (e.target as HTMLElement).closest<HTMLElement>('select.idsel') : null);
+      root.addEventListener('mousedown', (e) => { if (phoneId(e)) e.preventDefault(); }, true);   // empêche l'ouverture de la liste native
+      root.addEventListener('click', (e) => {
+        const sel = phoneId(e); if (!sel) return;
+        e.preventDefault(); e.stopImmediatePropagation(); sel.blur();
+        const key = sel.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (key) void act(root, key, 'id', 'scan');
+      }, true);
       root.addEventListener('change', (e) => {
         const t = e.target as HTMLInputElement | HTMLSelectElement;
         if (t.id === 'psort') { sortCol = t.value as Col; dir = 1; resort(); paint(root); return; }
