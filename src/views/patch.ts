@@ -249,12 +249,12 @@ export const patchView: ViewFactory = ([showId]) => {
     const ed = edSet(), rows = ordered();
     const last = rows.filter((r) => r.updatedAt).sort((a, b) => b.updatedAt!.localeCompare(a.updatedAt!))[0];
     const arrow = (c: Col) => (sortCol === c ? (dir === 1 ? ' ▲' : ' ▼') : '');
-    host.innerHTML = `<a href="#/show/${esc(showId)}" class="sub">‹ ${esc(show.name)}</a>
+    host.innerHTML = `<div class="phead"><a href="#/show/${esc(showId)}" class="sub">‹ ${esc(show.name)}</a>
       <div class="row wrap"><h1 class="grow">Patch / Focus</h1><span id="pstat" class="sub ${statErr ? 'warn' : ''}" role="status">${esc(stat)}</span></div>
       <div class="sub">${esc(show.name)} · du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)} · ${rows.length} ligne${rows.length > 1 ? 's' : ''} · focus ${rows.filter((r) => r.focus).length}/${rows.length}${last ? ` · dernière modification ${esc(fmtDateTime(last.updatedAt!))}${last.updatedBy ? ' par ' + esc(last.updatedBy) : ''}` : ''}</div>
       ${!navigator.onLine ? '<div class="banner">Hors ligne : la feuille est en lecture seule.</div>' : ed.size === 0 ? '<div class="sub">Consultation seulement : tu n\'es pas assigné à ce spectacle.</div>'
         : !canActShow(showId) ? '<div class="sub">Tu peux modifier la grada, la courbe et les gélatines.</div>' : ''}
-      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div>
+      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div></div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
       <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>

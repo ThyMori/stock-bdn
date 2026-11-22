@@ -485,6 +485,12 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
   body:has(.patch-page) .topbar .brand { font-size: .9rem; }
   body:has(.patch-page) nav.tabs a { flex-direction: row; gap: 6px; font-size: .75rem; }
   body:has(.patch-page) nav.tabs a svg { width: 18px; height: 18px; }
+  /* en-tête de la feuille sur une ou deux lignes : retour, titre, état, boutons, puis le détail */
+  .phead { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; }
+  .phead > .row.wrap:not(.noprint) { display: contents; }
+  .phead > a.sub { order: 1; } .phead h1 { order: 2; } .phead #pstat { order: 3; } .phead > .noprint { order: 4; margin-left: auto; }
+  .phead > .sub:not(a) { order: 5; flex-basis: 100%; font-size: .78rem; }
+  .phead > .banner { order: 6; flex-basis: 100%; margin: 2px 0; padding: 4px 8px; }
   .patch-page h1 { font-size: 1.1rem; margin: 0; }
   .patch-page .noprint { margin: 2px 0; }
   .patch-page .noprint .btn { min-height: 36px; }
