@@ -316,7 +316,7 @@ export const patchView: ViewFactory = ([showId]) => {
       ${exts.length ? `<div class="sub extinfo">Locations / prêts : ${exts.map((x) => `<span class="${x.placed === x.qty ? '' : 'extwarn'}">${esc(x.short)} <b>${esc(extCount(x))}</b></span>`).join(' · ')}</div>` : ''}
       ${!navigator.onLine ? '<div class="banner">Hors ligne : la feuille est en lecture seule.</div>' : ed.size === 0 ? '<div class="sub">Consultation seulement : tu n\'es pas assigné à ce spectacle.</div>'
         : !canActShow(showId) ? '<div class="sub">Tu peux modifier la grada, la courbe et les gélatines.</div>' : ''}
-      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div></div>
+      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button>${ed.has('id') ? '<details class="multi eraser"><summary class="btn">Effacer…</summary><div class="opts"><button class="btn" data-act="clear-circuits">Effacer les circuits</button><button class="btn" data-act="clear-gels">Effacer les gels et accessoires</button></div></details>' : ''}</div></div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
       <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}" aria-label="${c.label}" title="${c.label}">${c.short ?? c.label}${arrow(c.k)}</button><span class="rz" data-rz="${c.k}" title="Tire pour changer la largeur (double-clic : largeur automatique)" aria-hidden="true"></span></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
@@ -380,6 +380,19 @@ export const patchView: ViewFactory = ([showId]) => {
             const id = (r.data as PatchLine | null)?.id;   // la nouvelle ligne est en bas : on la montre et on se place sur son circuit
             const tr = [...root.querySelectorAll<HTMLElement>('tbody tr')].find((x) => x.dataset.key === `l${id}`);
             tr?.scrollIntoView({ block: 'center' }); tr?.querySelector<HTMLInputElement>('input.pin')?.focus({ preventScroll: true });
+          })();
+          return;
+        }
+        const clr = t.closest<HTMLElement>('[data-act="clear-circuits"], [data-act="clear-gels"]');
+        if (clr) {   // vider les circuits (gradas gardées) ou les gélatines + accessoires, pour repartir d'un montage déjà patché
+          clr.closest('details')?.removeAttribute('open');   // le menu se referme
+          const circ = clr.dataset.act === 'clear-circuits';
+          if (!window.confirm(circ ? 'Effacer tous les circuits de cette feuille ? Les gradas sont conservées.' : 'Effacer toutes les gélatines et tous les accessoires de cette feuille ?')) return;
+          void (async () => {
+            busy++; setStat(root, 'Effacement…');
+            const r = await rpcCall(circ ? 'patch_clear_circuits' : 'patch_clear_gels_acc', { p_show: showId }); busy--; seed();
+            if (r.error) { setStat(root, r.error, true); toast(r.error); return; }
+            setStat(root, circ ? 'Circuits effacés ✓' : 'Gélatines et accessoires effacés ✓'); paint(root);
           })();
           return;
         }

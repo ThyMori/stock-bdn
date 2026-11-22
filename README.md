@@ -179,6 +179,11 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Largeur automatique selon les valeurs** (v1.38.2) : le titre d'une colonne ne l'élargit plus (il est tronqué s'il est trop long). Titres abrégés : c° (circuit), grad. (grada), acc. (accessoires) ; le nom complet reste en infobulle et pour les lecteurs d'écran.
 - **PDF de la feuille de patch** : look feuille de cahier griffonnée (papier crème, lignes bleues = une ligne du tableau, double marge rouge, écriture manuscrite **Caveat** en bleu stylo, traits et cases tremblés, focus fait = coup de surligneur). Police libre SIL OFL (`src/assets/fonts/`), téléchargée seulement à la génération ; **hors ligne ou en cas d'échec, le PDF garde le même look avec la police normale**. Code : `src/patchPdf.ts`, `src/pdfFonts.ts`, `src/handwriting.ts`. Les autres PDF (prépa, démontage, étiquettes QR) restent sobres.
 
+## Repartir d'un autre spectacle, effacer circuits / gels (v1.43.0)
+- **Fiche spectacle > « Utiliser le matériel d'un autre spectacle »** (régisseur général et admin seulement, contrôlé par la base) : recopie les projecteurs **assignés** du spectacle choisi (tous les spectacles, passés ou futurs) avec la lampe des PAR. Pas recopiés : matériel demandé, locations, prêts, lignes de patch N/C. Questions posées : garder les circuits (oui/non), garder les gélatines et accessoires (oui/non). La grada, la courbe, le DMX, la position et les notes sont toujours recopiées ; « focus fait » repart à zéro. Si le spectacle a déjà du matériel : alerte et choix **Compléter** (ajoute, l'existant n'est pas touché) ou **Remplacer** (retire d'abord les projecteurs et lignes de projecteur déjà là ; lignes N/C, locations et demandes restent). Un projecteur indisponible aux dates (autre spectacle, SAV, prêt) est sauté et listé. Fonction SQL `show_copy_from`.
+- **Feuille de patch > « Effacer les circuits »** (gradas conservées) et **« Effacer les gels et accessoires »** : régisseur assigné, régisseur général, admin (technicien : non). Confirmation avant. Fonctions `patch_clear_circuits`, `patch_clear_gels_acc`.
+- Tout est inscrit au journal d'activité et demande une connexion.
+
 ## Liste de prépa : refonte (v1.41.0)
 Le PDF de prépa (page du spectacle) est organisé ainsi : **À préparer** (projecteurs à sortir du stock, un groupe par modèle, stock dessous avant stock 3e) ; **Présents sur le spectacle précédent** (déjà en place, à part, avec leur position actuelle et leur stockage normal dessous / 3e) ; **Prêts et locations** ; **Gélatines à couper** (par format de projecteur, lignes sans projecteur comprises) ; **Accessoires à préparer** (par modèle, avec les numéros de projecteurs, issus de la feuille de patch). Code : `prepSections` dans `src/prepPdf.ts`.
 
@@ -243,6 +248,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |
 | `schema.sql` fin de fichier (v1.36.0) | `demand_attach`, `demand_detach`, `patch_set_item` et `patch_delete_line` modifiées, reprise de l'existant | v1.36.0 |

@@ -21,6 +21,8 @@ const SECTIONS: Section[] = [
     '<b>Liste</b> : recherche par numéro ou modèle (sans accents ni majuscules), filtre par état (disponible, utilisé, SAV, en prêt) et par type.',
     '<b>États</b> (mêmes couleurs partout) : <b>vert</b> disponible, <b>vert hachuré</b> utilisé (affecté à un spectacle en cours), <b>jaune</b> en prêt, <b>rouge</b> SAV.',
     '<b>Fiche</b> : état, lampe montée, historique, <b>agenda</b> (frise de 3 mois : libre, prêt, SAV), spectacles où il est affecté.',
+    '<b>Utiliser le matériel d\'un autre spectacle</b> (régisseurs généraux et admins, fiche du spectacle) : recopie les projecteurs assignés d\'un autre spectacle, avec ou sans ses circuits, gélatines et accessoires. Pratique pour un spectacle léger qui repart d\'un montage précédent. Les locations et prêts ne sont pas recopiés.',
+    '<b>Effacer les circuits / les gels et accessoires</b> (feuille de patch) : vide la colonne circuit (les gradas restent) ou les gélatines et accessoires, pour repartir d\'un montage déjà patché.',
     '<b>Positions</b> : la liste de la feuille de patch est rangée par zone (Cintres, Cage de scène, FOH, Autres) pour t\'y retrouver en faisant défiler.',
     '<b>Position actuelle</b> : sur la fiche, où est le projecteur aujourd\'hui (position de la feuille de patch d\'un spectacle monté, stock dessous, stock 3e, PRÊT ou SAV).',
     '<b>Pastille bleue</b> : projecteur stocké au <b>3e</b> quand il ne joue pas. Seuls les régisseurs généraux et les admins la mettent ou l\'enlèvent (bouton sur la fiche). Filtre « Stocké au 3e » dans la liste.',

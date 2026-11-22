@@ -1942,3 +1942,84 @@ end $$;
 -- v1.39.0 : positions renommées (balcon -> 2e balcon, 3e -> 3e balcon), rejouable sans effet une fois fait
 update patch_lines set position = '2e balcon' where position = 'balcon';
 update patch_lines set position = '3e balcon' where position = '3e';
+
+-- v1.43.0 : repartir d'un autre spectacle, et effacer circuits / gélatines + accessoires d'une feuille de patch
+
+-- Recopie le matériel ASSIGNÉ d'un autre spectacle (pas le matériel demandé, pas les locations / prêts / lignes N/C) et, au choix, sa feuille de patch.
+-- Régisseur général et admin seulement. p_mode : 'add' = compléter (l'existant est gardé), 'replace' = retirer d'abord les projecteurs et lignes de projecteur déjà là.
+-- Un projecteur indisponible aux dates du spectacle (autre spectacle, SAV, prêt...) est sauté et renvoyé dans « skipped ».
+create or replace function show_copy_from(p_target uuid, p_source uuid, p_mode text, p_circuits boolean, p_gels boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare t shows; s shows; si show_items; sl patch_lines; c text; lbl text; added int[] := '{}'; skipped jsonb := '[]'::jsonb; nlines int := 0;
+begin
+  if not has_role('regisseur_general') then raise exception 'Droits insuffisants : réservé aux régisseurs généraux et aux admins' using errcode = '42501'; end if;
+  if p_mode not in ('add', 'replace') then raise exception 'Mode inconnu' using errcode = '22023'; end if;
+  if p_target = p_source then raise exception 'Choisis un autre spectacle' using errcode = '22023'; end if;
+  select * into t from shows where id = p_target; if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+  select * into s from shows where id = p_source; if not found then raise exception 'Spectacle source introuvable' using errcode = '22023'; end if;
+  lbl := patch_label();
+  if p_mode = 'replace' then   -- on repart de zéro côté projecteurs (les lignes N/C, locations et demandes ne sont pas touchées)
+    delete from patch_lines where show_id = p_target and item_id is not null;
+    delete from show_items where show_id = p_target;   -- les gélatines de projecteur partent avec (cascade)
+  end if;
+  for si in select * from show_items where show_id = p_source order by item_id loop
+    if exists (select 1 from show_items where show_id = p_target and item_id = si.item_id) then continue; end if;   -- déjà là (mode compléter)
+    c := item_conflict(si.item_id, p_target, t.start_date, t.end_date);
+    if c is not null then skipped := skipped || jsonb_build_object('item', si.item_id, 'reason', c); continue; end if;
+    insert into show_items (show_id, item_id, lamp_id, added_by_label) values (p_target, si.item_id, si.lamp_id, lbl);
+    added := added || si.item_id;
+    select * into sl from patch_lines where show_id = p_source and item_id = si.item_id;
+    if found then
+      insert into patch_lines (show_id, item_id, circuit, dimmer, curve, dmx, accessories, position, focus, notes, updated_by_label)
+      values (p_target, si.item_id, case when p_circuits then sl.circuit else '' end, sl.dimmer, sl.curve, sl.dmx,
+              case when p_gels then sl.accessories else '{}' end, sl.position, false, sl.notes, lbl)
+      on conflict do nothing;
+      nlines := nlines + 1;
+    end if;
+    if p_gels then
+      insert into show_gels (show_id, item_id, ref, color, added_by_label)
+      select p_target, item_id, ref, color, lbl from show_gels where show_id = p_source and item_id = si.item_id;
+    end if;
+  end loop;
+  perform log_event('SPECTACLE', format('« %s » : matériel repris de « %s » (%s projecteur(s), %s ligne(s) de patch%s%s, %s sauté(s))', t.name, s.name, cardinality(added), nlines,
+    case when p_circuits then ', avec circuits' else ', sans circuits' end, case when p_gels then ', avec gélatines' else ', sans gélatines' end, jsonb_array_length(skipped)));
+  perform reallocate_all();
+  return jsonb_build_object('added', to_jsonb(added), 'skipped', skipped, 'lines', nlines);
+end $$;
+
+-- Efface tous les circuits d'une feuille de patch (les gradas restent). Régisseur assigné, régisseur général, admin.
+create or replace function patch_clear_circuits(p_show uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int; nm text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  update patch_lines set circuit = '', updated_at = now(), updated_by_label = patch_label() where show_id = p_show and circuit <> '';
+  get diagnostics n = row_count;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : circuits effacés sur la feuille de patch (%s ligne(s))', nm, n));
+  return n;
+end $$;
+
+-- Efface les gélatines et les accessoires de toute la feuille de patch (projecteurs et lignes N/C). Mêmes droits.
+create or replace function patch_clear_gels_acc(p_show uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare n1 int; n2 int; nm text;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  delete from show_gels where show_id = p_show;
+  get diagnostics n1 = row_count;
+  update patch_lines set gels = '[]'::jsonb, accessories = '{}', updated_at = now(), updated_by_label = patch_label()
+    where show_id = p_show and (gels <> '[]'::jsonb or accessories <> '{}');
+  get diagnostics n2 = row_count;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : gélatines et accessoires effacés sur la feuille de patch (%s gélatine(s), %s ligne(s))', nm, n1, n2));
+  return n1 + n2;
+end $$;
+
+revoke all on function show_copy_from(uuid,uuid,text,boolean,boolean) from public;
+revoke all on function patch_clear_circuits(uuid) from public;
+revoke all on function patch_clear_gels_acc(uuid) from public;
+grant execute on function show_copy_from(uuid,uuid,text,boolean,boolean) to authenticated;
+grant execute on function patch_clear_circuits(uuid) to authenticated;
+grant execute on function patch_clear_gels_acc(uuid) to authenticated;
+

@@ -173,7 +173,7 @@ export const showView: ViewFactory = ([id]) => {
         })()}
         <div class="row wrap"><a class="btn patch-btn" href="#/patch/${esc(id)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Patch / Focus</a><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button>
           <button class="btn" data-act="teardown"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10M18 15l2 2 3-4"/></svg>Rapport de démontage</button></div>
-        ${canEdit ? `<div class="row"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button></div>` : ''}
+        ${canEdit ? `<div class="row wrap"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button><button class="btn" data-act="copy-from">Utiliser le matériel d'un autre spectacle</button></div>` : ''}
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${alertCard}
       ${wall}
@@ -499,6 +499,29 @@ export const showView: ViewFactory = ([id]) => {
           if (r.error) wallErr(r.error);
         }
         else if (act === 'fix-lamp') setLamp(Number(v), el.dataset.l!);
+        else if (act === 'copy-from') {   // repartir du matériel (et au choix de la feuille de patch) d'un autre spectacle : régisseurs généraux et admins
+          const day = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+          const others = view().shows.filter((x) => x.id !== id).sort((a, b) => b.start_date.localeCompare(a.start_date));   // tous les spectacles, les plus récents d'abord
+          if (!others.length) { err('Il n\'y a pas d\'autre spectacle.'); return; }
+          const nItems = view().showItems.filter((x) => x.show_id === id).length, nLines = view().patchLines.filter((l) => l.show_id === id && l.item_id !== null).length;
+          const has = nItems > 0 || nLines > 0;   // le spectacle a déjà du matériel : on demande quoi faire
+          const yn: [string, string][] = [['oui', 'Oui'], ['non', 'Non']];
+          const f = await openForm('Utiliser le matériel d\'un autre spectacle', [
+            { name: 'src', label: 'Spectacle à recopier', type: 'select', search: true, required: true, options: others.map((x): [string, string] => [x.id, `${x.name} (${day(x.start_date)} au ${day(x.end_date)})`]), hint: 'Les projecteurs assignés sont recopiés. Le matériel demandé, les locations et les prêts ne le sont pas.' },
+            { name: 'circ', label: 'Garder les circuits de la feuille de patch ?', type: 'select', options: yn, value: 'oui', hint: 'La grada, la courbe, le DMX, la position et les notes sont toujours gardés. « Focus fait » est remis à zéro.' },
+            { name: 'gels', label: 'Garder les gélatines et les accessoires ?', type: 'select', options: yn, value: 'oui' },
+            ...(has ? [{ name: 'mode', label: `⚠ Ce spectacle a déjà ${nItems} projecteur${nItems > 1 ? 's' : ''} et ${nLines} ligne${nLines > 1 ? 's' : ''} de patch. Que faire ?`, type: 'select' as const, required: true, options: [['', 'Choisis…'], ['add', 'Compléter : j\'ajoute, sans toucher à l\'existant'], ['replace', 'Remplacer : je retire d\'abord les projecteurs déjà là']] as [string, string][], hint: 'Les lignes de patch sans projecteur (locations, prêts, à louer) restent en place dans les deux cas.' }] : [])
+          ], { submit: 'Recopier', validate: (v) => (has && !v.mode ? 'Choisis : compléter ou remplacer.' : null) });
+          if (!f) return;
+          const mode = has ? f.mode : 'add';
+          if (mode === 'replace' && !window.confirm(`Retirer les ${nItems} projecteur${nItems > 1 ? 's' : ''} de ce spectacle avant de recopier ?`)) return;
+          const r = await rpcCall('show_copy_from', { p_target: id, p_source: f.src, p_mode: mode, p_circuits: f.circ !== 'non', p_gels: f.gels !== 'non' });
+          if (r.error) { err(r.error); return; }
+          const res = r.data as { added: number[]; skipped: { item: number; reason: string }[]; lines: number } | null;
+          const sk = res?.skipped ?? [];
+          const msg = `${res?.added.length ?? 0} projecteur${(res?.added.length ?? 0) > 1 ? 's' : ''} recopié${(res?.added.length ?? 0) > 1 ? 's' : ''}.` + (sk.length ? ` Non recopiés (${sk.length}) : ${sk.map((x) => `${x.item} (${x.reason})`).join(', ')}.` : '');
+          err(sk.length ? msg : ''); if (!sk.length) toast(msg);
+        }
         else if (act === 'edit') {
           const s = view().shows.find((x) => x.id === id); if (!s) return;
           const f = await openForm('Modifier le spectacle', [

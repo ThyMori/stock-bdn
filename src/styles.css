@@ -544,3 +544,8 @@ table.patch th .rz:hover, table.patch th .rz:active { background: color-mix(in s
 @media (max-width: 1000px), (hover: none) { table.patch th .rz { display: none; } }
 table.patch th[data-c="circuit"] { z-index: 5; }   /* sa poignée reste au-dessus du titre « Modèle » voisin */
 table.patch th[data-c="circuit"] .rz { right: 0; }
+
+/* menu « Effacer… » de la feuille de patch : action rare, rangée dans un menu (le texte du bouton garde la hauteur d'un bouton) */
+details.eraser > summary.btn { display: inline-flex; border-bottom-width: 2px; }
+details.eraser .opts { min-width: 230px; gap: 6px; }
+details.eraser .opts .btn { width: 100%; text-align: left; }
