@@ -24,6 +24,8 @@ async function callAdmin(body: Record<string, unknown>): Promise<unknown> {
   return data;
 }
 
+interface SignupRequest { id: string; first_name: string; last_name: string; email: string; message: string; created_at: string }
+
 const ALL_TABS: [string, string][] = [['items', 'Projecteurs'], ['models', 'Modèles'], ['lamps', 'Lampes'], ['refs', 'Référentiels'], ['users', 'Utilisateurs']];
 
 export const adminView: ViewFactory = ([want = 'items']) => ({
@@ -155,7 +157,18 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           : !u.confirmed ? '<span class="warn">Invitation envoyée, pas encore activée</span>'
           : `Actif · dernière connexion ${fmtDate(u.last_sign_in_at)}`;
 
-        body.innerHTML = `<form class="card stack" id="inv"><h2>Inviter quelqu'un</h2>
+        // Demandes d'inscription en attente (administrateurs seulement : la table est protégée par la base).
+        let reqs: SignupRequest[] = [];
+        if (isAdmin) {
+          const r = await supabase.from('signup_requests').select('id,first_name,last_name,email,message,created_at').eq('status', 'pending').order('created_at');
+          if (!r.error) reqs = (r.data ?? []) as SignupRequest[];   // table absente (SQL pas rejoué) : on n'affiche simplement rien
+        }
+        const reqHtml = reqs.length ? `<div class="card stack" id="reqs"><h2>Demandes d'inscription (${reqs.length})</h2>` + reqs.map((q) => `<div class="stack" data-req="${q.id}">
+            <div><div class="t">${esc(q.first_name + ' ' + q.last_name)}</div><div class="s">${esc(q.email)} · ${fmtDate(q.created_at)}${q.message ? '<br>' + esc(q.message) : ''}</div></div>
+            <div class="row wrap"><select data-rrole style="width:auto" aria-label="Rôle à donner">${roleOpts('technicien')}</select>
+              <button class="btn small primary" data-ract="invite">Inviter</button><button class="btn small danger" data-ract="refuse">Refuser</button></div></div>`).join('') + '</div>' : '';
+
+        body.innerHTML = reqHtml + `<form class="card stack" id="inv"><h2>Inviter quelqu'un</h2>
             <label class="f">Prénom<input name="first_name" required autocomplete="off"></label>
             <label class="f">Nom<input name="last_name" required autocomplete="off"></label>
             <label class="f">Adresse e-mail<input name="email" type="email" required autocomplete="off"></label>
@@ -172,6 +185,28 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           </div>`).join('') + '</div>' +
           `<div class="sub">Révoquer un accès coupe immédiatement les droits et empêche toute nouvelle connexion, sans supprimer le compte ni l'historique. On peut le rétablir à tout moment.</div>`;
 
+        body.querySelector('#reqs')?.addEventListener('click', async (e) => {
+          const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-ract]');
+          const card = btn?.closest<HTMLElement>('[data-req]');
+          const q = reqs.find((x) => x.id === card?.dataset.req);
+          if (!btn || !card || !q) return;
+          try {
+            if (btn.dataset.ract === 'invite') {
+              const role = card.querySelector<HTMLSelectElement>('[data-rrole]')!.value;
+              btn.disabled = true;
+              await callAdmin({ action: 'invite', email: q.email, first_name: q.first_name, last_name: q.last_name, role, redirect_to: redirect });
+              const { error } = await supabase.rpc('resolve_signup_request', { p_id: q.id, p_status: 'invited' });
+              if (error) throw new Error(error.message);
+              say(`Invitation envoyée à ${q.email}.`);
+            } else {
+              if (!window.confirm(`Refuser la demande de ${q.first_name} ${q.last_name} ? Aucun e-mail n'est envoyé.`)) return;
+              const { error } = await supabase.rpc('resolve_signup_request', { p_id: q.id, p_status: 'refused' });
+              if (error) throw new Error(error.message);
+              say('Demande refusée.');
+            }
+            void draw();
+          } catch (err) { btn.disabled = false; say((err as Error).message, true); }
+        });
         body.querySelector('#inv')!.addEventListener('submit', async (e) => {
           e.preventDefault();
           const form = e.target as HTMLFormElement; const fd = new FormData(form);

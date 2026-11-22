@@ -81,3 +81,41 @@ const run = async (f: ReturnType<typeof fake>, body: unknown, opts: { token?: st
 { const r = await run(fake({ subs: [] }), { action: 'test' }); assert.equal(r.status, 404); }
 { const r = await run(fake(), { action: 'nimporte' }); assert.equal(r.status, 400); }
 console.log('push-notify : tout OK');
+
+// ---- demande d'inscription (publique) ----
+function fakeSignup(o: { rpc?: { data?: unknown; error?: { message: string } }; admins?: { id: string }[]; subs?: unknown[] } = {}) {
+  const calls: [string, unknown][] = [];
+  const db = {
+    auth: { getUser: async () => ({ data: { user: null }, error: { message: 'x' } }) },
+    rpc: async (fn: string, a: unknown) => { calls.push(['rpc:' + fn, a]); return o.rpc ?? { data: [{ id: 'R1', is_new: true }], error: null }; },
+    from: (table: string) => {
+      const chain: Record<string, unknown> = {
+        select: () => chain, eq: () => chain, delete: () => chain,
+        in: (_c: string, v: unknown) => { calls.push(['in:' + table, v]); return chain; },
+        then: (res: (v: unknown) => void) => res({ data: table === 'profiles' ? (o.admins ?? [{ id: 'A1' }]) : (o.subs ?? [{ endpoint: 'https://p/a', p256dh: 'k', auth_key: 'a' }]), error: null })
+      };
+      return chain;
+    }
+  };
+  return { db, calls };
+}
+const sreq = (b: unknown) => new Request('https://f', { method: 'POST', body: JSON.stringify(b) });   // sans en-tête Authorization
+const ssend = async (f: ReturnType<typeof fakeSignup>, b: unknown, e = env) => {
+  const sent: { payload: { title: string; body: string; url: string } }[] = [];
+  const res = await handle(sreq(b), e, () => f.db, async (_s, p) => { sent.push({ payload: JSON.parse(p) }); });
+  return { status: res.status, body: (await res.json()) as Record<string, unknown>, sent };
+};
+const SU = { action: 'signup', first_name: ' Ana ', last_name: 'Lys', email: 'ana@test.fr', message: 'Salut' };
+{ const f = fakeSignup(); const r = await ssend(f, SU);   // sans connexion : accepté, administrateurs prévenus
+  assert.equal(r.status, 200); assert.equal(r.sent.length, 1); assert.equal(r.sent[0].payload.url, '#/admin/users'); assert.match(r.sent[0].payload.body, /Ana Lys \(ana@test\.fr\)/);
+  assert.deepEqual(f.calls.find((c) => c[0] === 'rpc:create_signup_request')![1], { p_first: 'Ana', p_last: 'Lys', p_email: 'ana@test.fr', p_message: 'Salut' });
+  assert.deepEqual(f.calls.find((c) => c[0] === 'in:push_subscriptions')![1], ['A1'], 'seulement les admins'); }
+{ const f = fakeSignup(); const r = await ssend(f, { ...SU, website: 'http://spam' }); assert.equal(r.status, 200); assert.equal(r.sent.length, 0); assert.ok(!f.calls.length, 'robot : rien en base'); }
+{ const r = await ssend(fakeSignup({ rpc: { data: [{ id: null, is_new: false }] } }), SU); assert.equal(r.status, 200); assert.equal(r.sent.length, 0, 'doublon : pas de notification'); }
+{ const r = await ssend(fakeSignup({ rpc: { error: { message: 'Trop de demandes en ce moment, réessaie plus tard' } } }), SU); assert.equal(r.status, 429); }
+{ const r = await ssend(fakeSignup({ rpc: { error: { message: 'Adresse e-mail invalide' } } }), SU); assert.equal(r.status, 400); }
+{ const r = await ssend(fakeSignup({ rpc: { error: { message: 'secret interne SQL' } } }), SU); assert.equal(r.status, 500); assert.ok(!/secret/.test(String(r.body.error)), 'pas de fuite d\'erreur'); }
+{ const r = await ssend(fakeSignup(), { ...SU, first_name: '' }); assert.equal(r.status, 400); }
+{ const r = await ssend(fakeSignup(), SU, { ...env, vapidPrivate: '' }); assert.equal(r.status, 200, 'push non configuré : la demande est quand même enregistrée'); assert.equal(r.sent.length, 0); }
+{ const r = await run(fake(), { action: 'post', post_id: POST_ID }, { token: '' }); assert.equal(r.status, 401, 'les autres actions restent protégées'); }
+console.log('inscription : tout OK');

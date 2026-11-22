@@ -2,6 +2,8 @@
 //
 //   { action: "post", post_id }   -> prévient les personnes concernées par un message du mur (appelé par l'appli juste après la publication)
 //   { action: "test" }            -> envoie une notification d'essai aux appareils de l'appelant
+//   { action: "signup", first_name, last_name, email, message }
+//                                 -> PUBLIC (sans connexion) : enregistre une demande d'inscription et prévient les administrateurs
 //
 // Qui est prévenu est décidé en base (fonction SQL push_targets) :
 //   message d'un spectacle        -> tous les régisseurs généraux et administrateurs, les personnes concernées (régisseurs assignés, créateur, personnes déjà intervenues sur son mur) et les personnes citées ;
@@ -54,13 +56,48 @@ export function buildPayload(t: Target, postId: string): Payload {
   };
 }
 
+/** Demande d'inscription : enregistrement en base, puis notification push à tous les administrateurs actifs (au mieux). */
+async function signup(body: Record<string, unknown>, admin: Client, env: Env, send: Sender): Promise<Response> {
+  const OK = json(200, { ok: true });
+  if (typeof body.website === 'string' && body.website.trim() !== '') return OK;   // robot : on fait semblant
+  const t = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const first = t(body.first_name, 60), last = t(body.last_name, 60), email = t(body.email, 120), message = t(body.message, 500);
+  if (!first || !last) return json(400, { error: 'Prénom et nom obligatoires' });
+  const { data, error } = await admin.rpc('create_signup_request', { p_first: first, p_last: last, p_email: email, p_message: message });
+  if (error) {
+    const m = String(error.message);
+    const known = /invalide|obligatoires|Trop de demandes/.test(m);
+    return json(known ? (/Trop/.test(m) ? 429 : 400) : 500, { error: known ? m : 'Envoi impossible pour le moment' });
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.is_new || !env.vapidPublic || !env.vapidPrivate) return OK;   // doublon / compte existant, ou push non configuré : rien à notifier
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin').eq('active', true);
+  const ids = (admins ?? []).map((a: Client) => a.id);
+  if (!ids.length) return OK;
+  const { data: subs } = await admin.from('push_subscriptions').select('endpoint,p256dh,auth_key').in('user_id', ids);
+  const payload: Payload = { title: 'Demande d’inscription', body: `${first} ${last} (${email}) souhaite accéder à l’application`, url: '#/admin/users', tag: 'signup-' + row.id };
+  const dead: string[] = [];
+  await Promise.all((subs ?? []).map(async (x: Client) => {
+    try { await send({ endpoint: x.endpoint, keys: { p256dh: x.p256dh, auth: x.auth_key } }, JSON.stringify(payload)); }
+    catch (e) { const c = (e as { statusCode?: number })?.statusCode; if (c === 404 || c === 410) dead.push(x.endpoint); }
+  }));
+  if (dead.length) await admin.from('push_subscriptions').delete().in('endpoint', dead);
+  return OK;   // la personne reçoit toujours la même réponse, quoi qu'il arrive côté notification
+}
+
 export async function handle(req: Request, env: Env, createClient: (url: string, key: string, opts?: unknown) => Client, send: Sender): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'Méthode non autorisée' });
 
+  const admin = createClient(env.url, env.service, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  // Seule action ouverte sans connexion : la demande d'inscription (la personne n'a pas encore de compte).
+  // Garde-fous : piège à robots (champ « website » rempli = on ignore), validation et limite horaire dans create_signup_request.
+  const raw = await req.clone().json().catch(() => null) as Record<string, unknown> | null;
+  if (raw && raw.action === 'signup') return signup(raw, admin, env, send);
+
   const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
   if (!token) return json(401, { error: 'Non connecté' });
-  const admin = createClient(env.url, env.service, { auth: { persistSession: false, autoRefreshToken: false } });
 
   const { data: who, error: whoErr } = await admin.auth.getUser(token);
   const caller = who?.user;

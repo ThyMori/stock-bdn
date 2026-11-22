@@ -112,6 +112,19 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 ### Assignation automatique (v1.9)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
+### Demande d'inscription (v1.19.0)
+Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (prénom, nom, e-mail, message facultatif). L'accès reste sur invitation.
+
+| Qui | Droit |
+|---|---|
+| Personne sans compte | envoyer une demande (via la fonction `push-notify`, action `signup`) |
+| Administrateur | voir les demandes (onglet Admin → Utilisateurs), **Inviter** (choix du rôle) ou **Refuser**, être notifié par push |
+| Régisseur général et autres | rien |
+
+- Anti-abus : une seule demande en attente par e-mail, 10 demandes par heure au maximum, champ piège pour les robots. Si l'adresse a déjà un compte, la personne reçoit la même réponse (on ne révèle pas qui a un compte) mais rien n'est enregistré.
+- « Inviter » envoie l'invitation habituelle (`admin-users`) puis marque la demande « invitée » ; « Refuser » l'archive sans e-mail. Les deux sont inscrits au journal.
+- **Supabase** : 1) rejouer `supabase/schema.sql` (table `signup_requests`, fonctions `create_signup_request` et `resolve_signup_request`) ; 2) redéployer la fonction `push-notify` (Verify JWT reste désactivé).
+
 ### Déconnexion fiabilisée et garde-fou de démarrage (v1.18.1)
 - Se déconnecter ne recharge plus la page deux fois (cause probable de l'écran noir sur l'appli installée).
 - Si l'écran reste vide 8 s au démarrage : message + bouton « Réinitialiser et recharger » (`src/watchdog.ts`).

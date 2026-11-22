@@ -1316,3 +1316,66 @@ end $$;
 drop trigger if exists on_auth_user_email_changed on auth.users;
 create trigger on_auth_user_email_changed after update of email on auth.users
   for each row when (old.email is distinct from new.email and new.email is not null) execute function sync_profile_email();
+
+-- ---------- v1.19 : demandes d'inscription ----------
+-- Une personne sans compte envoie une demande depuis l'écran de connexion. Elle passe par la fonction « push-notify »
+-- (clé service_role) : l'appli n'a aucun droit direct sur cette table. Seuls les administrateurs la lisent et la traitent.
+create table if not exists signup_requests (
+  id          uuid primary key default gen_random_uuid(),
+  first_name  text not null check (length(first_name) between 1 and 60),
+  last_name   text not null check (length(last_name) between 1 and 60),
+  email       text not null check (length(email) between 5 and 120),
+  message     text not null default '' check (length(message) <= 500),
+  status      text not null default 'pending' check (status in ('pending', 'invited', 'refused')),
+  created_at  timestamptz not null default now(),
+  handled_by  uuid references profiles(id) on delete set null,
+  handled_at  timestamptz
+);
+-- une seule demande « en attente » par adresse e-mail
+create unique index if not exists signup_requests_pending_email on signup_requests (lower(email)) where status = 'pending';
+alter table signup_requests enable row level security;
+revoke all on signup_requests from anon, authenticated;
+grant select on signup_requests to authenticated;
+drop policy if exists signup_requests_admin_read on signup_requests;
+create policy signup_requests_admin_read on signup_requests for select using (has_role('admin'));
+
+-- Création d'une demande (appelée uniquement par la fonction serveur). Renvoie l'id et si une notification doit partir.
+-- Silencieuse (aucune nouvelle ligne) si l'adresse a déjà un compte ou une demande en attente : on ne révèle pas qui a un compte.
+create or replace function create_signup_request(p_first text, p_last text, p_email text, p_message text)
+returns table(id uuid, is_new boolean)
+language plpgsql security definer set search_path = public as $$
+declare e text := lower(trim(coalesce(p_email, ''))); nid uuid;
+begin
+  if e !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(e) > 120 then raise exception 'Adresse e-mail invalide'; end if;
+  if length(trim(coalesce(p_first, ''))) = 0 or length(trim(coalesce(p_last, ''))) = 0 then raise exception 'Prénom et nom obligatoires'; end if;
+  if (select count(*) from signup_requests where created_at > now() - interval '1 hour') >= 10 then
+    raise exception 'Trop de demandes en ce moment, réessaie plus tard';
+  end if;
+  if exists (select 1 from profiles where lower(email) = e) or exists (select 1 from signup_requests where lower(signup_requests.email) = e and status = 'pending') then
+    return query select null::uuid, false; return;
+  end if;
+  insert into signup_requests (first_name, last_name, email, message)
+  values (left(trim(p_first), 60), left(trim(p_last), 60), e, left(trim(coalesce(p_message, '')), 500)) returning signup_requests.id into nid;
+  return query select nid, true;
+end $$;
+revoke all on function create_signup_request(text, text, text, text) from public, anon, authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function create_signup_request(text, text, text, text) to service_role;
+  end if;
+end $$;
+
+-- Traitement par un administrateur : « invited » (après l'invitation) ou « refused ».
+create or replace function resolve_signup_request(p_id uuid, p_status text) returns void
+language plpgsql security definer set search_path = public as $$
+declare r signup_requests;
+begin
+  if not has_role('admin') then raise exception 'Réservé aux administrateurs'; end if;
+  if p_status not in ('invited', 'refused') then raise exception 'Statut invalide'; end if;
+  update signup_requests set status = p_status, handled_by = auth.uid(), handled_at = now()
+   where signup_requests.id = p_id and status = 'pending' returning * into r;
+  if r.id is null then raise exception 'Demande introuvable ou déjà traitée'; end if;
+  perform log_event('COMPTE', format('demande d''inscription de %s %s (%s) : %s', r.first_name, r.last_name, r.email, case p_status when 'invited' then 'invitée' else 'refusée' end));
+end $$;
+revoke all on function resolve_signup_request(uuid, text) from public, anon;
+grant execute on function resolve_signup_request(uuid, text) to authenticated;
