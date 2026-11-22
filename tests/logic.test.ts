@@ -6,6 +6,7 @@ import { compareShows } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
 import { todayStr, addDays, applyPending, barSpan, counts, currentImmo, dayOf, immoState, isTransient, parseScan } from '../src/logic';
 import { EMPTY_DATA } from '../src/types';
+import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
 
 let n = 0;
@@ -243,5 +244,14 @@ t('prêts / locations : libellé et rappel de calendrier', () => {
   assert.equal(c[0].label, '4 × PAR64 CP62 loués chez Dushow · jusqu\'au 20/11');
   assert.equal(c[1].label, '1 × PAR64 CP62 prêté par Vidy · jusqu\'au 18/11');
   assert.deepEqual([c[0].start, c[0].end], ['2026-11-04', '2026-11-20']);
+});
+t('agenda : fenêtre glissante de 20 jours (5 avant, aujourd\'hui, 14 après)', () => {
+  const w = dayWindow('2026-11-22', 0);
+  assert.deepEqual([w.from, w.to], ['2026-11-17', '2026-12-06']);
+  assert.equal(addDays(w.to, 1) > w.to, true);
+  assert.deepEqual(w.ticks.map((t) => t.label), ['17/11', '22/11', '27/11', '02/12']);
+  const next = dayWindow('2026-11-22', 14);
+  assert.deepEqual([next.from, next.to], ['2026-12-01', '2026-12-20']);
+  assert.deepEqual([dayWindow('2026-03-01', 0).from, dayWindow('2026-01-03', 0).from], ['2026-02-24', '2025-12-29']);   // passage de mois et d'année
 });
 console.log(`\n${n} tests OK`);

@@ -12,7 +12,7 @@ import { supabase } from '../supabase';
 
 export const itemView: ViewFactory = ([idStr]) => {
   const id = Number(idStr);
-  let offset = 0;                       // décalage de la frise de l'agenda, en mois
+  let offset = 0;                       // décalage de la frise de l'agenda, en jours
   return {
     mount(root) {
       root.innerHTML = `<div class="page">
