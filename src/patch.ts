@@ -6,6 +6,7 @@ import { describe } from './ref';
 export interface PatchLine {
   id: string; show_id: string; item_id: number | null; circuit: string; dimmer: string; curve: string[]; dmx: string;
   model_text: string; accessories: string[]; position: string; focus: boolean; notes: string; updated_at: string; updated_by_label: string | null;
+  state?: '' | 'ok' | 'todo'; state_note?: string;   // état : vide, ok (vert, focus fait) ou todo (rouge, à faire) + ce qu'il y a à faire
   need_demand_id?: string | null;   // ligne « à louer / à emprunter » : demande de matériel que la ligne fait monter de 1 tant que rien ne la couvre
   external_id?: string | null;   // ligne N/C rattachée à une location / un prêt du spectacle
   model_id?: string | null; lamp_id?: string | null;   // ligne N/C préparée : modèle du catalogue (et lampe voulue pour un PAR)
@@ -31,11 +32,11 @@ export const POSITION_GROUPS: { label: string; items: string[] }[] = [
 export const POSITIONS = POSITION_GROUPS.flatMap((g) => g.items);
 
 /** Colonnes, dans l'ordre d'affichage. */
-export type Col = 'circuit' | 'dimmer' | 'curve' | 'dmx' | 'id' | 'model' | 'gels' | 'accessories' | 'position' | 'focus' | 'notes';
+export type Col = 'circuit' | 'dimmer' | 'curve' | 'dmx' | 'id' | 'model' | 'gels' | 'accessories' | 'position' | 'state' | 'notes';
 export const COLS: { k: Col; label: string; short?: string }[] = [
   { k: 'circuit', label: 'Circuit', short: 'c°' }, { k: 'model', label: 'Modèle' }, { k: 'dimmer', label: 'Grada', short: 'grad.' }, { k: 'curve', label: 'Courbe' }, { k: 'dmx', label: 'DMX' }, { k: 'id', label: 'ID' },
   { k: 'gels', label: 'Gélatines' }, { k: 'accessories', label: 'Accessoires', short: 'acc.' }, { k: 'position', label: 'Position' },
-  { k: 'focus', label: 'Focus' }, { k: 'notes', label: 'Notes' }
+  { k: 'state', label: 'État' }, { k: 'notes', label: 'Notes' }
 ];
 
 /** Une ligne affichée : ce qui est enregistré + ce qui vient du matériel (modèle, gélatines). */
@@ -43,7 +44,7 @@ export interface PatchRow {
   key: string;                // identifiant stable de la ligne (« i12 » pour le projecteur 12, « l<uuid> » pour une ligne N/C)
   lineId: string | null;      // ligne en base (nulle tant que rien n'a été saisi)
   itemId: number | null;
-  circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; gelIds: string[]; auto: boolean; accessories: string[]; position: string; focus: boolean; notes: string;
+  circuit: string; dimmer: string; curve: string[]; dmx: string; model: string; gels: string[]; gelIds: string[]; auto: boolean; accessories: string[]; position: string; focus: boolean; state: '' | 'ok' | 'todo'; stateNote: string; notes: string;
   updatedAt: string | null; updatedBy: string | null;
   needId: string | null;   // ligne « à louer / à emprunter » (pas encore de location saisie)
   externalId: string | null; extNote: string;   // location / prêt auquel la ligne est rattachée, et sa mention (« loué chez X »)
@@ -83,7 +84,7 @@ function fromLine(l: PatchLine | null, key: string, itemId: number | null, model
   return {
     key, lineId: l?.id ?? null, itemId, model, gels, gelIds: [], auto: false, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false,
     circuit: l?.circuit ?? '', dimmer: l?.dimmer ?? '', curve: l?.curve ?? ['lineaire'], dmx: l?.dmx ?? '', accessories: l?.accessories ?? [],
-    position: l?.position ?? '', focus: l?.focus ?? false, notes: l?.notes ?? '', updatedAt: l?.updated_at ?? null, updatedBy: l?.updated_by_label ?? null
+    position: l?.position ?? '', focus: (l?.state ?? (l?.focus ? 'ok' : '')) === 'ok', state: l?.state ?? (l?.focus ? 'ok' : ''), stateNote: l?.state_note ?? '', notes: l?.notes ?? '', updatedAt: l?.updated_at ?? null, updatedBy: l?.updated_by_label ?? null
   };
 }
 
@@ -98,7 +99,7 @@ export function sortRows(rows: PatchRow[], col: Col, dir: 1 | -1): PatchRow[] {
     switch (col) {
       case 'circuit': return !r.circuit; case 'dimmer': return !r.dimmer; case 'dmx': return !r.dmx; case 'id': return r.itemId === null;
       case 'model': return !r.model; case 'gels': return !r.gels.length; case 'accessories': return !r.accessories.length;
-      case 'position': return !r.position; case 'notes': return !r.notes; case 'curve': return !r.curve.length; case 'focus': return false;
+      case 'position': return !r.position; case 'notes': return !r.notes; case 'curve': return !r.curve.length; case 'state': return !r.state;
     }
   };
   const cmp = (a: PatchRow, b: PatchRow): number => {
@@ -107,7 +108,7 @@ export function sortRows(rows: PatchRow[], col: Col, dir: 1 | -1): PatchRow[] {
       case 'id': return (a.itemId ?? 0) - (b.itemId ?? 0); case 'model': return nat(a.model, b.model);
       case 'gels': return nat(a.gels.join(' '), b.gels.join(' ')); case 'accessories': return nat(a.accessories.join(' '), b.accessories.join(' '));
       case 'position': return POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position); case 'notes': return nat(a.notes, b.notes);
-      case 'curve': return nat(a.curve.join(' '), b.curve.join(' ')); case 'focus': return Number(b.focus) - Number(a.focus);   // focalisés d'abord (sens croissant)
+      case 'curve': return nat(a.curve.join(' '), b.curve.join(' ')); case 'state': return (a.state === 'todo' ? 0 : 1) - (b.state === 'todo' ? 0 : 1);   // « à faire » d'abord, puis « fait » (sens croissant) ; les cases vides passent toujours en dernier
     }
   };
   return [...rows].sort((a, b) => {
@@ -119,7 +120,7 @@ export function sortRows(rows: PatchRow[], col: Col, dir: 1 | -1): PatchRow[] {
 
 /** Colonnes qu'on peut modifier selon le rôle : technicien = grada, courbe et gélatines ; régisseur assigné / RG / admin = tout (dont l'ID). */
 export function editableCols(actor: boolean, technician: boolean): Set<Col> {
-  if (actor) return new Set<Col>(['circuit', 'dimmer', 'curve', 'dmx', 'id', 'model', 'gels', 'accessories', 'position', 'focus', 'notes']);
+  if (actor) return new Set<Col>(['circuit', 'dimmer', 'curve', 'dmx', 'id', 'model', 'gels', 'accessories', 'position', 'state', 'notes']);
   return technician ? new Set<Col>(['dimmer', 'curve', 'gels']) : new Set<Col>();
 }
 
@@ -139,3 +140,10 @@ export function externalStatus(data: Data, showId: string, lines: PatchLine[]): 
 }
 /** Texte du compteur d'une location : « 3/4 », avec « il en manque 1 » ou « 1 en trop ». */
 export const extCount = (x: ExtStatus): string => `${x.placed}/${x.qty}${x.placed < x.qty ? ` · il en manque ${x.qty - x.placed}` : x.placed > x.qty ? ` · ${x.placed - x.qty} en trop` : ' ✓'}`;
+
+/** Comptes de l'état des lignes : faites (vert) et à faire (rouge). */
+export function stateCounts(rows: PatchRow[]): { ok: number; todo: number } {
+  return { ok: rows.filter((r) => r.state === 'ok').length, todo: rows.filter((r) => r.state === 'todo').length };
+}
+/** Texte d'en-tête : « 3 faits · 2 à faire ». */
+export const stateText = (rows: PatchRow[]): string => { const c = stateCounts(rows); return `${c.ok} fait${c.ok > 1 ? 's' : ''} · ${c.todo} à faire`; };

@@ -52,7 +52,8 @@ const SECTIONS: Section[] = [
     '<b>Régisseurs</b> : seul le régisseur assigné au spectacle (ou un régisseur général / admin) peut y affecter des projecteurs.'
   ] },
   { title: 'Patch / Focus', items: [
-    'Bouton bleu <b>Patch / Focus</b> dans l\'en-tête d\'une fiche de spectacle : une ligne par projecteur affecté, avec circuit, grada, courbe, adresse DMX, ID, modèle, gélatines, accessoires, position, focus et notes.',
+    'Bouton bleu <b>Patch / Focus</b> dans l\'en-tête d\'une fiche de spectacle : une ligne par projecteur affecté, avec circuit, grada, courbe, adresse DMX, ID, modèle, gélatines, accessoires, position, état et notes.',
+    '<b>État</b> : un premier appui sur le rond le passe en <b>vert</b> (fait). Un deuxième le passe en <b>rouge</b> (à faire) et ouvre une fenêtre pour noter ce qu\'il y a à faire. La note apparaît sous une petite pastille « i » : touche-la (téléphone) ou survole-la (ordinateur) ; sur téléphone, « Modifier la note » est dans la bulle. Un troisième appui efface l\'état. Dans les PDF, la note est écrite en bas de page.',
     '<b>Trier</b> : touche un titre de colonne (ordinateur) ou utilise « Trier par » (téléphone). Les cases vides passent en dernier.',
     '<b>Courbe</b> : un seul choix (Linéaire par défaut, Off/On, Autre, DIRECT). Avec DIRECT, une <b>adresse DMX</b> au format univers-adresse (ex. 1-45) devient possible.',
     '<b>Qui peut quoi</b> : tout le monde voit la feuille. Un technicien modifie la grada, la courbe et les gélatines. Le régisseur du spectacle, le régisseur général et l\'admin modifient tout, changent les ID et ajoutent ou suppriment des lignes.',

@@ -5,7 +5,7 @@ import type { Data } from './types';
 import { gelColorOf } from './gels';
 import { ACCESSORIES, CURVES, labelsOf } from './patch';
 import type { PatchRow } from './patch';
-import { sortRows } from './patch';
+import { sortRows, stateText } from './patch';
 import { positionGroups } from './patchLists';
 import { appReference } from './pdfHeader';
 import { HAND, addHandFont } from './pdfFonts';
@@ -28,7 +28,7 @@ type PCol = { k: string; label: string; w: number };
 const COLS: PCol[] = [
   { k: 'circuit', label: 'CIRCUIT', w: 18 }, { k: 'dimmer', label: 'GRADA', w: 16 }, { k: 'curve', label: 'COURBE', w: 24 }, { k: 'dmx', label: 'DMX', w: 16 },
   { k: 'id', label: 'ID', w: 14 }, { k: 'model', label: 'MODÈLE', w: 44 }, { k: 'gels', label: 'GÉLATINES', w: 40 }, { k: 'accessories', label: 'ACCESSOIRES', w: 30 },
-  { k: 'position', label: 'POSITION', w: 28 }, { k: 'focus', label: 'FOCUS', w: 12 }, { k: 'notes', label: 'NOTES', w: 35 }
+  { k: 'position', label: 'POSITION', w: 28 }, { k: 'state', label: 'ÉTAT', w: 12 }, { k: 'notes', label: 'NOTES', w: 35 }
 ];
 
 /** Génère le PDF dans l'ordre des lignes reçues (celui de l'écran). jsPDF est chargé à la demande.
@@ -76,7 +76,7 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     const tw = doc.getTextWidth('Patch / Focus ');
     color(INK); font(true, 16); write(show.name, M + tw + 6, 20);
     doc.setDrawColor(...RED); doc.setLineWidth(0.5); pen(M, 22.3, M + tw - 2, 22.3, 0.3, 6);   // soulignement rouge
-    color(PENCIL); plain(false, 10); say(`Du ${ISO_DAY(show.start_date)} au ${ISO_DAY(show.end_date)}  -  ${rows.length} ligne${rows.length > 1 ? 's' : ''}  -  focus ${rows.filter((r) => r.focus).length}/${rows.length}`, M, 28);
+    color(PENCIL); plain(false, 10); say(`Du ${ISO_DAY(show.start_date)} au ${ISO_DAY(show.end_date)}  -  ${rows.length} ligne${rows.length > 1 ? 's' : ''}  -  ${stateText(rows)}`, M, 28);
     color(RED); plain(true, 10); say(`Générée le ${generated}`, M, 34);
     if (last) { const gw = doc.getTextWidth(`Générée le ${generated}`); color(PENCIL); plain(false, 10);
       say(`   -   dernière modification de la feuille le ${stamp(new Date(last.updatedAt!))}${last.updatedBy ? ' par ' + last.updatedBy : ''}`, M + gw + 1, 34); }
@@ -92,12 +92,25 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
   const gelColor = (ref: string) => data.showGels.find((g) => g.show_id === showId && g.ref === ref)?.color ?? gelColorOf(ref);   // ligne sans projecteur : couleur déduite de la référence
 
   let y = TOP, started = false;                                 // haut de la ligne en cours ; une page a-t-elle déjà été créée ?
-  const newPage = (first: boolean) => { if (!first) doc.addPage(); paper(); header(); };
+  // notes de bas de page : les « à faire » de la page en cours, numérotées 1, 2, 3… à chaque page, écrites en bas de cette page
+  let notes: { n: number; lines: string[] }[] = [];
+  const noteLines = (n: number, label: string, text: string): string[] => { plain(false, 8); return doc.splitTextToSize(`${n}  ${label}${text ? ' : ' + text : ''}`, W - 2 * M - 4) as string[]; };
+  const footH = () => (notes.length ? 4 + notes.reduce((a, x) => a + x.lines.length * 3.7, 0) : 0);   // hauteur réservée en bas de la page
+  const limit = () => H - 14 - footH();                          // bas de la zone des lignes
+  const flushNotes = () => {                                      // écrit les notes de la page en cours juste au-dessus du pied de page
+    if (!notes.length) return;
+    let ny = H - 14 - footH() + 4;
+    doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); pen(M, ny - 3, M + 40, ny - 3, 0.1, 8);
+    plain(false, 8); color(RED);
+    for (const x of notes) { for (const l of x.lines) { say(l, M + 1, ny); ny += 3.7; } }
+    color(INK); notes = [];
+  };
+  const newPage = (first: boolean) => { flushNotes(); if (!first) doc.addPage(); paper(); header(); };
   /** Commence une feuille sur une nouvelle page. */
   const begin = (title: string, cols: PCol[]) => { cur = { title, cols }; newPage(!started); started = true; y = TOP; };
   /** Titre d'une zone (« CINTRES »…) : une ligne de cahier, écrite en gras, soulignée en rouge. */
   const band = (label: string) => {
-    if (y + 2 * R > H - 14) { newPage(false); y = TOP; }
+    if (y + 2 * R > limit()) { newPage(false); y = TOP; }
     color(INK); font(true, 13); write(label.toUpperCase(), M + 1.5, y + 5);
     doc.setDrawColor(...RED); doc.setLineWidth(0.5); pen(M + 1, y + 6, M + 3 + doc.getTextWidth(label.toUpperCase()), y + 6, 0.25, 6);
     y += R;
@@ -112,7 +125,7 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
       if (g.label && g.label !== lastLabel) band(g.label);
       lastLabel = g.label;
       if (g.sub) {   // sous-titre : la position précise, en écriture manuscrite, soulignée au crayon
-        if (y + 3 * R > H - 14) { newPage(false); y = TOP; }
+        if (y + 3 * R > limit()) { newPage(false); y = TOP; }
         color(INK); font(true, 11.5); write(g.sub, M + 6, y + 5);
         doc.setDrawColor(...PENCIL); doc.setLineWidth(0.3); pen(M + 5, y + 6, M + 8 + doc.getTextWidth(g.sub), y + 6, 0.2, 5);
         y += R;
@@ -123,15 +136,20 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
         const cells: Record<string, string[]> = {
           circuit: [r.circuit], dimmer: [r.dimmer], curve: [labelsOf(CURVES, r.curve)], dmx: [r.curve.includes('direct') ? r.dmx : ''],
           id: [r.itemId === null ? 'N/C' : String(r.itemId)], model: doc.splitTextToSize((r.model || '') + (r.extNote ? ` (${r.extNote})` : ''), wOf('model') - 3) as string[], gels: [],
-          accessories: doc.splitTextToSize(labelsOf(ACCESSORIES, r.accessories), wOf('accessories') - 3) as string[], position: [r.position], focus: [''],
+          accessories: doc.splitTextToSize(labelsOf(ACCESSORIES, r.accessories), wOf('accessories') - 3) as string[], position: [r.position], state: [''],
           notes: doc.splitTextToSize(r.notes || '', wOf('notes') - 3) as string[]
         };
         const gelRows = Math.max(1, Math.ceil(r.gels.length / 2));   // gélatines : deux par ligne (pastille de couleur + référence)
         const lines = Math.max(1, ...Object.values(cells).map((c) => c.length), gelRows);
         const h = Math.max(1, Math.ceil((lines * 4.2 + 2.8) / R)) * R;   // hauteur = un nombre entier de lignes du cahier
-        if (y + h > H - 14) { newPage(false); y = TOP; }
-        if (r.focus) {   // focus fait : coup de surligneur jaune-vert (transparent : les lignes du cahier restent visibles)
-          doc.setGState(doc.GState({ opacity: 0.4 })); doc.setFillColor(200, 232, 120); doc.rect(M, y + 0.6, W - 2 * M, h - 1.2, 'F'); doc.setGState(doc.GState({ opacity: 1 }));
+        const label = `${r.itemId === null ? 'N/C' : 'ID ' + r.itemId}${r.circuit ? ' (c° ' + r.circuit + ')' : ''}${r.model ? ' - ' + r.model : ''}`;   // de quelle ligne parle la note
+        const wantNote = r.state === 'todo' && !!r.stateNote;
+        const nl = wantNote ? noteLines(notes.length + 1, label, r.stateNote) : [];
+        if (y + h > limit() - (nl.length ? (notes.length ? 0 : 4) + nl.length * 3.7 : 0)) { newPage(false); y = TOP; }   // la ligne ET sa note doivent tenir sur la page
+        let noteNo = 0;
+        if (wantNote) { noteNo = notes.length + 1; notes.push({ n: noteNo, lines: noteLines(noteNo, label, r.stateNote) }); }
+        if (r.state !== '') {   // surligneur : vert si fait (jaune-vert), rose si à faire (transparent : les lignes du cahier restent visibles)
+          doc.setGState(doc.GState({ opacity: r.state === 'ok' ? 0.4 : 0.3 })); if (r.state === 'ok') doc.setFillColor(200, 232, 120); else doc.setFillColor(240, 140, 140); doc.rect(M, y + 0.6, W - 2 * M, h - 1.2, 'F'); doc.setGState(doc.GState({ opacity: 1 }));
         }
         const base = y + 5;                                           // les écritures reposent sur la ligne du cahier
         let x = M;
@@ -144,9 +162,13 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
               doc.setDrawColor(...PENCIL); doc.setLineWidth(0.25); box(gx, gy - 2.8, 3, 3);
               color(INK); plain(false, 9); say(g, gx + 4, gy);
             });
-          } else if (c.k === 'focus') {
+          } else if (c.k === 'state') {
             doc.setDrawColor(...PENCIL); doc.setLineWidth(0.35); box(cx + 1, base - 3.6, 4.2, 4.2);
-            if (r.focus) { doc.setDrawColor(20, 130, 60); doc.setLineWidth(0.7); pen(cx + 1.4, base - 1.2, cx + 2.8, base + 0.3, 0.1, 4); pen(cx + 2.8, base + 0.3, cx + 5.4, base - 4, 0.1, 4); }
+            if (r.state === 'ok') { doc.setDrawColor(20, 130, 60); doc.setLineWidth(0.7); pen(cx + 1.4, base - 1.2, cx + 2.8, base + 0.3, 0.1, 4); pen(cx + 2.8, base + 0.3, cx + 5.4, base - 4, 0.1, 4); }   // coche verte
+            if (r.state === 'todo') {   // croix rouge, et le numéro de la note en indice
+              doc.setDrawColor(...RED); doc.setLineWidth(0.7); pen(cx + 1.6, base - 3.2, cx + 4.8, base - 0.2, 0.1, 4); pen(cx + 4.8, base - 3.2, cx + 1.6, base - 0.2, 0.1, 4);
+              if (noteNo) { plain(true, 7); color(RED); say(String(noteNo), cx + 6.1, base - 3.4); color(INK); }
+            }
           } else if (c.k === 'curve' && r.curve.includes('direct')) {
             plain(true, 9); doc.setTextColor(29, 107, 255);   // DIRECT en bleu vif, comme à l'écran
             const others = labelsOf(CURVES.filter((q) => q.k !== 'direct'), r.curve);
@@ -171,6 +193,7 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
   if (kind === 'circuit' || kind === 'all') sheetCircuit();
   if (kind === 'dimmer' || kind === 'all') sheetDimmer();
   if (kind === 'position' || kind === 'all') sheetPosition();
+  flushNotes();   // notes de la dernière page
   // pied de page de chaque page : spectacle, date et heure de génération, numéro de page
   const n = doc.getNumberOfPages();
   for (let p = 1; p <= n; p++) {

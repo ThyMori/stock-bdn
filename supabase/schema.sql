@@ -1477,6 +1477,9 @@ create table if not exists patch_lines (
 alter table patch_lines add column if not exists model_id text references models(id) on delete set null;   -- ligne N/C : modèle choisi dans le catalogue (prépa)
 alter table patch_lines add column if not exists lamp_id text references lamps(id) on delete set null;       -- ligne N/C d'un PAR : lampe voulue
 alter table patch_lines add column if not exists gels jsonb not null default '[]'::jsonb;   -- gélatines d'une ligne N/C : [{ref, color}] (celles d'un projecteur affecté sont dans show_gels)
+alter table patch_lines add column if not exists state text not null default '' check (state in ('', 'ok', 'todo'));   -- v1.44.0 : état du focus : vide, ok (vert, fait) ou todo (rouge, à faire)
+alter table patch_lines add column if not exists state_note text not null default '' check (length(state_note) <= 300);   -- ce qu'il y a à faire (état todo)
+update patch_lines set state = 'ok' where focus and state = '';   -- les anciennes cases « focus fait » deviennent l'état vert
 create unique index if not exists patch_lines_item_uniq on patch_lines (show_id, item_id) where item_id is not null;
 create index if not exists patch_lines_show_idx on patch_lines (show_id);
 alter table patch_lines enable row level security;
@@ -1490,10 +1493,10 @@ create policy patch_lines_select on patch_lines for select using (has_role('tech
 --   régisseur assigné, régisseur général, admin : tous les champs.
 create or replace function set_patch_field(p_show uuid, p_item int, p_line uuid, p_field text, p_value jsonb)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare r patch_lines; lbl text; txt text; arr text[]; ok text[];
+declare r patch_lines; lbl text; txt text; arr text[]; ok text[]; stn text;
 begin
   if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
-  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'model_id', 'lamp_id', 'external_id', 'accessories', 'position', 'focus', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
+  if p_field not in ('circuit', 'dimmer', 'curve', 'dmx', 'model_text', 'model_id', 'lamp_id', 'external_id', 'accessories', 'position', 'focus', 'state', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
   if p_field not in ('dimmer', 'curve') and not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   -- ligne existante, ou création pour un projecteur affecté
   if p_line is not null then select * into r from patch_lines where id = p_line and show_id = p_show;
@@ -1559,8 +1562,14 @@ begin
       update patch_lines set dmx = '' where id = r.id;
     end if;
     execute format('update patch_lines set %I = $1, updated_at = now(), updated_by_label = $2 where id = $3', p_field) using arr, lbl, r.id;
-  else   -- focus
-    update patch_lines set focus = coalesce((p_value #>> '{}')::boolean, false), updated_at = now(), updated_by_label = lbl where id = r.id;
+  elsif p_field = 'state' then   -- état : valeur {"s": "" | "ok" | "todo", "note": "..."} ; la note n'a de sens que pour « todo »
+    txt := coalesce(p_value ->> 's', '');
+    if txt not in ('', 'ok', 'todo') then raise exception 'État inconnu' using errcode = '22023'; end if;
+    stn := case when txt = 'todo' then trim(coalesce(p_value ->> 'note', '')) else '' end;
+    if length(stn) > 300 then raise exception 'Note trop longue (300 caractères au plus)' using errcode = '22023'; end if;
+    update patch_lines set state = txt, state_note = stn, focus = (txt = 'ok'), updated_at = now(), updated_by_label = lbl where id = r.id;
+  else   -- focus (anciens appareils) : la case coche / décoche l'état vert
+    update patch_lines set focus = coalesce((p_value #>> '{}')::boolean, false), state = case when coalesce((p_value #>> '{}')::boolean, false) then 'ok' else '' end, state_note = '', updated_at = now(), updated_by_label = lbl where id = r.id;
   end if;
   select * into r from patch_lines where id = r.id;
   return to_jsonb(r);

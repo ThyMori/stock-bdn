@@ -9,7 +9,7 @@ import { EMPTY_DATA } from '../src/types';
 import { rollingStart } from '../src/views/calendar';
 import { dayWindow } from '../src/views/agenda';
 import type { Data, Immo, Op } from '../src/types';
-import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount, POSITIONS, POSITION_GROUPS } from '../src/patch';
+import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount, POSITIONS, POSITION_GROUPS, stateText } from '../src/patch';
 import type { PatchRow } from '../src/patch';
 import { positionGroups, accessoryList } from '../src/patchLists';
 import { rankStock, similarNames } from '../src/patchSuggest';
@@ -275,7 +275,7 @@ t('calendrier glissant : commence le lundi de la semaine passée', () => {
   assert.equal(rollingStart('2026-01-03'), '2025-12-22');   // passage d'année
 });
 // --- Feuille de patch / focus ---
-const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, ...o });
+const prow = (o: Partial<PatchRow>): PatchRow => ({ key: 'k', lineId: null, itemId: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model: '', gels: [], gelIds: [], auto: false, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false, accessories: [], position: '', focus: false, state: '', stateNote: '', notes: '', updatedAt: null, updatedBy: null, ...o });
 t('patch : droits par colonne', () => {
   assert.deepEqual([...editableCols(false, true)].sort(), ['curve', 'dimmer', 'gels']);   // technicien
   assert.equal(editableCols(false, false).size, 0);                                // lecture seule
@@ -350,7 +350,7 @@ t('positions : groupes par zone, P0 présent, aucun doublon', () => {
   assert.equal(new Set(POSITIONS).size, POSITIONS.length);
 });
 t('PDF patch : zones > positions, accessoires par modèle', () => {
-  const R = (o: Partial<PatchRow>): PatchRow => ({ key: String(Math.random()), lineId: null, itemId: 1, circuit: '', dimmer: '', curve: [], dmx: '', model: 'PC', gels: [], gelIds: [], auto: false, accessories: [], position: '', focus: false, notes: '', updatedAt: null, updatedBy: null, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false, ...o });
+  const R = (o: Partial<PatchRow>): PatchRow => ({ key: String(Math.random()), lineId: null, itemId: 1, circuit: '', dimmer: '', curve: [], dmx: '', model: 'PC', gels: [], gelIds: [], auto: false, accessories: [], position: '', focus: false, state: '', stateNote: '', notes: '', updatedAt: null, updatedBy: null, needId: null, externalId: null, extNote: '', modelId: null, lampId: null, par: false, ...o });
   const rows = [R({ circuit: '10', position: 'sol', gels: ['L201', 'R80'], accessories: ['iris'] }), R({ circuit: '2', position: 'P3', gels: ['L201'], model: 'Découpe', accessories: ['iris', 'gobo'] }), R({ circuit: '5', position: '2e balcon' }), R({ circuit: '1', position: 'P0' }), R({ circuit: '7' })];
   const g = positionGroups(rows);
   assert.deepEqual(g.map((x) => [x.label, x.sub]), [['Cintres', 'P0'], ['Cintres', 'P3'], ['FOH', '2e balcon'], ['Autres', 'sol'], ['Sans position', '']], 'zone > position, dans l\'ordre, vides omises');
@@ -358,6 +358,13 @@ t('PDF patch : zones > positions, accessoires par modèle', () => {
   assert.deepEqual(ids, [2, 9, null], 'classés par ID, N/C à la fin');
   const al = accessoryList(rows);
   assert.deepEqual(al.map((x) => [x.model, x.accessory, x.qty]), [['Découpe', 'Iris', 1], ['Découpe', 'Gobo', 1], ['PC', 'Iris', 1]], 'classés par modèle');
+});
+t('état des lignes : tri (à faire, fait, vide) et compte', () => {
+  const rows = [prow({ key: 'a', itemId: 1, state: 'ok' }), prow({ key: 'b', itemId: 2 }), prow({ key: 'c', itemId: 3, state: 'todo', stateNote: 'x' }), prow({ key: 'd', itemId: 4, state: 'ok' })];
+  assert.deepEqual(sortRows(rows, 'state', 1).map((r) => r.key), ['c', 'a', 'd', 'b'], 'à faire, puis fait, puis vide');
+  assert.equal(stateText(rows), '2 faits · 1 à faire'); assert.equal(stateText([]), '0 fait · 0 à faire');
+  const line = { id: 'L', show_id: 's', item_id: null, circuit: '', dimmer: '', curve: ['lineaire'], dmx: '', model_text: 'x', accessories: [], position: '', focus: true, notes: '', updated_at: '', updated_by_label: null } as unknown as Parameters<typeof buildRows>[2][number];
+  assert.equal(buildRows(EMPTY_DATA, 's', [line])[0].state, 'ok', 'ancienne ligne focus=true : état vert');
 });
 t('prépa : modèles similaires', () => {
   assert.ok(similarNames('614SX', '614S') && similarNames('ETC 25-50', '613') && similarNames('329HPC', '329HPB') && similarNames('310HPC', '306HPC'));

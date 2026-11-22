@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
 import { gelColorOf } from '../gels';
-import { ACCESSORIES, COLS, CURVES, POSITION_GROUPS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows } from '../patch';
+import { ACCESSORIES, COLS, CURVES, POSITION_GROUPS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows, stateText } from '../patch';
 import type { Col, PatchLine, PatchRow } from '../patch';
 import { fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
@@ -252,11 +252,14 @@ export const patchView: ViewFactory = ([showId]) => {
         return chips || add ? `<span class="gels">${chips}${add}</span>` : '<i class="muted">—</i>';
       }
       case 'position': return can_ ? `<select class="pin" data-k="position" aria-label="Position"><option value="">—</option>${POSITION_GROUPS.map((g) => `<optgroup label="${esc(g.label)}">${g.items.map((p) => `<option ${p === r.position ? 'selected' : ''}>${esc(p)}</option>`).join('')}</optgroup>`).join('')}</select>` : `<span>${esc(r.position) || '<i class="muted">—</i>'}</span>`;
-      case 'focus': return `<input type="checkbox" class="fcb" data-k="focus" ${r.focus ? 'checked' : ''} ${can_ ? '' : 'disabled'} aria-label="Focus fait">`;
+      case 'state': {   // état : vide → vert (fait) → rouge (à faire, avec une note) → vide
+        const st = r.state, lab = st === 'ok' ? 'Focus fait' : st === 'todo' ? 'À faire' : 'Pas d\'état';
+        return `<span class="stwrap"><button type="button" class="stbtn st-${st || 'none'}" data-act="state" aria-label="État : ${lab}${can_ ? '. Toucher pour changer' : ''}"><span aria-hidden="true">${st === 'ok' ? '✓' : st === 'todo' ? '!' : ''}</span></button>${st === 'todo' && r.stateNote ? '<button type="button" class="stnote" data-act="state-note" aria-label="Voir la note">i</button>' : ''}</span>`;
+      }
       case 'notes': return can_ ? `<input class="pin" data-k="notes" value="${esc(r.notes)}" maxlength="500" autocomplete="off" aria-label="Notes">` : `<span>${esc(r.notes) || '<i class="muted">—</i>'}</span>`;
     }
   };
-  const rowHtml = (r: PatchRow, ed: Set<Col>): string => `<tr data-key="${esc(r.key)}" class="${r.focus ? 'done' : ''}" ${r.updatedAt ? `title="Modifié ${esc(fmtDateTime(r.updatedAt))}${r.updatedBy ? ' par ' + esc(r.updatedBy) : ''}"` : ''}>${COLS.map((c) => `<td data-label="${c.label}" data-c="${c.k}">${cell(r, c.k, ed)}</td>`).join('')}<td class="rowact" data-c="act">${ed.has('id') ? `<button class="btn mini" data-act="line-del" aria-label="Supprimer la ligne">Suppr.</button>` : ''}</td></tr>`;
+  const rowHtml = (r: PatchRow, ed: Set<Col>): string => `<tr data-key="${esc(r.key)}" class="${r.state === 'ok' ? 'done' : r.state === 'todo' ? 'todo' : ''}" ${r.updatedAt ? `title="Modifié ${esc(fmtDateTime(r.updatedAt))}${r.updatedBy ? ' par ' + esc(r.updatedBy) : ''}"` : ''}>${COLS.map((c) => `<td data-label="${c.label}" data-c="${c.k}">${cell(r, c.k, ed)}</td>`).join('')}<td class="rowact" data-c="act">${ed.has('id') ? `<button class="btn mini" data-act="line-del" aria-label="Supprimer la ligne">Suppr.</button>` : ''}</td></tr>`;
 
   /** Choix du modèle d'une ligne sans projecteur : catalogue, texte libre, ou nouveau modèle ajouté au catalogue. */
   /** « + À louer / à emprunter… » : on choisit le modèle (et la lampe d'un PAR) ; la demande de matériel monte de 1 et l'alarme « manque » joue si le stock ne suffit pas. */
@@ -312,7 +315,7 @@ export const patchView: ViewFactory = ([showId]) => {
     const arrow = (c: Col) => (sortCol === c ? (dir === 1 ? ' ▲' : ' ▼') : '');
     host.innerHTML = `<div class="phead"><a href="#/show/${esc(showId)}" class="sub">‹ ${esc(show.name)}</a>
       <div class="row wrap"><h1 class="grow">Patch / Focus</h1><span id="pstat" class="sub ${statErr ? 'warn' : ''}" role="status">${esc(stat)}</span></div>
-      <div class="sub">${esc(show.name)} · du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)} · ${rows.length} ligne${rows.length > 1 ? 's' : ''} · focus ${rows.filter((r) => r.focus).length}/${rows.length}${last ? ` · dernière modification ${esc(fmtDateTime(last.updatedAt!))}${last.updatedBy ? ' par ' + esc(last.updatedBy) : ''}` : ''}</div>
+      <div class="sub">${esc(show.name)} · du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)} · ${rows.length} ligne${rows.length > 1 ? 's' : ''} · ${stateText(rows)}${last ? ` · dernière modification ${esc(fmtDateTime(last.updatedAt!))}${last.updatedBy ? ' par ' + esc(last.updatedBy) : ''}` : ''}</div>
       ${exts.length ? `<div class="sub extinfo">Locations / prêts : ${exts.map((x) => `<span class="${x.placed === x.qty ? '' : 'extwarn'}">${esc(x.short)} <b>${esc(extCount(x))}</b></span>`).join(' · ')}</div>` : ''}
       ${!navigator.onLine ? '<div class="banner">Hors ligne : la feuille est en lecture seule.</div>' : ed.size === 0 ? '<div class="sub">Consultation seulement : tu n\'es pas assigné à ce spectacle.</div>'
         : !canActShow(showId) ? '<div class="sub">Tu peux modifier la grada, la courbe et les gélatines.</div>' : ''}
@@ -346,7 +349,7 @@ export const patchView: ViewFactory = ([showId]) => {
   function save(root: HTMLElement, key: string, field: string, value: unknown) {
     const r = rowsNow().find((x) => x.key === key); if (!r) return;
     busy++; setStat(root, 'Enregistrement…');
-    queue = queue.then(async () => {
+    const done = queue = queue.then(async () => {
       const cur = rowsNow().find((x) => x.key === key) ?? r;   // l'ID de ligne a pu être créé par un envoi précédent
       const send = () => supabase.rpc('set_patch_field', { p_show: showId, p_item: cur.itemId, p_line: cur.lineId, p_field: field, p_value: value });
       let { data, error } = await send();
@@ -357,8 +360,52 @@ export const patchView: ViewFactory = ([showId]) => {
       const line = data as PatchLine; const i = lines.findIndex((l) => l.id === line.id);
       if (i >= 0) lines[i] = line; else lines.push(line);
       setStat(root, 'Enregistré ✓ ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
-      if (field === 'curve') paintRow(root, key);   // DMX actif seulement avec DIRECT
+      if (field === 'curve' || field === 'state') paintRow(root, key);   // DMX actif seulement avec DIRECT ; l'état change la couleur de la ligne et l'indice de note
     });
+    return done;
+  }
+
+  // ---- état de la ligne : vide → vert (fait) → rouge (à faire + note) → vide ----
+  const stBusy = new Set<string>();   // lignes dont un changement d'état est en cours (évite le double clic)
+  const rowLabel = (r: PatchRow): string => (r.itemId === null ? 'ligne N/C' : `projecteur ${r.itemId}`) + (r.circuit ? ` (circuit ${r.circuit})` : '');
+  /** Fenêtre de saisie de la note « à faire » ; renvoie le texte, ou null si on annule. */
+  const askNote = async (r: PatchRow): Promise<string | null> => {
+    const f = await openForm('À faire : ' + rowLabel(r), [{ name: 'note', label: 'Qu\'y a-t-il à faire ?', type: 'textarea', value: r.stateNote, hint: '300 caractères au plus. La note s\'affiche en touchant (ou en survolant) la petite pastille « i ».' }], { submit: 'Enregistrer' });
+    return f ? f.note.trim().slice(0, 300) : null;
+  };
+  /** Le tour de l'état d'une ligne. */
+  const cycleState = async (root: HTMLElement, key: string) => {
+    const r = rowsNow().find((x) => x.key === key); if (!r || stBusy.has(key) || !edSet().has('state')) return;
+    stBusy.add(key); hidePop();
+    try {
+      if (r.state === '') await save(root, key, 'state', { s: 'ok' });                                   // 1er appui : vert
+      else if (r.state === 'ok') { const note = await askNote(r); if (note !== null) await save(root, key, 'state', { s: 'todo', note }); }   // 2e appui : rouge + note (annuler = reste vert)
+      else await save(root, key, 'state', { s: '' });                                                    // 3e appui : on efface
+    } finally { stBusy.delete(key); }
+  };
+  const editNote = async (root: HTMLElement, key: string) => {
+    const r = rowsNow().find((x) => x.key === key); if (!r || r.state !== 'todo' || stBusy.has(key)) return;
+    stBusy.add(key); hidePop();
+    try { const note = await askNote(r); if (note !== null) await save(root, key, 'state', { s: 'todo', note }); } finally { stBusy.delete(key); }
+  };
+  // bulle de la note : survol sur ordinateur, toucher sur téléphone ; le texte vient d'un utilisateur → textContent
+  let pop: HTMLElement | null = null, popPinned = false, popTimer = 0;
+  function hidePop() { window.clearTimeout(popTimer); pop?.remove(); pop = null; popPinned = false; }
+  function showPop(root: HTMLElement, btn: HTMLElement, pinned: boolean) {
+    const key = btn.closest<HTMLElement>('tr[data-key]')?.dataset.key, r = key ? rowsNow().find((x) => x.key === key) : undefined; if (!r || !key) return;
+    hidePop();
+    const el = document.createElement('div'); el.className = 'stpop'; el.setAttribute('role', 'tooltip'); el.dataset.key = key;
+    const p = document.createElement('p'); p.textContent = r.stateNote; el.append(p);
+    if (pinned && edSet().has('state')) {   // « Modifier la note » : seulement quand la bulle est ouverte par un toucher
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn mini'; b.textContent = 'Modifier la note';
+      b.addEventListener('click', () => void editNote(root, key)); el.append(b);
+    }
+    el.addEventListener('mouseenter', () => window.clearTimeout(popTimer));
+    el.addEventListener('mouseleave', () => { if (!popPinned) popTimer = window.setTimeout(hidePop, 150); });
+    document.body.append(el); pop = el; popPinned = pinned;
+    const b = btn.getBoundingClientRect();   // posée sous la pastille (au-dessus s'il manque de place), sans sortir de l'écran
+    el.style.left = Math.max(6, Math.min(b.left, window.innerWidth - el.offsetWidth - 6)) + 'px';
+    el.style.top = (b.bottom + el.offsetHeight + 8 > window.innerHeight ? Math.max(6, b.top - el.offsetHeight - 4) : b.bottom + 4) + 'px';
   }
 
   return {
@@ -383,6 +430,10 @@ export const patchView: ViewFactory = ([showId]) => {
           })();
           return;
         }
+        const sb = t.closest<HTMLElement>('[data-act="state"]');
+        if (sb) { const k = sb.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (k) void cycleState(root, k); return; }
+        const sn = t.closest<HTMLElement>('[data-act="state-note"]');
+        if (sn) { e.stopPropagation(); if (pop && popPinned && pop.dataset.key === sn.closest<HTMLElement>('tr[data-key]')?.dataset.key) hidePop(); else showPop(root, sn, true); return; }   // toucher : ouvre / referme
         const clr = t.closest<HTMLElement>('[data-act="clear-circuits"], [data-act="clear-gels"]');
         if (clr) {   // vider les circuits (gradas gardées) ou les gélatines + accessoires, pour repartir d'un montage déjà patché
           clr.closest('details')?.removeAttribute('open');   // le menu se referme
@@ -465,9 +516,13 @@ export const patchView: ViewFactory = ([showId]) => {
         if (k === 'ext_pick' && t.value === '__cancel') { extMode.delete(key); save(root, key, 'model_id', ''); queue = queue.then(() => paintRow(root, key)); return; }   // abandonne le besoin
         if (k === 'ext_pick' && t.value === '__need') { void needForm(root, key); return; }   // « + À louer / à emprunter… »
         if (k === 'ext_pick') { save(root, key, 'external_id', t.value); queue = queue.then(() => paint(root)); return; }   // rattachement à une location : le compteur et le modèle sont mis à jour   // cellule ID : changement de projecteur
-        save(root, key, k, k === 'focus' ? (t as HTMLInputElement).checked : t.value.trim());
-        if (k === 'focus') tr.classList.toggle('done', (t as HTMLInputElement).checked);
+        save(root, key, k, t.value.trim());
       });
+      const hoverOk = () => window.matchMedia('(hover: hover)').matches;   // survol : ordinateur seulement
+      root.addEventListener('mouseover', (e) => { const n = (e.target as HTMLElement).closest<HTMLElement>('[data-act="state-note"]'); if (n && hoverOk() && !popPinned) { window.clearTimeout(popTimer); showPop(root, n, false); } });
+      root.addEventListener('mouseout', (e) => { if ((e.target as HTMLElement).closest('[data-act="state-note"]') && !popPinned) popTimer = window.setTimeout(hidePop, 150); });
+      const outside = (e: Event) => { if (pop && popPinned && !pop.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('[data-act="state-note"]')) hidePop(); };
+      document.addEventListener('click', outside);
       // menu des accessoires : posé en « fixed » sous la case (ou au-dessus s'il manque de place), pour ne pas être coupé par la zone de défilement du tableau
       root.addEventListener('toggle', (e) => {
         const d = e.target as HTMLDetailsElement; if (!(d instanceof HTMLDetailsElement) || !d.classList.contains('multi') || !d.open) return;
@@ -476,7 +531,7 @@ export const patchView: ViewFactory = ([showId]) => {
         box.style.position = 'fixed'; box.style.left = Math.max(4, Math.min(r.left, window.innerWidth - box.offsetWidth - 4)) + 'px';
         box.style.top = (r.bottom + box.offsetHeight + 4 > window.innerHeight ? Math.max(4, r.top - box.offsetHeight) : r.bottom) + 'px';   // en haut si le bas de l'écran est trop proche
       }, true);
-      root.addEventListener('scroll', () => root.querySelectorAll<HTMLDetailsElement>('details.multi[open]').forEach((d) => { d.open = false; }), true);   // défiler ferme le menu (sa place ne suivrait plus)
+      root.addEventListener('scroll', () => { hidePop(); root.querySelectorAll<HTMLDetailsElement>('details.multi[open]').forEach((d) => { d.open = false; }); }, true);   // défiler ferme le menu (sa place ne suivrait plus)
       // largeur des colonnes réglable à la souris (ordinateur) : poignée au bord de chaque titre, mémorisée sur cet appareil
       let widths: Widths = loadWidths();
       const colStyle = document.createElement('style'); document.head.append(colStyle);
@@ -501,7 +556,7 @@ export const patchView: ViewFactory = ([showId]) => {
       const refit = () => fitTable(root);   // rotation ou redimensionnement
       window.addEventListener('resize', refit); window.addEventListener('orientationchange', refit);
       window.addEventListener('online', repaint); window.addEventListener('offline', repaint);
-      return () => { colStyle.remove(); document.removeEventListener('click', closeMenus); window.removeEventListener('resize', refit); window.removeEventListener('orientationchange', refit); window.removeEventListener('online', repaint); window.removeEventListener('offline', repaint); };   // nettoyage à la sortie de la page
+      return () => { hidePop(); colStyle.remove(); document.removeEventListener('click', outside); document.removeEventListener('click', closeMenus); window.removeEventListener('resize', refit); window.removeEventListener('orientationchange', refit); window.removeEventListener('online', repaint); window.removeEventListener('offline', repaint); };   // nettoyage à la sortie de la page
     },
     update(root) {
       if (busy || root.querySelector('.patch :focus, details.multi[open]')) return;   // jamais pendant une saisie

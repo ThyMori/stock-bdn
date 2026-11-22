@@ -3,7 +3,7 @@
 export type Widths = Record<string, number>;
 const KEY = 'stockbdn.patchcols';          // clé de mémorisation (localStorage)
 export const MIN_W = 40, MAX_W = 700;       // largeur mini / maxi d'une colonne, en pixels
-const COLS_OK = ['circuit', 'dimmer', 'curve', 'dmx', 'id', 'model', 'gels', 'accessories', 'position', 'focus', 'notes'];
+const COLS_OK = ['circuit', 'dimmer', 'curve', 'dmx', 'id', 'model', 'gels', 'accessories', 'position', 'state', 'notes'];
 
 /** Ramène une largeur dans les limites (nombre entier de pixels). */
 export const clampW = (w: number): number => Math.round(Math.min(MAX_W, Math.max(MIN_W, w)));
