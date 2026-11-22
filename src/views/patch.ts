@@ -259,14 +259,13 @@ export const patchView: ViewFactory = ([showId]) => {
       <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div></div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
-      <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
+      <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
         <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
     fitTable(root);
   }
-  /** Mode tableau (ordinateur ou paysage) : l'en-tête (titre, boutons, titres de colonnes) reste en place, seules les lignes défilent dans le tableau. */
+  /** Toujours en tableau (ordinateur et téléphone) : l'en-tête (titre, boutons, titres de colonnes) reste en place, seules les lignes défilent dans le tableau. */
   const fitTable = (root: HTMLElement) => {
     const el = root.querySelector<HTMLElement>('.ptable'); if (!el) return;
-    if (!window.matchMedia('(min-width: 1001px), (orientation: landscape) and (max-height: 520px) and (min-width: 560px)').matches) { el.style.maxHeight = ''; return; }
     window.scrollTo(0, 0);                                                   // la page elle-même ne défile pas
     const nav = document.querySelector<HTMLElement>('nav.tabs')?.offsetHeight ?? 0;
     el.style.maxHeight = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - nav - 2) + 'px';   // place restante sous l'en-tête, au-dessus de la barre du bas

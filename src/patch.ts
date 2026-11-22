@@ -23,8 +23,8 @@ export const POSITIONS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 
 /** Colonnes, dans l'ordre d'affichage. */
 export type Col = 'circuit' | 'dimmer' | 'curve' | 'dmx' | 'id' | 'model' | 'gels' | 'accessories' | 'position' | 'focus' | 'notes';
 export const COLS: { k: Col; label: string }[] = [
-  { k: 'circuit', label: 'Circuit' }, { k: 'dimmer', label: 'Grada' }, { k: 'curve', label: 'Courbe' }, { k: 'dmx', label: 'DMX' }, { k: 'id', label: 'ID' },
-  { k: 'model', label: 'Modèle' }, { k: 'gels', label: 'Gélatines' }, { k: 'accessories', label: 'Accessoires' }, { k: 'position', label: 'Position' },
+  { k: 'circuit', label: 'Circuit' }, { k: 'model', label: 'Modèle' }, { k: 'dimmer', label: 'Grada' }, { k: 'curve', label: 'Courbe' }, { k: 'dmx', label: 'DMX' }, { k: 'id', label: 'ID' },
+  { k: 'gels', label: 'Gélatines' }, { k: 'accessories', label: 'Accessoires' }, { k: 'position', label: 'Position' },
   { k: 'focus', label: 'Focus' }, { k: 'notes', label: 'Notes' }
 ];
 
