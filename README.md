@@ -161,7 +161,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Pastille bleue** (`items.blue_dot`) : projecteur stocké au **3e** quand il ne joue pas. Fiche + liste du parc (filtre « Stocké au 3e »). Journal : « PASTILLE ». Pas de notification.
 - **Interrupteur monté / démonté** (`shows.mounted`, `mounted_at`) en haut d'un spectacle : en cours = figé monté ; avant : selon l'interrupteur ; après le dernier jour : démonté automatiquement (sauf forçage « monté » postérieur à la fin). Journal : « MONTAGE ».
 - **Position actuelle** d'un projecteur (fiche) : PRÊT / SAV, sinon position de la feuille de patch du spectacle monté, sinon stock 3e (pastille) ou stock dessous. Logique dans `src/position.ts`.
-- **Propositions d'ID** (feuille de patch) : 1) modèle (même, puis similaire) ; 2) disponible sur toute la durée ; 3) position qu'il avait dans le spectacle juste avant (sinon stock) : 3e / balcon / coupole → déjà là ou stock 3e d'abord ; Px / mezza / allemande / passerelle / sol → déjà là, puis dessous, puis 3e ; corbeille → déjà là, 3e, dessous ; 4) lampe des PAR.
+- **Propositions d'ID** (feuille de patch) : 1) modèle (même, puis similaire) ; 2) disponible sur toute la durée ; 3) position qu'il avait dans le spectacle juste avant (sinon stock) : 3e / balcon / coupole → déjà là ou stock 3e d'abord ; Px / mezza / allemande / passerelle / sol / pont coupole → déjà là, puis dessous, puis 3e ; corbeille → déjà là, 3e, dessous ; 4) lampe des PAR.
 - **Rapport de démontage** : à stocker dessous, à stocker au 3e, à garder en place, à déplacer, à monter (provenance), + infos lampes PAR et « À rendre ».
 - **Liste de prépa** : sections stock dessous / stock 3e / déjà monté, accessoires et position prévue, prêts et locations en bleu (accessoires des lignes rattachées cumulés).
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
@@ -213,6 +213,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` (v1.35.2) | position « pont coupole » acceptée par `set_patch_field` (liste des positions) | v1.35.2 |
 | `schema.sql` fin de fichier (v1.34.0) | pastille bleue `items.blue_dot`, `shows.mounted` / `mounted_at`, `set_blue_dot`, `set_show_mounted` | v1.34.0 |
 | `schema.sql` fin de fichier (v1.32.0) | lignes noID rattachées à une location / un prêt : colonne `patch_lines.external_id`, `set_patch_field` (champ `external_id`), `patch_set_item` (détache la ligne) | v1.32.0 |
 | `schema.sql` fin de fichier (v1.30.0) | mode prépa : colonnes `patch_lines.model_id` / `lamp_id`, `set_patch_field` étendue, `patch_item_model`, `patch_set_item` mise à jour, `add_model` | v1.30.0 |

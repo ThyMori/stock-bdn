@@ -40,7 +40,7 @@ export interface Plan { dessous: PlanRow[]; stock3: PlanRow[]; keep: PlanRow[]; 
 
 /** Plan de démontage du spectacle en cours (positions de sa feuille de patch) vers le prochain (positions de la sienne).
  *  - dans l'ancien, pas dans le nouveau : à stocker (3e si pastille bleue, sinon dessous) ;
- *  - dans les deux, même position : à garder en place (cintres, allemandes, passerelles, sols…) ;
+ *  - dans les deux, même position : à garder en place (cintres, allemandes, passerelles, sols, pont coupole…) ;
  *  - dans les deux, position différente : à déplacer ;
  *  - dans le nouveau seulement : à monter (avec sa provenance : stock dessous, stock 3e, prêt, SAV, ou spectacle d'avant). */
 export function teardownPlan(data: Data, curId: string, nextId: string): Plan {
@@ -122,7 +122,7 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   const from = (r: PlanRow) => (r.oldPos ? `était : ${r.oldPos}` : '');
   section('À stocker dessous', 'projecteurs sans pastille, absents du spectacle suivant', plan.dessous, '', from);
   section('À stocker au 3e', 'projecteurs à pastille bleue, absents du spectacle suivant', plan.stock3, '', from, true);
-  section('À garder en place', 'même position dans les deux spectacles (cintres, allemandes, passerelles, sols…)', plan.keep, 'LAMPE', (r) => r.newPos);
+  section('À garder en place', 'même position dans les deux spectacles (cintres, allemandes, passerelles, sols, pont coupole…)', plan.keep, 'LAMPE', (r) => r.newPos);
   section('À déplacer', 'dans les deux spectacles, à une autre position', plan.move, 'LAMPE', (r) => `${r.oldPos || '?'} > ${r.newPos || '?'}`);
   section('À monter', 'nouveaux pour le spectacle suivant, avec leur provenance', plan.mount, 'LAMPE REQUISE', (r) => `${r.newPos || 'position ?'}  (de : ${r.origin})`);
   const exts = data.showExternals.filter((e) => e.show_id === curId).sort((a, b) => a.return_date.localeCompare(b.return_date));

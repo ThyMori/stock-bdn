@@ -12,7 +12,7 @@ import type { Data, Immo, Op } from '../src/types';
 import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount } from '../src/patch';
 import type { PatchRow } from '../src/patch';
 import { rankStock, similarNames } from '../src/patchSuggest';
-import { showMounted, positionNow, positionBefore, previousShow, positionTier, posLabel } from '../src/position';
+import { showMounted, positionNow, positionBefore, previousShow, positionTier, posLabel, isHang, isHigh } from '../src/position';
 
 let n = 0;
 const t = (name: string, fn: () => void) => { fn(); n++; console.log('ok -', name); };
@@ -394,5 +394,11 @@ t('liste de prépa : provenance, position et accessoires ; prêts et locations s
   assert.deepEqual([r[0].position, r[0].accessories, r[2].from], ['P1', ['Volets'], 'P2 (a)']);
   const e = externalRows(d, 'b');
   assert.deepEqual([e[0].kind, e[0].text, e[0].accessories], ['location', '2 × 614 CP62 — loué chez X', ['2 × Iris']]);
+});
+t('position « pont coupole » : traitée comme « sol » (déjà là, puis dessous, puis stock 3e)', () => {
+  const p = (kind: 'show' | 'dessous' | 'stock3', position = '') => ({ kind, position, show: '' }) as Parameters<typeof positionTier>[0];
+  assert.deepEqual(positionTier(p('show', 'pont coupole'), 'pont coupole'), positionTier(p('show', 'sol'), 'sol'));
+  assert.ok(positionTier(p('dessous'), 'pont coupole').tier < positionTier(p('stock3'), 'pont coupole').tier);
+  assert.ok(isHang('pont coupole') && !isHigh('pont coupole'));
 });
 console.log(`\n${n} tests OK`);
