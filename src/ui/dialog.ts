@@ -1,4 +1,5 @@
 import { esc } from '../logic';
+import { cashBeep } from './beep';
 
 /** Message d'alerte d'un scan : texte rouge en gras et vibration longue (si le téléphone sait vibrer). */
 function alarm(msg: HTMLElement, text: string) { msg.textContent = text; msg.classList.add('scanerr'); navigator.vibrate?.([250, 100, 250, 100, 250]); }
@@ -82,6 +83,7 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
             const search = dlg.querySelector<HTMLInputElement>(`[data-search="${f.name}"]`);
             if (search) { search.value = ''; search.dispatchEvent(new Event('input')); }   // on rétablit toute la liste avant de choisir
             sel.value = res.value;
+            cashBeep();                                                              // bip « caisse enregistreuse » : le QR code a été lu
             const warn = f.scanWarn?.(res.value) ?? null;
             stop();
             if (warn) alarm(msg, `${warn} Sélectionné : ${sel.selectedOptions[0]?.textContent ?? res.value}. Tu peux valider quand même.`);   // autorisé, mais signalé

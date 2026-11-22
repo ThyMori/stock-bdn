@@ -27,6 +27,7 @@ const SECTIONS: Section[] = [
   { title: 'Scanner un QR code', items: [
     'Onglet <b>Scan</b> : la caméra lit l\'étiquette collée sur le projecteur et ouvre sa fiche. La caméra demande l\'accès : autorise-le dans le navigateur.',
     'Les étiquettes s\'impriment depuis <b>Plus → Étiquettes QR</b> (régisseur général et admin). Le QR code contient l\'adresse de l\'appli : ne change pas l\'adresse après impression.',
+    'Chaque QR code lu fait un petit <b>bip « caisse enregistreuse »</b> (si le son de ton téléphone est activé).',
     'Le scan sert aussi à <b>affecter un lot</b> de projecteurs à un spectacle, à <b>changer</b> un projecteur, et dans la <b>feuille de patch</b> (liste d\'ID → « Scanner un QR code… »).'
   ] },
   { title: 'Pannes', items: [

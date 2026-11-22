@@ -15,6 +15,7 @@ import { openForm } from '../ui/dialog';
 import { deliverPdf } from '../ui/deliverPdf';
 import { ALL_OPT, notifyPost } from '../push';
 import { fmtDay } from './agenda';
+import { cashBeep } from '../ui/beep';
 
 const PAR_LAMPS = ['CP60', 'CP61', 'CP62', 'CP95'];
 type Mode = 'view' | 'pick' | 'scan';
@@ -198,7 +199,7 @@ export const showView: ViewFactory = ([id]) => {
       if (n === null) { msg = `QR non reconnu : « ${text.slice(0, 30)} »`; return; }
       if (!view().items.some((i) => i.id === n)) { msg = `Projecteur n° ${n} introuvable.`; return; }
       if (view().showItems.some((s) => s.show_id === id && s.item_id === n)) { msg = `N° ${n} déjà dans ce spectacle.`; return; }
-      sel.add(n); suggestLamp(n); msg = `N° ${n} ajouté au lot.`; navigator.vibrate?.(40);
+      sel.add(n); suggestLamp(n); msg = `N° ${n} ajouté au lot.`; navigator.vibrate?.(40); cashBeep();
       repaintKeepVideo(root);
     };
     (root as HTMLElement & { _add?: (t: string) => void })._add = add;

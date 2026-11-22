@@ -3,6 +3,7 @@ import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { parseScan, esc } from '../logic';
 import { view } from '../store';
+import { cashBeep } from '../ui/beep';
 
 export const scanView: ViewFactory = () => ({
   mount(root) {
@@ -20,7 +21,7 @@ export const scanView: ViewFactory = () => ({
       const n = parseScan(text);
       if (n === null) { msg.textContent = `QR non reconnu : « ${text.slice(0, 40)} »`; return false; }
       if (!view().items.some((i) => i.id === n)) { msg.textContent = `Projecteur n° ${n} introuvable dans la base.`; return false; }
-      done = true; navigator.vibrate?.(60); go(`#/item/${n}`); return true;
+      done = true; navigator.vibrate?.(60); cashBeep(); go(`#/item/${n}`); return true;
     };
     const scanner = new QrScanner(video, (r) => {
       if (done || (r.data === last && Date.now() - lastAt < 2500)) return;
