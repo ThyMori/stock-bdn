@@ -496,12 +496,26 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
   .patch-page .noprint .btn { min-height: 36px; }
 }
 
+/* mode tableau (ordinateur, ou téléphone en paysage) : l'en-tête de la feuille reste fixe, seules les lignes défilent (hauteur du tableau fixée par fitTable dans patch.ts) */
+@media (min-width: 1001px), (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  body:has(.patch-page) { overflow-y: hidden; }
+  #app:has(.patch-page) { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
+  .ptable { overflow: auto; -webkit-overflow-scrolling: touch; }
+  table.patch th { position: sticky; top: 0; z-index: 2; }
+  .phead { display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; }
+  .phead > .row.wrap:not(.noprint) { display: contents; }
+  .phead > a.sub { order: 1; } .phead h1 { order: 2; margin: 0; font-size: 1.25rem; } .phead #pstat { order: 3; } .phead > .noprint { order: 4; margin-left: auto; }
+  .phead > .sub:not(a) { order: 5; flex-basis: 100%; }
+  .phead > .banner { order: 6; flex-basis: 100%; margin: 2px 0; padding: 4px 8px; }
+}
 /* mode tableau (ordinateur, ou téléphone en paysage) : circuit, grada, DMX et ID prennent la largeur de leur contenu, le reste de la place va aux autres colonnes */
 @media (min-width: 1001px), (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
   table.patch td[data-c="circuit"], table.patch td[data-c="dimmer"], table.patch td[data-c="dmx"], table.patch td[data-c="id"] { width: 1%; white-space: nowrap; }
   table.patch td[data-c="curve"] { width: 1%; white-space: nowrap; } table.patch td[data-c="curve"] .pin { width: auto; }   /* courbe : jamais coupée */
-  table.patch td[data-c="circuit"] .pin, table.patch td[data-c="dimmer"] .pin, table.patch td[data-c="dmx"] .pin { width: var(--w, 4ch); min-width: 3ch; }
-  .idcell .idsel { width: calc(var(--w, 5ch) + 1.8em); min-width: 0; }   /* la liste déroulante garde sa largeur, seule la valeur affichée est étroite */
+  table.patch td[data-c="circuit"] .pin, table.patch td[data-c="dimmer"] .pin, table.patch td[data-c="dmx"] .pin { width: calc(var(--w, 4ch) + 18px); min-width: 3ch; box-sizing: border-box; }   /* + marges internes du champ */
+  .idcell .idsel { width: calc(var(--w, 5ch) + 1.8em + 12px); min-width: 0; }
+  table.patch td[data-c="model"] .pin { min-width: 9em; }   /* le modèle reste lisible : si la place manque, c'est le tableau qui défile de côté */
+  table.patch { min-width: 980px; }   /* la liste déroulante garde sa largeur, seule la valeur affichée est étroite */
 }
 
 /* ---------- aide intégrée (bouton « i ») ---------- */

@@ -263,10 +263,10 @@ export const patchView: ViewFactory = ([showId]) => {
         <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
     fitTable(root);
   }
-  /** Écran bas en paysage : l'en-tête (titre, boutons, titres de colonnes) reste en place, seules les lignes défilent dans le tableau. */
+  /** Mode tableau (ordinateur ou paysage) : l'en-tête (titre, boutons, titres de colonnes) reste en place, seules les lignes défilent dans le tableau. */
   const fitTable = (root: HTMLElement) => {
     const el = root.querySelector<HTMLElement>('.ptable'); if (!el) return;
-    if (!window.matchMedia('(orientation: landscape) and (max-height: 520px) and (min-width: 560px)').matches) { el.style.maxHeight = ''; return; }
+    if (!window.matchMedia('(min-width: 1001px), (orientation: landscape) and (max-height: 520px) and (min-width: 560px)').matches) { el.style.maxHeight = ''; return; }
     window.scrollTo(0, 0);                                                   // la page elle-même ne défile pas
     const nav = document.querySelector<HTMLElement>('nav.tabs')?.offsetHeight ?? 0;
     el.style.maxHeight = Math.max(120, window.innerHeight - el.getBoundingClientRect().top - nav - 2) + 'px';   // place restante sous l'en-tête, au-dessus de la barre du bas
