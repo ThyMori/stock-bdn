@@ -12,6 +12,8 @@ import { toast } from '../ui/toast';
 import { blockedReason } from '../alerts';
 import { describe } from '../ref';
 import { rankStock, similarNames } from '../patchSuggest';
+import { clampW, colCss, loadWidths, saveWidths } from '../patchCols';
+import type { Widths } from '../patchCols';
 import type { Suggestion } from '../patchSuggest';
 
 /** Feuille de patch / focus d'un spectacle : une ligne par projecteur affecté, saisie directe, tri par colonne. */
@@ -317,7 +319,7 @@ export const patchView: ViewFactory = ([showId]) => {
       <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button></div></div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
-      <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
+      <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}">${c.label}${arrow(c.k)}</button><span class="rz" data-rz="${c.k}" title="Tire pour changer la largeur (double-clic : largeur automatique)" aria-hidden="true"></span></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
         <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
     fitTable(root);
     const nt = host.querySelector<HTMLElement>('.ptable'); if (nt) { nt.scrollTop = keepTop; nt.scrollLeft = keepLeft; }
@@ -455,13 +457,31 @@ export const patchView: ViewFactory = ([showId]) => {
         box.style.top = (r.bottom + box.offsetHeight + 4 > window.innerHeight ? Math.max(4, r.top - box.offsetHeight) : r.bottom) + 'px';   // en haut si le bas de l'écran est trop proche
       }, true);
       root.addEventListener('scroll', () => root.querySelectorAll<HTMLDetailsElement>('details.multi[open]').forEach((d) => { d.open = false; }), true);   // défiler ferme le menu (sa place ne suivrait plus)
+      // largeur des colonnes réglable à la souris (ordinateur) : poignée au bord de chaque titre, mémorisée sur cet appareil
+      let widths: Widths = loadWidths();
+      const colStyle = document.createElement('style'); document.head.append(colStyle);
+      const applyCols = () => { colStyle.textContent = colCss(widths); };
+      applyCols();
+      root.addEventListener('pointerdown', (e) => {
+        const h = (e.target as HTMLElement).closest<HTMLElement>('[data-rz]'); if (!h || e.button !== 0) return;
+        const col = h.dataset.rz!, th = h.closest('th')!;
+        e.preventDefault(); h.setPointerCapture(e.pointerId);
+        const x0 = e.clientX, w0 = th.getBoundingClientRect().width;
+        const move = (ev: PointerEvent) => { widths = { ...widths, [col]: clampW(w0 + ev.clientX - x0) }; applyCols(); };
+        const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up); saveWidths(widths); };
+        h.addEventListener('pointermove', move); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
+      });
+      root.addEventListener('dblclick', (e) => {   // double-clic sur la poignée : largeur automatique pour cette colonne
+        const h = (e.target as HTMLElement).closest<HTMLElement>('[data-rz]'); if (!h) return;
+        const { [h.dataset.rz!]: _gone, ...rest } = widths; widths = rest; applyCols(); saveWidths(widths);
+      });
       // un menu à cases se ferme quand on touche ailleurs
       const repaint = () => paint(root);
       document.addEventListener('click', closeMenus);
       const refit = () => fitTable(root);   // rotation ou redimensionnement
       window.addEventListener('resize', refit); window.addEventListener('orientationchange', refit);
       window.addEventListener('online', repaint); window.addEventListener('offline', repaint);
-      return () => { document.removeEventListener('click', closeMenus); window.removeEventListener('resize', refit); window.removeEventListener('orientationchange', refit); window.removeEventListener('online', repaint); window.removeEventListener('offline', repaint); };   // nettoyage à la sortie de la page
+      return () => { colStyle.remove(); document.removeEventListener('click', closeMenus); window.removeEventListener('resize', refit); window.removeEventListener('orientationchange', refit); window.removeEventListener('online', repaint); window.removeEventListener('offline', repaint); };   // nettoyage à la sortie de la page
     },
     update(root) {
       if (busy || root.querySelector('.patch :focus, details.multi[open]')) return;   // jamais pendant une saisie

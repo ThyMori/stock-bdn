@@ -535,3 +535,9 @@ button.bluebtn { cursor: pointer; }
 .bluebtn.on { background: #1d6bff; border: 3px solid #1d6bff; }
 @media (prefers-reduced-motion: reduce) { .bluebtn { transition: none; } }
 .extsel.need { font-weight: 700; }
+/* poignée de largeur de colonne (ordinateur seulement) */
+table.patch th .rz { position: absolute; top: 0; bottom: 0; right: -4px; width: 9px; cursor: col-resize; z-index: 6; touch-action: none; }
+table.patch th .rz:hover, table.patch th .rz:active { background: color-mix(in srgb, var(--ink) 35%, transparent); }
+@media (max-width: 1000px), (hover: none) { table.patch th .rz { display: none; } }
+table.patch th[data-c="circuit"] { z-index: 5; }   /* sa poignée reste au-dessus du titre « Modèle » voisin */
+table.patch th[data-c="circuit"] .rz { right: 0; }

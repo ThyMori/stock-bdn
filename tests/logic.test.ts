@@ -12,6 +12,8 @@ import type { Data, Immo, Op } from '../src/types';
 import { buildRows, sortRows, editableCols, dmxRank, externalStatus, extCount } from '../src/patch';
 import type { PatchRow } from '../src/patch';
 import { rankStock, similarNames } from '../src/patchSuggest';
+import { clampW, cleanWidths, colCss, MIN_W, MAX_W } from '../src/patchCols';
+import { noise, wobblePoints } from '../src/handwriting';
 import { showMounted, positionNow, positionBefore, previousShow, positionTier, posLabel, isHang, isHigh } from '../src/position';
 
 let n = 0;
@@ -400,5 +402,21 @@ t('position « pont coupole » : traitée comme « sol » (déjà là, puis dess
   assert.deepEqual(positionTier(p('show', 'pont coupole'), 'pont coupole'), positionTier(p('show', 'sol'), 'sol'));
   assert.ok(positionTier(p('dessous'), 'pont coupole').tier < positionTier(p('stock3'), 'pont coupole').tier);
   assert.ok(isHang('pont coupole') && !isHigh('pont coupole'));
+});
+t('largeurs de colonnes : limites, nettoyage et CSS réservé aux grands écrans', () => {
+  assert.equal(clampW(5), MIN_W); assert.equal(clampW(5000), MAX_W); assert.equal(clampW(123.4), 123);
+  assert.deepEqual(cleanWidths({ model: 200, bidon: 50, notes: 'x', gels: Infinity, dmx: 10 }), { model: 200, dmx: MIN_W }, 'colonnes inconnues et valeurs abîmées ignorées');
+  assert.deepEqual(cleanWidths(null), {});
+  assert.equal(colCss({}), '');
+  const css = colCss({ model: 300, circuit: 70 });
+  assert.match(css, /min-width: 1001px/); assert.match(css, /td\[data-c="model"\][^}]*width: 300px/); assert.match(css, /--cw: 70px/);
+});
+t('look cahier : tremblé déterministe, extrémités exactes', () => {
+  assert.equal(noise(3), noise(3)); assert.ok(Math.abs(noise(7)) <= 1);
+  const a = wobblePoints(0, 10, 100, 10, 0.3, 10, 5), b = wobblePoints(0, 10, 100, 10, 0.3, 10, 5);
+  assert.deepEqual(a, b, 'même graine = même trait');
+  assert.deepEqual(a[0], [0, 10]); assert.deepEqual(a[a.length - 1], [100, 10]);
+  assert.ok(a.every(([, y]) => Math.abs(y - 10) <= 0.3 + 1e-9), 'écart maximal respecté');
+  assert.equal(wobblePoints(5, 5, 5, 5).length, 2, 'trait nul : deux points');
 });
 console.log(`\n${n} tests OK`);

@@ -174,6 +174,10 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - Reprise de l'existant : les projecteurs déjà affectés à la main aux spectacles en cours ou à venir rejoignent le matériel demandé (au rejeu du SQL).
 - Droits et notifications inchangés (assignés au spectacle) ; le journal garde une ligne. L'alarme « manque » est celle du matériel demandé, recalculée tout de suite.
 
+## Colonnes redimensionnables et PDF « cahier » (v1.38.0)
+- **Largeur des colonnes** (ordinateur seulement, écran > 1000 px avec souris) : poignée au bord droit de chaque titre ; tirer change la largeur, **double-clic** = largeur automatique pour cette colonne. Mémorisé sur l'ordinateur (localStorage `stockbdn.patchcols`). Sur téléphone, rien ne change (circuit + modèle = 1/3 de l'écran). Code : `src/patchCols.ts`.
+- **PDF de la feuille de patch** : look feuille de cahier griffonnée (papier crème, lignes bleues = une ligne du tableau, double marge rouge, écriture manuscrite **Caveat** en bleu stylo, traits et cases tremblés, focus fait = coup de surligneur). Police libre SIL OFL (`src/assets/fonts/`), téléchargée seulement à la génération ; **hors ligne ou en cas d'échec, le PDF garde le même look avec la police normale**. Code : `src/patchPdf.ts`, `src/pdfFonts.ts`, `src/handwriting.ts`. Les autres PDF (prépa, démontage, étiquettes QR) restent sobres.
+
 ## Ligne « à louer / à emprunter » (v1.37.0)
 - Sur une ligne sans ID : modèle **« Location / prêt… »** → 2e liste → **« + À louer / à emprunter… »** → on choisit le modèle (et la lampe d'un PAR). La demande de matériel monte de 1 : si le stock ne suffit pas, le **manque** déclenche l'alarme habituelle ; sinon un projecteur du stock est réservé par la demande.
 - Seules ces lignes comptent : le matériel du décor ou de la Cie (lignes normales, texte libre) n'entre jamais dans le matériel demandé.
