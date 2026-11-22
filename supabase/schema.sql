@@ -1474,6 +1474,7 @@ create table if not exists patch_lines (
   updated_at       timestamptz not null default now(),
   updated_by_label text
 );
+alter table patch_lines add column if not exists gels jsonb not null default '[]'::jsonb;   -- gélatines d'une ligne N/C : [{ref, color}] (celles d'un projecteur affecté sont dans show_gels)
 create unique index if not exists patch_lines_item_uniq on patch_lines (show_id, item_id) where item_id is not null;
 create index if not exists patch_lines_show_idx on patch_lines (show_id);
 alter table patch_lines enable row level security;
@@ -1537,8 +1538,16 @@ create or replace function patch_label() returns text language sql stable securi
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) from profiles where id = auth.uid();
 $$;
 
--- Change le projecteur d'une ligne de la feuille. Les gélatines appartiennent à la ligne (au circuit) : elles suivent la ligne (choose, new, replace)
--- sauf avec noid, où elles restent sur le projecteur (une ligne sans projecteur ne peut pas porter de gélatine). La ligne est désignée par p_item (ligne d'un projecteur) ou p_line (ligne N/C).
+-- Reporte les gélatines d'une ligne N/C ([{ref, color}]) sur un projecteur affecté.
+create or replace function patch_gels_to_item(p_show uuid, p_item int, p_gels jsonb, p_label text) returns void
+language sql security definer set search_path = public as $$
+  insert into show_gels (show_id, item_id, ref, color, added_by_label)
+  select p_show, p_item, g ->> 'ref', g ->> 'color', p_label from jsonb_array_elements(coalesce(p_gels, '[]'::jsonb)) g
+   where exists (select 1 from show_items where show_id = p_show and item_id = p_item);
+$$;
+
+-- Change le projecteur d'une ligne de la feuille. Les gélatines appartiennent à la ligne (au circuit) : elles suivent la ligne dans tous les cas
+-- (choose, new, replace, noid : une ligne sans projecteur garde les siennes dans patch_lines.gels). La ligne est désignée par p_item (ligne d'un projecteur) ou p_line (ligne N/C).
 --   choose  : prend un projecteur déjà affecté au spectacle (p_target) ; les deux lignes s'échangent leurs projecteurs.
 --   noid    : la ligne devient « sans projecteur » (N/C) ; l'ancien reste affecté, sur une ligne vide.
 --   new     : ajoute au spectacle un projecteur (p_target, lampe p_lamp pour un PAR) et le met sur la ligne ; l'ancien reste affecté, sur une ligne vide.
@@ -1546,7 +1555,7 @@ $$;
 -- Réservé au régisseur du spectacle, au régisseur général et à l'admin.
 create or replace function patch_set_item(p_show uuid, p_item int, p_line uuid, p_mode text, p_target int default null, p_lamp text default null)
 returns void language plpgsql security definer set search_path = public as $$
-declare s shows; cb patch_lines; tb patch_lines; lbl text; res jsonb; oldsi show_items; m1 text; m2 text;
+declare s shows; cb patch_lines; tb patch_lines; lbl text; res jsonb; oldsi show_items; m1 text; m2 text; gj jsonb;
 begin
   if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
   if p_mode not in ('choose', 'noid', 'new', 'replace') then raise exception 'Action inconnue' using errcode = '22023'; end if;
@@ -1565,8 +1574,11 @@ begin
 
   if p_mode = 'noid' then
     if p_item is null then return; end if;
-    if cb.id is null then insert into patch_lines (show_id, item_id, updated_by_label) values (p_show, null, lbl);
-    else update patch_lines set item_id = null, model_text = '', updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
+    -- les gélatines suivent la ligne : elles passent de la liste du projecteur à la ligne sans projecteur
+    select coalesce(jsonb_agg(jsonb_build_object('ref', ref, 'color', color) order by ref), '[]'::jsonb) into gj from show_gels where show_id = p_show and item_id = p_item;
+    delete from show_gels where show_id = p_show and item_id = p_item;
+    if cb.id is null then insert into patch_lines (show_id, item_id, gels, updated_by_label) values (p_show, null, gj, lbl);
+    else update patch_lines set item_id = null, model_text = '', gels = gj, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     perform log_event('SPECTACLE', format('« %s » : patch, la ligne du projecteur %s devient « sans projecteur » (il reste affecté)', s.name, p_item));
     return;
   end if;
@@ -1589,8 +1601,12 @@ begin
       update show_gels set item_id = case when item_id = p_item then p_target else p_item end where show_id = p_show and item_id in (p_item, p_target);
       perform log_event('SPECTACLE', format('« %s » : patch, projecteurs %s et %s échangés de ligne (gélatines et saisie restent sur la ligne)', s.name, p_item, p_target));
     else   -- ligne N/C qui prend un projecteur affecté ; sa ligne d'origine devient N/C
-      if tb.id is not null then update patch_lines set item_id = null, model_text = '', updated_at = now(), updated_by_label = lbl where id = tb.id; end if;
-      update patch_lines set item_id = p_target, model_text = '', updated_at = now(), updated_by_label = lbl where id = cb.id;
+      select coalesce(jsonb_agg(jsonb_build_object('ref', ref, 'color', color) order by ref), '[]'::jsonb) into gj from show_gels where show_id = p_show and item_id = p_target;
+      delete from show_gels where show_id = p_show and item_id = p_target;   -- les gélatines de l'ancienne ligne du projecteur passent à la ligne qui devient N/C
+      if tb.id is not null then update patch_lines set item_id = null, model_text = '', gels = gj, updated_at = now(), updated_by_label = lbl where id = tb.id;
+      elsif jsonb_array_length(gj) > 0 then insert into patch_lines (show_id, item_id, gels, updated_by_label) values (p_show, null, gj, lbl); end if;
+      perform patch_gels_to_item(p_show, p_target, cb.gels, lbl);   -- celles de la ligne N/C passent au projecteur
+      update patch_lines set item_id = p_target, model_text = '', gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
       perform log_event('SPECTACLE', format('« %s » : patch, une ligne sans projecteur prend le projecteur %s', s.name, p_target));
     end if;
     return;
@@ -1610,7 +1626,9 @@ begin
   if jsonb_array_length(res -> 'skipped') > 0 then raise exception 'Projecteur % : %', p_target, res -> 'skipped' -> 0 ->> 'reason' using errcode = '22023'; end if;
   delete from patch_lines where show_id = p_show and item_id = p_target;   -- reste d'une ancienne affectation
   if p_mode = 'new' then
-    if p_item is null then update patch_lines set item_id = p_target, model_text = '', updated_at = now(), updated_by_label = lbl where id = cb.id;
+    if p_item is null then
+      perform patch_gels_to_item(p_show, p_target, cb.gels, lbl);   -- les gélatines de la ligne passent au projecteur ajouté
+      update patch_lines set item_id = p_target, model_text = '', gels = '[]', updated_at = now(), updated_by_label = lbl where id = cb.id;
     elsif cb.id is not null then update patch_lines set item_id = p_target, updated_at = now(), updated_by_label = lbl where id = cb.id; end if;
     if p_item is not null then update show_gels set item_id = p_target where show_id = p_show and item_id = p_item; end if;   -- les gélatines suivent la ligne
     perform log_event('SPECTACLE', format('« %s » : patch, projecteur %s ajouté au spectacle sur une ligne', s.name, p_target));
@@ -1702,3 +1720,35 @@ update patch_lines set position = 'allemande C' where position in ('allemande C1
 update patch_lines set curve = case when 'direct' = any (curve) then '{direct}'::text[] when 'onoff' = any (curve) then '{onoff}'::text[]
                                     when 'autre' = any (curve) then '{autre}'::text[] else '{lineaire}'::text[] end
  where cardinality(curve) <> 1;
+
+-- v1.26.2 : gélatines d'une ligne sans projecteur (ouvert dès le technicien)
+create or replace function patch_add_line_gel(p_show uuid, p_line uuid, p_ref text, p_color text) returns void
+language plpgsql security definer set search_path = public as $$
+declare r patch_lines; nm text;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into r from patch_lines where id = p_line and show_id = p_show and item_id is null;
+  if r.id is null then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+  if nullif(trim(p_ref), '') is null or length(trim(p_ref)) > 60 then raise exception 'Référence du gel obligatoire (60 caractères maximum)' using errcode = '22023'; end if;
+  if not (p_color = any (gel_colors())) then raise exception 'Couleur de gel inconnue' using errcode = '22023'; end if;
+  if jsonb_array_length(r.gels) >= 20 then raise exception 'Trop de gélatines sur cette ligne (20 maximum)' using errcode = '22023'; end if;
+  update patch_lines set gels = gels || jsonb_build_array(jsonb_build_object('ref', trim(p_ref), 'color', p_color)), updated_at = now(), updated_by_label = patch_label() where id = r.id;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : gel %s (%s) ajouté sur une ligne sans projecteur (feuille de patch)', nm, trim(p_ref), p_color));
+end $$;
+revoke all on function patch_add_line_gel(uuid, uuid, text, text) from public, anon;
+grant execute on function patch_add_line_gel(uuid, uuid, text, text) to authenticated;
+
+create or replace function patch_delete_line_gel(p_show uuid, p_line uuid, p_ref text) returns void
+language plpgsql security definer set search_path = public as $$
+declare r patch_lines; nm text;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select * into r from patch_lines where id = p_line and show_id = p_show and item_id is null;
+  if r.id is null then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+  update patch_lines set gels = coalesce((select jsonb_agg(g) from jsonb_array_elements(gels) g where g ->> 'ref' <> p_ref), '[]'::jsonb), updated_at = now(), updated_by_label = patch_label() where id = r.id;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : gel %s retiré d''une ligne sans projecteur (feuille de patch)', nm, p_ref));
+end $$;
+revoke all on function patch_delete_line_gel(uuid, uuid, text) from public, anon;
+grant execute on function patch_delete_line_gel(uuid, uuid, text) to authenticated;

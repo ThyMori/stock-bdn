@@ -166,7 +166,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | Technicien, régisseur non affecté au spectacle | voir ; modifier **grada**, **courbe** et **gélatines** |
 | Régisseur du spectacle, RG, admin | tout : colonnes, cellule ID, ajout / suppression de lignes |
 
-**Cellule ID** (régisseur du spectacle, RG, admin). Liste d'une ligne avec projecteur : noID, « Ajouter un projecteur du stock… » (fenêtre avec recherche), puis les ID du spectacle. Liste d'une ligne sans projecteur (et d'une ligne qu'on vient d'ajouter) : noID, ou directement les ID des projecteurs du stock disponibles aux dates du spectacle et pas encore affectés. Le bouton « + Ajouter une ligne » est au-dessus du tableau.
+**Cellule ID** (régisseur du spectacle, RG, admin). Liste d'une ligne avec projecteur : noID, « Ajouter un projecteur du stock… » (fenêtre avec recherche), puis les ID du spectacle. Liste d'une ligne sans projecteur (et d'une ligne qu'on vient d'ajouter) : noID, ou directement les ID des projecteurs du stock disponibles aux dates du spectacle et pas encore affectés. Le bouton « + Ajouter une ligne » est au-dessus du tableau. Toutes les listes d'ID proposent aussi **« Scanner un QR code… »** (la caméra démarre seule) : un projecteur déjà dans le spectacle prend la place de celui de la ligne, un projecteur du stock disponible est ajouté ; la fenêtre ⇄ permet aussi de scanner.
 
 | Geste | Effet sur la ligne | Le projecteur d'avant |
 |---|---|---|
@@ -175,7 +175,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | Ajouter un projecteur du stock | la ligne prend un projecteur ajouté au spectacle (mêmes vérifications que l'affectation : dates, prêt, SAV, panne ; lampe montée des PAR) | reste affecté, sur une ligne vide |
 | ⇄ | la ligne prend un projecteur du stock (changement de type possible) | retiré du spectacle ; proposition de déclarer une panne |
 
-- **Les gélatines appartiennent à la ligne (au circuit)** : elles suivent la ligne quand on échange, ajoute ou remplace un ID, et la liste « Projecteurs affectés » de la fiche du spectacle est mise à jour. Exception : avec noID, elles restent sur le projecteur (une ligne sans projecteur ne peut pas porter de gélatine).
+- **Les gélatines appartiennent à la ligne (au circuit)** : elles suivent la ligne quand on échange, ajoute, remplace un ID ou passe en noID, et la liste « Projecteurs affectés » de la fiche du spectacle est mise à jour. Une ligne sans projecteur porte ses propres gélatines (colonne `patch_lines.gels`) ; elles passent au projecteur quand la ligne en reçoit un. Elles ne figurent pas dans la liste de prépa (pas de projecteur à équiper).
 - Un projecteur issu d'une demande de matériel ne peut être remplacé que par le même modèle et ne peut pas être retiré d'ici (change la demande sur la fiche du spectacle).
 - Supprimer une ligne : ligne N/C = elle disparaît ; ligne d'un projecteur = on la vide, avec le choix de retirer aussi le projecteur des projecteurs affectés.
 - Base : table `patch_lines` (écriture uniquement par fonctions), fonctions `set_patch_field`, `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel`.
@@ -187,6 +187,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
+| `schema.sql` fin de fichier (v1.27.0) | gélatines des lignes sans projecteur : colonne `patch_lines.gels`, `patch_add_line_gel`, `patch_delete_line_gel` | v1.27.0 |
 | `schema.sql` fin de fichier (v1.26.1) | courbe à choix unique (anciennes saisies multiples ramenées à un choix) | v1.26.1 |
 | `schema.sql` fin de fichier (v1.24.3) | positions « allemande J / C » (au lieu de J1, J2, C1, C2) et « passerelle J / C » | v1.24.4 |
 

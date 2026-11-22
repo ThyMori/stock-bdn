@@ -2,6 +2,7 @@
 // (essentiel : le kit peut changer, on doit savoir de quand date la feuille), et dernière modification de la feuille.
 import { GEL_COLORS } from './types';
 import type { Data } from './types';
+import { gelColorOf } from './gels';
 import { ACCESSORIES, CURVES, labelsOf } from './patch';
 import type { PatchRow } from './patch';
 import { appReference } from './pdfHeader';
@@ -51,7 +52,7 @@ export async function buildPatchPdf(data: Data, showId: string, rows: PatchRow[]
     const hex = GEL_COLORS.find(([n]) => n === color)?.[1] ?? '#8d6e63';
     return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
   };
-  const gelColor = (ref: string) => data.showGels.find((g) => g.show_id === showId && g.ref === ref)?.color ?? 'Autre';
+  const gelColor = (ref: string) => data.showGels.find((g) => g.show_id === showId && g.ref === ref)?.color ?? gelColorOf(ref);   // ligne sans projecteur : couleur déduite de la référence
 
   head(); tableHead();
   if (!rows.length) { doc.setFontSize(10); doc.text('Aucun projecteur affecté à ce spectacle.', M, y + 4); }

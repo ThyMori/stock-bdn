@@ -1,7 +1,7 @@
 import type { ViewFactory } from '../router';
 import { can, canActShow, reportFault, rpcCall, view } from '../store';
 import { supabase } from '../supabase';
-import { esc, fmtDateTime } from '../logic';
+import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
 import { gelColorOf } from '../gels';
 import { ACCESSORIES, COLS, CURVES, POSITIONS, buildRows, editableCols, labelsOf, sortRows } from '../patch';
@@ -40,7 +40,7 @@ export const patchView: ViewFactory = ([showId]) => {
     const own = ids.map((n) => `<option value="${n}" ${n === r.itemId ? 'selected' : ''}>${n === r.itemId ? n : `${n} · ${esc(modelOf(n))}`}</option>`).join('');
     const stock = r.itemId !== null ? "" : candidates(null).map(([v, l]) => `<option value="stock:${v}">${esc(l.replace(/^n° /, ''))}</option>`).join('');
     return `<span class="idcell"><select class="pin idsel" data-k="id" aria-label="ID du projecteur (ou noID, ou un projecteur du stock)">
-      <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option>${r.itemId === null ? stock : `<option value="new">Ajouter un projecteur du stock…</option>${own}`}</select>
+      <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option><option value="scan">Scanner un QR code…</option>${r.itemId === null ? stock : `<option value="new">Ajouter un projecteur du stock…</option>${own}`}</select>
       ${r.itemId !== null ? `<a class="idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}" aria-label="Voir la fiche du projecteur ${r.itemId}">↗</a><button class="btn mini swapbtn" data-act="swap" title="Remplacer ce projecteur par un autre du stock" aria-label="Remplacer le projecteur ${r.itemId} par un autre">⇄</button>` : ''}</span>`;
   };
   /** Projecteurs qu'on peut ajouter : pas déjà dans ce spectacle, disponibles à ses dates (ni prêt, SAV ou panne). Même modèle en premier. */
@@ -52,6 +52,14 @@ export const patchView: ViewFactory = ([showId]) => {
     return d.items.filter((i) => !taken.has(i.id) && !blockedReason(d, i.id, show)).map((i) => ({ i, ds: describe(d, i) }))
       .sort((a, b) => Number(b.i.model_id === ref) - Number(a.i.model_id === ref) || (a.ds.model?.name ?? '').localeCompare(b.ds.model?.name ?? '', 'fr', { numeric: true }) || a.i.id - b.i.id)
       .map(({ i, ds }): [string, string] => [String(i.id), `n° ${i.id} · ${ds.model?.name ?? '?'}${ref && i.model_id === ref ? ' (même modèle)' : ''} · ${d.lamps.find((l) => l.id === i.lamp_id)?.name ?? 'sans lampe'} · ${st(i)}`]);
+  };
+  /** Réponse à un QR code lu dans une fenêtre de choix : accepte un projecteur de la liste, sinon explique pourquoi pas. */
+  const scanReply = (opts: [string, string][]) => (text: string): { value: string } | { error: string } => {
+    const n = parseScan(text); if (n === null) return { error: `QR non reconnu : « ${text.slice(0, 40)} »` };
+    if (opts.some(([v]) => v === String(n))) return { value: String(n) };
+    const d = view(), show = d.shows.find((x) => x.id === showId);
+    if (!d.items.some((i) => i.id === n)) return { error: `Projecteur n° ${n} introuvable dans la base.` };
+    return { error: `Le n° ${n} n'est pas disponible : ${(show && blockedReason(d, n, show)) || 'indisponible'}.` };
   };
   /** Lampe à demander pour un PAR : toujours celle qui est montée sur le projecteur choisi. */
   const lampFor = (n: number): string | null => { const d = view(), it = d.items.find((i) => i.id === n); return it && /^PAR/i.test(describe(d, it).type?.name ?? '') ? it.lamp_id : null; };
@@ -84,6 +92,19 @@ export const patchView: ViewFactory = ([showId]) => {
     const who = { p_item: r.itemId, p_line: r.itemId === null ? r.lineId : null };
     if (what === 'id') {
       if (v === 'noid') { if (r.itemId !== null) await structural(root, 'patch_set_item', { ...who, p_mode: 'noid' }, 'Ligne sans projecteur'); return; }
+      if (v === 'scan') {   // scan d'un QR code : projecteur déjà affecté = échange de lignes ; projecteur du stock disponible = ajout
+        const inShow = new Set(view().showItems.filter((x) => x.show_id === showId).map((x) => x.item_id));
+        const mine = [...inShow].filter((n) => n !== r.itemId).sort((a, b) => a - b).map((n): [string, string] => [String(n), `n° ${n} · déjà dans ce spectacle`]);
+        const opts = [...mine, ...candidates(null)];
+        const p = openForm('Scanner un projecteur', [{ name: 'to', label: 'Projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), hint: 'Un projecteur déjà dans le spectacle prend la place de celui de la ligne ; un projecteur du stock est ajouté au spectacle.' }], { submit: 'Valider' });
+        setTimeout(() => document.querySelector<HTMLElement>('dialog.dlg [data-scan]')?.click(), 150);   // la caméra démarre tout de suite
+        const f = await p;
+        if (!f) { paintRow(root, key); return; }
+        const n = Number(f.to);
+        if (inShow.has(n)) await structural(root, 'patch_set_item', { ...who, p_mode: 'choose', p_target: n }, `Projecteur ${n} placé`);
+        else await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${n} ajouté`);
+        return;
+      }
       if (v?.startsWith('stock:')) {   // ID choisi directement dans la liste du stock disponible
         const n = Number(v.slice(6));
         await structural(root, 'patch_set_item', { ...who, p_mode: 'new', p_target: n, p_lamp: lampFor(n) }, `Projecteur ${n} ajouté`); return;
@@ -101,7 +122,7 @@ export const patchView: ViewFactory = ([showId]) => {
       const old = r.itemId, opts = candidates(old);
       if (!opts.length) { toast('Aucun projecteur du stock n\'est disponible pendant ce spectacle.'); return; }
       const f = await openForm(`Remplacer le projecteur ${old}`, [
-        { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, hint: r.auto ? 'Ce projecteur vient d\'une demande : choisis le même modèle.' : 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
+        { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), hint: r.auto ? 'Ce projecteur vient d\'une demande : choisis le même modèle.' : 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
         { name: 'fault', label: `Déclarer une panne sur le projecteur ${old} ?`, type: 'select', options: [['', 'Non'], ['oui', 'Oui, en même temps']], value: '' },
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea' }], { submit: 'Remplacer' });
       if (!f) return;
@@ -121,14 +142,19 @@ export const patchView: ViewFactory = ([showId]) => {
       if (c) await structural(root, 'patch_delete_line', { p_item: r.itemId, p_line: null, p_remove: c === 'remove' }, c === 'remove' ? 'Projecteur retiré' : 'Ligne vidée');
       return;
     }
-    if (what === 'gel-add' && r.itemId !== null) {
+    if (what === 'gel-add') {
       const used = [...new Set(view().showGels.filter((g) => g.show_id === showId).map((g) => g.ref))].sort();
-      const f = await openForm(`Gel sur le projecteur ${r.itemId}`, [{ name: 'ref', label: 'Référence du gel', required: true, hint: used.length ? `Déjà utilisés ici : ${used.join(', ')}` : 'Ex. L201 (Lee), R80 ou #80 (Rosco)' }], { submit: 'Ajouter le gel' });
+      const f = await openForm(r.itemId === null ? 'Gel sur cette ligne' : `Gel sur le projecteur ${r.itemId}`, [{ name: 'ref', label: 'Référence du gel', required: true, hint: used.length ? `Déjà utilisés ici : ${used.join(', ')}` : 'Ex. L201 (Lee), R80 ou #80 (Rosco)' }], { submit: 'Ajouter le gel' });
       if (!f) return;
-      await structural(root, 'patch_add_gel', { p_item: r.itemId, p_ref: f.ref.trim(), p_color: gelColorOf(f.ref) }, `Gel ${f.ref.trim()} ajouté`);
+      if (r.itemId === null) await structural(root, 'patch_add_line_gel', { p_line: r.lineId, p_ref: f.ref.trim(), p_color: gelColorOf(f.ref) }, `Gel ${f.ref.trim()} ajouté`);   // ligne sans projecteur
+      else await structural(root, 'patch_add_gel', { p_item: r.itemId, p_ref: f.ref.trim(), p_color: gelColorOf(f.ref) }, `Gel ${f.ref.trim()} ajouté`);
       return;
     }
-    if (what === 'gel-del' && v) { await structural(root, 'patch_delete_gel', { p_id: v }, 'Gel retiré'); return; }
+    if (what === 'gel-del' && v) {
+      if (r.itemId === null) await structural(root, 'patch_delete_line_gel', { p_line: r.lineId, p_ref: v }, 'Gel retiré');
+      else await structural(root, 'patch_delete_gel', { p_id: v }, 'Gel retiré');
+      return;
+    }
   }
 
   const cell = (r: PatchRow, c: Col, ed: Set<Col>): string => {
@@ -152,7 +178,7 @@ export const patchView: ViewFactory = ([showId]) => {
       case 'model': return r.itemId === null && can_ ? `<input class="pin" data-k="model_text" value="${esc(r.model)}" maxlength="80" autocomplete="off" aria-label="Modèle">` : `<span>${esc(r.model) || '<i class="muted">—</i>'}</span>`;
       case 'gels': {
         const chips = r.gels.map((g, i) => `<span class="gel"><i style="background:${gelCss(gelColorOf(g))}"></i>${esc(g)}${can_ && r.gelIds[i] ? `<button class="gx" data-act="gel-del" data-v="${esc(r.gelIds[i])}" aria-label="Retirer le gel ${esc(g)}">✕</button>` : ''}</span>`).join(' ');
-        const add = can_ && r.itemId !== null ? `<button class="btn mini" data-act="gel-add" aria-label="Ajouter un gel">+ Gel</button>` : '';
+        const add = can_ ? `<button class="btn mini" data-act="gel-add" aria-label="Ajouter un gel">+ Gel</button>` : '';
         return chips || add ? `<span class="gels">${chips}${add}</span>` : '<i class="muted">—</i>';
       }
       case 'position': return can_ ? `<select class="pin" data-k="position" aria-label="Position"><option value="">—</option>${POSITIONS.map((p) => `<option ${p === r.position ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : `<span>${esc(r.position) || '<i class="muted">—</i>'}</span>`;

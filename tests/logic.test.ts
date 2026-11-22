@@ -289,4 +289,12 @@ t('patch : adresse DMX comparée univers puis adresse', () => {
 t('patch : buildRows sans projecteur ni ligne = vide', () => {
   assert.deepEqual(buildRows(EMPTY_DATA, 's1', []), []);
 });
+t('patch : une ligne sans projecteur porte ses gélatines', () => {
+  const line = { id: 'L1', show_id: 's1', item_id: null, circuit: '3', dimmer: '', curve: ['lineaire'], dmx: '', model_text: 'Découpe louée', accessories: [], position: '', focus: false, notes: '', updated_at: '2026-11-22T10:00:00Z', updated_by_label: 'X', gels: [{ ref: 'R80', color: 'Bleu' }, { ref: 'L201', color: 'Correction (CTO/CTB)' }] };
+  const rows = buildRows(EMPTY_DATA, 's1', [line]);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].gels, ['R80', 'L201']);
+  assert.deepEqual(rows[0].gelIds, ['R80', 'L201']);   // retrait par référence
+  assert.equal(rows[0].itemId, null);
+});
 console.log(`\n${n} tests OK`);

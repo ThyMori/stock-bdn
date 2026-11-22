@@ -6,6 +6,7 @@ import { describe } from './ref';
 export interface PatchLine {
   id: string; show_id: string; item_id: number | null; circuit: string; dimmer: string; curve: string[]; dmx: string;
   model_text: string; accessories: string[]; position: string; focus: boolean; notes: string; updated_at: string; updated_by_label: string | null;
+  gels?: { ref: string; color: string }[];   // gélatines d'une ligne N/C (celles d'un projecteur affecté sont dans show_gels)
 }
 
 /** Courbes de gradateur (plusieurs choix possibles ; « linéaire » est la valeur de base). */
@@ -50,7 +51,11 @@ export function buildRows(data: Data, showId: string, lines: PatchLine[]): Patch
     row.gelIds = gl.map((g) => g.id); row.auto = !!si.demand_id;   // gélatines modifiables une à une ; projecteur issu d'une demande = ni retrait ni remplacement par un autre modèle
     rows.push(row);
   }
-  for (const l of mine.filter((x) => x.item_id === null)) rows.push(fromLine(l, `l${l.id}`, null, l.model_text, []));
+  for (const l of mine.filter((x) => x.item_id === null)) {
+    const row = fromLine(l, `l${l.id}`, null, l.model_text, (l.gels ?? []).map((g) => g.ref));
+    row.gelIds = row.gels;   // pour une ligne N/C, une gélatine se retire par sa référence
+    rows.push(row);
+  }
   return rows;
 }
 function fromLine(l: PatchLine | null, key: string, itemId: number | null, model: string, gels: string[]): PatchRow {
