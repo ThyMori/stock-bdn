@@ -45,7 +45,7 @@ export const patchView: ViewFactory = ([showId]) => {
       const l = sug.filter((x) => x.group === g); return l.length ? `<optgroup label="${t}">${l.map((x) => `<option value="stock:${x.id}">${esc(sugLabel(x, false))}</option>`).join('')}</optgroup>` : '';
     };
     const stock = r.modelId ? grp('same', 'Suggestions (même modèle)') + grp('similar', 'Modèles similaires') + grp('other', 'Autres modèles') : grp('other', 'Projecteurs disponibles');
-    return `<span class="idcell"><select class="pin idsel" data-k="id" aria-label="ID du projecteur (ou noID, ou un projecteur du stock)">
+    return `<span class="idcell"><select class="pin idsel" data-k="id" style="--w:${wch(r.itemId === null ? 'noID' : String(r.itemId), 4)}ch" aria-label="ID du projecteur (ou noID, ou un projecteur du stock)">
       <option value="noid" ${r.itemId === null ? 'selected' : ''}>noID</option><option value="scan">Scanner un QR code…</option>${r.itemId === null ? stock : `<option value="new">Ajouter un projecteur du stock…</option>${own}`}</select>
       ${r.itemId !== null ? `<a class="idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}" aria-label="Voir la fiche du projecteur ${r.itemId}">↗</a><button class="btn mini swapbtn" data-act="swap" title="Remplacer ce projecteur par un autre du stock" aria-label="Remplacer le projecteur ${r.itemId} par un autre">⇄</button>` : ''}</span>`;
   };
@@ -186,10 +186,12 @@ export const patchView: ViewFactory = ([showId]) => {
     const lamps = d.lamps.filter((l) => !model?.socket_id || !l.socket_id || l.socket_id === model.socket_id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     return `${sel}<select class="pin" data-k="lamp_pick" aria-label="Lampe du PAR"><option value="">Lampe ?</option>${lamps.map((l) => `<option value="${esc(l.id)}" ${l.id === r.lampId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>`;
   };
+  /** Largeur (en caractères) d'une cellule étroite : celle de son contenu, avec un minimum. */
+  const wch = (v: string, min = 3): number => Math.max(min, v.length + 1);
   const cell = (r: PatchRow, c: Col, ed: Set<Col>): string => {
     const can_ = ed.has(c);
     switch (c) {
-      case 'circuit': case 'dimmer': return can_ ? `<input class="pin num" data-k="${c}" value="${esc(r[c])}" maxlength="30" autocomplete="off" aria-label="${c === 'circuit' ? 'Circuit' : 'Grada'}">` : `<span class="num">${esc(r[c]) || '<i class="muted">—</i>'}</span>`;
+      case 'circuit': case 'dimmer': return can_ ? `<input class="pin num" data-k="${c}" style="--w:${wch(r[c])}ch" value="${esc(r[c])}" maxlength="30" autocomplete="off" aria-label="${c === 'circuit' ? 'Circuit' : 'Grada'}">` : `<span class="num">${esc(r[c]) || '<i class="muted">—</i>'}</span>`;
       case 'curve': {   // un seul choix possible
         const v = r.curve[0] ?? 'lineaire';
         if (!can_) return v === 'direct' ? '<b class="direct">DIRECT</b>' : `<span>${esc(labelsOf(CURVES, r.curve)) || '<i class="muted">—</i>'}</span>`;
@@ -201,7 +203,7 @@ export const patchView: ViewFactory = ([showId]) => {
         return `<details class="multi" data-k="accessories"><summary>${txt || '<i class="muted">—</i>'}</summary><div class="opts">${list.map((x) =>
           `<label><input type="checkbox" data-v="${x.k}" ${vals.includes(x.k) ? 'checked' : ''}> ${esc(x.label)}</label>`).join('')}</div></details>`;
       }
-      case 'dmx': return can_ && r.curve.includes('direct') ? `<input class="pin num" data-k="dmx" value="${esc(r.dmx)}" placeholder="1-120" maxlength="7" inputmode="numeric" autocomplete="off" aria-label="Adresse DMX, univers-adresse">`
+      case 'dmx': return can_ && r.curve.includes('direct') ? `<input class="pin num" data-k="dmx" style="--w:${wch(r.dmx, 5)}ch" value="${esc(r.dmx)}" placeholder="1-120" maxlength="7" inputmode="numeric" autocomplete="off" aria-label="Adresse DMX, univers-adresse">`
         : r.curve.includes('direct') ? `<span class="num">${esc(r.dmx) || '<i class="muted">—</i>'}</span>` : '<i class="muted">—</i>';
       case 'id': return can_ ? idCell(r) : r.itemId === null ? '<span class="muted">N/C</span>' : `<a class="num idlink" href="#/item/${r.itemId}?from=patch-${esc(showId)}">${r.itemId}</a>`;
       case 'model': return r.itemId === null && can_ ? modelCell(r) : `<span>${esc(r.model) || '<i class="muted">—</i>'}</span>`;
@@ -326,6 +328,9 @@ export const patchView: ViewFactory = ([showId]) => {
         }
         const ab = t.closest<HTMLElement>('[data-act]'), tr = t.closest<HTMLElement>('tr[data-key]');
         if (ab && tr && ['swap', 'line-del', 'gel-add', 'gel-del'].includes(ab.dataset.act ?? '')) void act(root, tr.dataset.key!, ab.dataset.act!, ab.dataset.v);
+      });
+      root.addEventListener('input', (e) => {   // la colonne s'élargit / se resserre pendant la frappe
+        const t = e.target as HTMLInputElement; if (t.tagName === 'INPUT' && t.classList.contains('num')) t.style.setProperty('--w', Math.max(t.dataset.k === 'dmx' ? 5 : 3, t.value.length + 1) + 'ch');
       });
       root.addEventListener('change', (e) => {
         const t = e.target as HTMLInputElement | HTMLSelectElement;

@@ -496,6 +496,14 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
   .patch-page .noprint .btn { min-height: 36px; }
 }
 
+/* mode tableau (ordinateur, ou téléphone en paysage) : circuit, grada, DMX et ID prennent la largeur de leur contenu, le reste de la place va aux autres colonnes */
+@media (min-width: 1001px), (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  table.patch td[data-c="circuit"], table.patch td[data-c="dimmer"], table.patch td[data-c="dmx"], table.patch td[data-c="id"] { width: 1%; white-space: nowrap; }
+  table.patch td[data-c="curve"] { width: 1%; white-space: nowrap; } table.patch td[data-c="curve"] .pin { width: auto; }   /* courbe : jamais coupée */
+  table.patch td[data-c="circuit"] .pin, table.patch td[data-c="dimmer"] .pin, table.patch td[data-c="dmx"] .pin { width: var(--w, 4ch); min-width: 3ch; }
+  .idcell .idsel { width: calc(var(--w, 5ch) + 1.8em); min-width: 0; }   /* la liste déroulante garde sa largeur, seule la valeur affichée est étroite */
+}
+
 /* ---------- aide intégrée (bouton « i ») ---------- */
 .info-btn { font-weight: 800; font-style: italic; font-family: Georgia, serif; min-width: 44px; }
 dialog.help { border: 2px solid var(--ink); background: var(--paper); color: var(--ink); padding: 0 16px 16px; width: min(94vw, 640px); max-height: 88dvh; overflow-y: auto; }
