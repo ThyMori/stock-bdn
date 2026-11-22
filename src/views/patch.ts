@@ -201,20 +201,22 @@ export const patchView: ViewFactory = ([showId]) => {
   }
 
   /** Cellule modèle d'une ligne sans projecteur : modèle du catalogue (groupé par type), texte libre, ajout au catalogue (régisseur général / admin) et lampe pour un PAR. */
+  const extMode = new Set<string>();   // lignes dont on a choisi « Location / prêt » sans avoir encore désigné laquelle
   const modelCell = (r: PatchRow): string => {
-    const d = view(), types = [...d.types].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    const d = view(), exts = externalStatus(d, showId, lines);   // locations / prêts du spectacle
+    const inExt = !!r.externalId || extMode.has(r.key);            // ligne en mode « Location / prêt » : on ne montre plus le modèle ni la lampe
+    const modelId = inExt ? null : r.modelId, types = [...d.types].sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     const groups = [...types.map((t) => ({ label: t.name, id: t.id as string | null })), { label: 'Sans type', id: null }].map((g) => {
       const ms = d.models.filter((m) => (m.type_id ?? null) === g.id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
-      return ms.length ? `<optgroup label="${esc(g.label)}">${ms.map((m) => `<option value="${esc(m.id)}" ${m.id === r.modelId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</optgroup>` : '';
+      return ms.length ? `<optgroup label="${esc(g.label)}">${ms.map((m) => `<option value="${esc(m.id)}" ${m.id === modelId ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</optgroup>` : '';
     }).join('');
-    const free = !r.modelId && r.model ? `<option value="__keep" selected>${esc(r.model)} (texte libre)</option>` : '';
-    const sel = `<select class="pin" data-k="model_pick" aria-label="Modèle du projecteur"><option value="" ${!r.modelId && !r.model ? 'selected' : ''}>—</option>${free}${groups}<option value="__text">Autre (texte libre)…</option>${can('regisseur_general') ? '<option value="__add">+ Ajouter un modèle au catalogue…</option>' : ''}</select>`;
+    const free = !inExt && !r.modelId && r.model ? `<option value="__keep" selected>${esc(r.model)} (texte libre)</option>` : '';
+    const sel = `<select class="pin" data-k="model_pick" aria-label="Modèle du projecteur"><option value="" ${!inExt && !r.modelId && !r.model ? 'selected' : ''}>—</option>${exts.length ? `<option value="__ext" ${inExt ? 'selected' : ''}>Location / prêt…</option>` : ''}${free}${groups}<option value="__text">Autre (texte libre)…</option>${can('regisseur_general') ? '<option value="__add">+ Ajouter un modèle au catalogue…</option>' : ''}</select>`;
     const model = d.models.find((m) => m.id === r.modelId);
     const lamps = d.lamps.filter((l) => !model?.socket_id || !l.socket_id || l.socket_id === model.socket_id).sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     const lampSel = r.par ? `<select class="pin" data-k="lamp_pick" aria-label="Lampe du PAR"><option value="">Lampe ?</option>${lamps.map((l) => `<option value="${esc(l.id)}" ${l.id === r.lampId ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select>` : '';
-    const exts = externalStatus(d, showId, lines);   // locations / prêts du spectacle : la ligne peut y être rattachée (information)
-    const extSel = exts.length ? `<select class="pin extsel${r.externalId ? ' linked' : ''}" data-k="ext_pick" aria-label="Rattacher à une location ou un prêt"><option value="">Loc./prêt : aucun</option>${exts.map((x) => `<option value="${esc(x.id)}" ${x.id === r.externalId ? 'selected' : ''}>${esc(x.tag)} ${x.placed}/${x.qty}</option>`).join('')}</select>` : '';
-    return sel + lampSel + extSel;
+    const extSel = inExt ? `<select class="pin extsel${r.externalId ? ' linked' : ''}" data-k="ext_pick" aria-label="Quelle location ou quel prêt"><option value="">— laquelle ? —</option>${exts.map((x) => `<option value="${esc(x.id)}" ${x.id === r.externalId ? 'selected' : ''}>${esc(x.short)} (${x.placed}/${x.qty})</option>`).join('')}</select>` : '';
+    return inExt ? sel + extSel : sel + lampSel;
   };
   /** Largeur (en caractères) d'une cellule étroite : celle de son contenu, avec un minimum. */
   const wch = (v: string, min = 3): number => Math.max(min, v.length + 1);
@@ -252,6 +254,9 @@ export const patchView: ViewFactory = ([showId]) => {
   /** Choix du modèle d'une ligne sans projecteur : catalogue, texte libre, ou nouveau modèle ajouté au catalogue. */
   async function pickModel(root: HTMLElement, key: string, v: string) {
     if (v === '__keep') return;                                   // texte libre déjà en place : rien à faire
+    if (v === '__ext') { extMode.add(key); paintRow(root, key); return; }   // « Location / prêt… » : la 2e liste apparaît pour choisir laquelle
+    const was = rowsNow().find((x) => x.key === key);
+    if (extMode.delete(key) || was?.externalId) save(root, key, 'external_id', '');   // on quitte le mode location : la ligne est détachée
     if (v === '') { save(root, key, 'model_id', ''); save(root, key, 'model_text', ''); queue = queue.then(() => paintRow(root, key)); return; }
     if (v === '__text') {
       const f = await openForm('Modèle en texte libre', [{ name: 't', label: 'Nom du modèle', required: true }], { submit: 'Valider' });
