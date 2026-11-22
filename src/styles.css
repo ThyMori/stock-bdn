@@ -442,11 +442,11 @@ details.multi .opts input { width: 22px; height: 22px; accent-color: var(--ink);
 .ptable { width: 100%; overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 body:has(.patch-page) { overflow: hidden; }                                   /* la page ne défile pas : seul le tableau défile */
 #app:has(.patch-page) { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
-table.patch { min-width: 980px; border-collapse: separate; border-spacing: 0; }   /* « separate » : les colonnes fixées gardent leurs bordures */
+table.patch { --cw: 64px; min-width: 980px; border-collapse: separate; border-spacing: 0; }   /* « separate » : les colonnes fixées gardent leurs bordures */
 table.patch th { position: sticky; top: 0; z-index: 2; }                     /* titres de colonnes fixes */
 /* colonnes fixées à gauche : Circuit (largeur fixe), puis Modèle juste à côté */
-table.patch th[data-c="circuit"], table.patch td[data-c="circuit"] { position: sticky; left: 0; width: 64px; min-width: 64px; max-width: 64px; box-sizing: border-box; }
-table.patch th[data-c="model"], table.patch td[data-c="model"] { position: sticky; left: 64px; min-width: 8.5em; box-shadow: 3px 0 0 color-mix(in srgb, var(--ink) 35%, transparent); }
+table.patch th[data-c="circuit"], table.patch td[data-c="circuit"] { position: sticky; left: 0; width: var(--cw); min-width: var(--cw); max-width: var(--cw); box-sizing: border-box; }
+table.patch th[data-c="model"], table.patch td[data-c="model"] { position: sticky; left: var(--cw); min-width: 8.5em; box-shadow: 3px 0 0 color-mix(in srgb, var(--ink) 35%, transparent); }
 table.patch th[data-c="circuit"], table.patch th[data-c="model"] { z-index: 4; }   /* les coins restent au-dessus de tout */
 table.patch td[data-c="circuit"], table.patch td[data-c="model"] { z-index: 1; background: var(--paper); }   /* fond plein : ce qui défile passe dessous */
 table.patch tbody tr:hover td[data-c="circuit"], table.patch tbody tr:hover td[data-c="model"] { background: color-mix(in srgb, var(--ink) 5%, var(--paper)); }
@@ -465,7 +465,9 @@ table.patch td[data-c="model"] .pin { min-width: 8em; }
 .phead > .banner { order: 6; flex-basis: 100%; margin: 2px 0; padding: 4px 8px; }
 /* téléphone (portrait) et écran bas : tout est plus compact, bandeaux d'installation / notifications / spectacle en cours masqués */
 @media (max-width: 1000px), (orientation: landscape) and (max-height: 520px) {
-  table.patch { font-size: .78rem; margin-top: 6px; }
+  table.patch { --cw: 44px; font-size: .78rem; margin-top: 6px; }   /* Circuit plus étroite sur téléphone */
+  table.patch td[data-c="circuit"] .pin { padding-left: 2px; padding-right: 2px; font-size: 15px; }
+  table.patch th[data-c="circuit"] button { padding-left: 2px; padding-right: 2px; font-size: .56rem; letter-spacing: 0; }
   table.patch th button { padding: 8px 4px; min-height: 36px; font-size: .66rem; letter-spacing: .03em; }
   table.patch td { padding: 2px 3px; }
   .pin { min-height: 36px; padding: 3px 4px; }
