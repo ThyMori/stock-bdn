@@ -1508,7 +1508,7 @@ begin
         if txt !~ '^[0-9]{1,3}-[0-9]{1,3}$' or split_part(txt, '-', 2)::int not between 1 and 512 or split_part(txt, '-', 1)::int < 1 then raise exception 'Adresse DMX : format univers-adresse (ex. 1-120, adresse de 1 à 512)' using errcode = '22023'; end if;
         if not ('direct' = any (r.curve)) then raise exception 'Coche d''abord la courbe DIRECT pour saisir une adresse DMX' using errcode = '22023'; end if;
       end if;
-    elsif p_field = 'position' and txt <> '' and txt not in ('P1','P2','P3','P4','P5','P6','P7','P8','P9','P10','mezza J','mezza C','allemande J','allemande C','corbeille','balcon','3e','sol','coupole','autre') then
+    elsif p_field = 'position' and txt <> '' and txt not in ('P1','P2','P3','P4','P5','P6','P7','P8','P9','P10','mezza J','mezza C','allemande J','allemande C','passerelle J','passerelle C','corbeille','balcon','3e','sol','coupole','autre') then
       raise exception 'Position inconnue' using errcode = '22023';
     end if;
     execute format('update patch_lines set %I = $1, updated_at = now(), updated_by_label = $2 where id = $3', p_field) using txt, lbl, r.id;

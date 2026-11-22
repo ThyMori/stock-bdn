@@ -186,7 +186,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 |---|---|---|
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
-| `schema.sql` fin de fichier (v1.24.3) | positions « allemande J » et « allemande C » (au lieu de J1, J2, C1, C2) | v1.24.3 |
+| `schema.sql` fin de fichier (v1.24.3) | positions « allemande J / C » (au lieu de J1, J2, C1, C2) et « passerelle J / C » | v1.24.4 |
 
 ### Déconnexion fiabilisée et garde-fou de démarrage (v1.18.1)
 - Se déconnecter ne recharge plus la page deux fois (cause probable de l'écran noir sur l'appli installée).
