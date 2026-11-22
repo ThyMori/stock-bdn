@@ -316,9 +316,12 @@ export const patchView: ViewFactory = ([showId]) => {
     busy++; setStat(root, 'Enregistrement…');
     queue = queue.then(async () => {
       const cur = rowsNow().find((x) => x.key === key) ?? r;   // l'ID de ligne a pu être créé par un envoi précédent
-      const { data, error } = await supabase.rpc('set_patch_field', { p_show: showId, p_item: cur.itemId, p_line: cur.lineId, p_field: field, p_value: value });
+      const send = () => supabase.rpc('set_patch_field', { p_show: showId, p_item: cur.itemId, p_line: cur.lineId, p_field: field, p_value: value });
+      let { data, error } = await send();
+      // coupure réseau passagère (« Failed to fetch ») : l'envoi est rejouable sans risque (il fixe une valeur), on réessaie une fois
+      if (error && /failed to fetch|network|load failed/i.test(error.message)) { await new Promise((ok) => setTimeout(ok, 1200)); ({ data, error } = await send()); }
       busy--;
-      if (error || !data) { setStat(root, error?.message ?? 'Enregistrement impossible', true); paintRow(root, key); return; }
+      if (error || !data) { setStat(root, error && /failed to fetch|network|load failed/i.test(error.message) ? 'Connexion perdue : réessaie dans un instant' : error?.message ?? 'Enregistrement impossible', true); paintRow(root, key); return; }
       const line = data as PatchLine; const i = lines.findIndex((l) => l.id === line.id);
       if (i >= 0) lines[i] = line; else lines.push(line);
       setStat(root, 'Enregistré ✓ ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
