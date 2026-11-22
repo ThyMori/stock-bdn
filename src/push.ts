@@ -2,6 +2,7 @@
 // La clé publique VAPID peut être publique ; la clé privée n'existe que dans la fonction serveur « push-notify ».
 import { supabase } from './supabase';
 import { can } from './store';
+import { isStandalone } from './install';
 
 export const VAPID_PUBLIC_KEY = 'BCD_wF5cDyfY5fKoV9Jg3zWFyEy9hQ-ddz6HEcyIgXHtdl66LixKLBWfhS5fN1BgZ79B1YX4s1tpx-CgtzMScBE';
 
@@ -12,7 +13,6 @@ const getFlag = (uid: string): boolean => { try { return localStorage.getItem(fl
 const setFlag = (uid: string, on: boolean) => { try { if (on) localStorage.setItem(flag(uid), '1'); else localStorage.removeItem(flag(uid)); } catch { /* stockage indisponible */ } };
 
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const isStandalone = () => matchMedia('(display-mode: standalone)').matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
 
 function keyBytes(b64: string): Uint8Array {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);

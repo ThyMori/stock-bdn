@@ -27,6 +27,7 @@ import type { Role } from './types';
 import { fmtDateTime } from './logic';
 import { enablePush, listenPushNavigation, notifBannerWanted, snoozeNotifBanner, syncPush } from './push';
 import { toast } from './ui/toast';
+import { initInstall, installBannerWanted, installButtonLabel, promptInstall, snoozeInstall } from './install';
 import { initUpdates } from './updates';
 
 initUpdates();
@@ -72,10 +73,13 @@ function paintStatus() {
   el.innerHTML = `<div class="topbar"><span class="brand">Stock BdN</span>
       <button class="sync ${!navigator.onLine ? 'off' : state.syncing ? 'busy' : ''}" id="syncBtn" title="${state.lastPull ? 'Dernière mise à jour ' + fmtDateTime(state.lastPull) : ''}">${label}</button></div>
     ${showAlerts(view(), todayStr()).slice(0, 3).map((a) => `<a class="banner alarm" href="#/show/${a.show.id}" role="alert"><b>⚠ ALERTE MATÉRIEL · ${esc(a.show.name)}</b><br>${esc(alertText(a))} — à réparer, louer ou emprunter</a>`).join('')}
-    ${notifBanner ? `<div class="banner notif" role="region" aria-label="Notifications"><span>Les notifications sont désactivées : tu ne seras pas prévenu quand on te cite ou quand un message arrive sur un de tes spectacles.</span><span class="row"><button class="btn primary" data-act="notif-on">Activer</button><button class="btn" data-act="notif-later">Plus tard</button></span></div>` : ''}
+    ${installBannerWanted() ? `<div class="banner install" role="region" aria-label="Installer l'application"><img src="${import.meta.env.BASE_URL}icon-192.png" alt="" width="40" height="40"><span class="grow"><b>Installe Stock BdN</b><br>Un accès en un geste depuis ton écran d'accueil, en plein écran, comme une vraie appli.</span><span class="row"><button class="btn primary" data-act="inst-now">${installButtonLabel()}</button><button class="btn" data-act="inst-later">Plus tard</button></span></div>` : ''}
+    ${notifBanner && !installBannerWanted() ? `<div class="banner notif" role="region" aria-label="Notifications"><span>Les notifications sont désactivées : tu ne seras pas prévenu quand on te cite ou quand un message arrive sur un de tes spectacles.</span><span class="row"><button class="btn primary" data-act="notif-on">Activer</button><button class="btn" data-act="notif-later">Plus tard</button></span></div>` : ''}
     ${state.rejected.length ? `<div class="banner err">${state.rejected.length} action(s) refusée(s) par le serveur — <a href="#/more">voir</a></div>` : ''}
     ${state.error && navigator.onLine ? `<div class="banner">Synchro en échec : ${state.error}</div>` : ''}`;
   el.querySelector('#syncBtn')?.addEventListener('click', () => void sync());
+  el.querySelector('[data-act=inst-now]')?.addEventListener('click', () => void promptInstall());
+  el.querySelector('[data-act=inst-later]')?.addEventListener('click', () => snoozeInstall());
   el.querySelector('[data-act=notif-later]')?.addEventListener('click', () => { snoozeNotifBanner(); notifBanner = false; paintStatus(); });
   el.querySelector('[data-act=notif-on]')?.addEventListener('click', async () => {
     const uid = state.session?.user.id; if (!uid) return;
@@ -135,7 +139,9 @@ function startApp() {
 window.addEventListener('online', () => { setOnline(true); void sync(); });
 window.addEventListener('offline', () => setOnline(false));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { void sync(); void refreshNotifBanner(); } });
-window.addEventListener('push-changed', () => void refreshNotifBanner());   // activé / désactivé depuis Plus ou depuis le bandeau
+window.addEventListener('push-changed', () => void refreshNotifBanner());
+window.addEventListener('install-changed', () => paintStatus());   // installée / reportée : le bandeau suit
+initInstall();   // activé / désactivé depuis Plus ou depuis le bandeau
 
 async function boot() {
   if (!configured) return showConfigMissing(app);

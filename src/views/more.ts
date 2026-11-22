@@ -4,6 +4,8 @@ import { openForm } from '../ui/dialog';
 import { esc, fmtDateTime } from '../logic';
 import { ROLE_LABEL, fullName } from '../types';
 import { supabase } from '../supabase';
+import { canInstall, promptInstall } from '../install';
+import { shareApp } from '../share';
 import { disablePush, enablePush, forgetPushOnLogout, pushStatus, testPush } from '../push';
 import type { PushStatus } from '../push';
 
@@ -32,6 +34,8 @@ export const moreView: ViewFactory = () => ({
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
       if (el.dataset.act === 'sync') void sync();
+      if (el.dataset.act === 'share') void shareApp();
+      if (el.dataset.act === 'install') void promptInstall();
       if (el.dataset.act === 'chmail' && state.profile) {
         const msg = (t: string) => { const x = root.querySelector('#mailMsg'); if (x) x.textContent = t; };
         const f = await openForm('Changer mon e-mail', [
@@ -84,7 +88,7 @@ export const moreView: ViewFactory = () => ({
 
 function paint(root: HTMLElement) {
   const p = state.profile;
-  root.innerHTML = `<div class="page"><h1>Plus</h1>
+  root.innerHTML = `<div class="page"><div class="row"><h1 class="grow">Plus</h1><button class="btn" data-act="share" aria-label="Partager l'application" title="Partager l'application"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg></button></div>
     <div class="card stack">
       <div><div class="t">${esc(p ? fullName(p) : '—')}</div><div class="sub">${p ? ROLE_LABEL[p.role] + (fullName(p) !== p.email ? ' · ' + esc(p.email) : '') : ''}</div></div>
       <div class="row wrap"><button class="btn" data-act="rename" ${state.online ? '' : 'disabled'}>Modifier mon nom</button><button class="btn" data-act="chmail" ${state.online ? '' : 'disabled'}>Changer mon e-mail</button></div><div id="profErr" class="sub warn" role="alert"></div>
@@ -95,6 +99,7 @@ function paint(root: HTMLElement) {
     ${state.rejected.length ? `<div class="card stack"><h2 class="warn">Actions refusées par le serveur</h2>
       ${state.rejected.map((r, i) => `<div class="row"><div class="grow sub">${esc(r.op.kind)} — ${esc(r.message)}</div><button class="btn small" data-act="dismiss" data-v="${i}">OK</button></div>`).join('')}</div>` : ''}
     ${pushCard()}
+    ${canInstall() ? '<div class="card stack"><h2>Installer l\'appli</h2><div class="sub">Un accès en un geste depuis ton écran d\'accueil, en plein écran, comme une vraie appli.</div><button class="btn" data-act="install">Installer l\'application</button></div>' : ''}
     <div class="list">
       ${can('regisseur_general') ? '<a class="item" href="#/labels"><div class="grow"><div class="t">Étiquettes QR</div><div class="s">Imprimer les stickers des projecteurs</div></div>›</a>' : ''}
       ${can('regisseur_general') ? `
@@ -107,7 +112,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v1.16.0</div></div>`;
+    <div class="sub" style="text-align:center">Stock BdN · v1.17.0</div></div>`;
 }
 
 function pushCard(): string {

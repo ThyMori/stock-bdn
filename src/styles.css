@@ -342,3 +342,13 @@ nav.tabs a { font-size: .68rem; }
 .update-bar[hidden] { display: none; }
 .update-bar span { flex: 1; min-width: 0; }
 .update-bar .btn { flex: none; width: auto; }
+
+/* Bandeau « installe l'appli » et guide d'installation */
+.banner.install { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); }
+.banner.install img { flex: none; }
+.banner.install .grow { flex: 1 1 12em; min-width: 0; }
+.banner.install .btn { width: auto; }
+.install-guide { max-height: 88dvh; overflow: auto; }
+.install-guide details { border: 2px solid var(--ink); padding: 8px 12px; }
+.install-guide summary { cursor: pointer; }
+.install-guide ol { margin: 8px 0 2px; padding-left: 20px; display: grid; gap: 6px; }
