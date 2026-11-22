@@ -358,7 +358,18 @@ export const showView: ViewFactory = ([id]) => {
           if (!cands.length) { err('Aucun autre projecteur de ce modèle n\'est disponible pendant ce spectacle (déjà pris, SAV, prêt ou en panne).'); return; }
           const st = (i: (typeof cands)[number]) => ({ dispo: 'disponible', utilise: 'utilisé', sav: 'SAV', en_pret: 'en prêt' }[i.eff ?? i.status]);
           const f = await openForm(`Remplacer le projecteur ${v}`, [{ name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true,
-            options: cands.map((i): [string, string] => [String(i.id), `n° ${i.id} · ${lampName(i.lamp_id) ?? 'sans lampe'} · ${st(i)}`]) }], { submit: 'Remplacer' });
+            options: cands.map((i): [string, string] => [String(i.id), `n° ${i.id} · ${lampName(i.lamp_id) ?? 'sans lampe'} · ${st(i)}`]),
+            // QR code scanné : accepté seulement s'il fait partie des candidats ; sinon on explique pourquoi pas
+            scan: (text) => {
+              const n = parseScan(text); if (n === null) return { error: `QR non reconnu : « ${text.slice(0, 40)} »` };
+              if (cands.some((c) => c.id === n)) return { value: String(n) };
+              const other = dd.items.find((i) => i.id === n);
+              if (!other) return { error: `Projecteur n° ${n} introuvable dans la base.` };
+              if (n === Number(v)) return { error: `Le n° ${n} est le projecteur à remplacer.` };
+              if (other.model_id !== it.model_id) return { error: `Le n° ${n} n'est pas du même modèle (${dd.models.find((m) => m.id === it.model_id)?.name ?? '?'} attendu).` };
+              if (taken.has(n)) return { error: `Le n° ${n} est déjà assigné à ce spectacle.` };
+              return { error: `Le n° ${n} n'est pas disponible : ${(cs && blockedReason(dd, n, cs)) || 'indisponible'}.` };
+            } }], { submit: 'Remplacer' });
           if (!f) return;
           const r = await rpcCall('swap_show_item', { p_show: id, p_old: Number(v), p_new: Number(f.to) });
           if (r.error) err(r.error);
