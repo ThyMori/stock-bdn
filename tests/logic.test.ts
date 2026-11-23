@@ -196,7 +196,12 @@ t('gélatines : sections par format de projecteur, modèles à même porte-filtr
       { id: '4', show_id: 's', item_id: 3, ref: 'L106', color: 'Rouge' },
       { id: '5', show_id: 'autre', item_id: 3, ref: 'L106', color: 'Rouge' }] } as unknown as Data;
   const g = gelGroups(d, 's');
-  assert.deepEqual(g.map((x) => [x.title, x.ref, x.qty]), [['613 SX / 614 SX', 'R26', 1], ['613 SX / 614 SX', 'L201', 2], ['PAR64', 'L106', 1]]);
+  assert.deepEqual(g.map((x) => [x.title, x.ref, x.qty]), [['613 SX / 614 SX', 'L201', 2], ['613 SX / 614 SX', 'R26', 1], ['PAR64', 'L106', 1]]);
+});
+t('gélatines : classées par référence (Lee avant Rosco, puis par numéro)', () => {
+  const mk = (ref: string) => ({ show_id: 's', item_id: 1, ref, color: 'Bleu' });
+  const d = { shows: [], items: [{ id: 1, model_id: 'm' }], models: [{ id: 'm', name: 'PAR64' }], types: [], families: [], lamps: [], sockets: [], filterSizes: [], patchLines: [], showGels: ['R80', 'L201', 'LEE 106', '#26', 'L20', 'Rosco 3202'].map(mk) } as unknown as Data;
+  assert.deepEqual(gelGroups(d, 's').map((x) => x.ref), ['L20', 'LEE 106', 'L201', '#26', 'R80', 'Rosco 3202']);
 });
 t('gélatines : couleur déduite de la référence (Lee / Rosco)', () => {
   assert.equal(gelColorOf('L201'), 'Correction (CTO/CTB)');

@@ -43,9 +43,15 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
     const cur = map.get(key) ?? { title: titleOf(r.key), size: r.size, color: r.g.color, ref: r.g.ref.trim(), qty: 0, items: [] };
     cur.qty++; if (r.g.item_id) cur.items.push(r.g.item_id); map.set(key, cur);
   }
-  const rank = (c: string) => { const i = GEL_COLORS.findIndex(([n]) => n === c); return i < 0 ? 99 : i; };
+  // classement par référence : Lee (L, LEE) avant Rosco (R, #), puis par numéro (106 avant 201), puis par le reste du texte
+  const refKey = (ref: string): [number, number, string] => {
+    const m = ref.toLowerCase().replace(/\s+/g, '').match(/^(lee|l|rosco|roscolux|rosc|r|#)?(\d+)(.*)$/);
+    if (!m) return [2, 0, ref.toLowerCase()];                              // référence inhabituelle : à la fin, par ordre alphabétique
+    return [!m[1] || m[1] === 'lee' || m[1] === 'l' ? 0 : 1, Number(m[2]), m[3]];
+  };
+  const byRef = (a: string, b: string): number => { const x = refKey(a), y = refKey(b); return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2], 'fr'); };
   return [...map.values()].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
-    .sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true }) || rank(a.color) - rank(b.color) || a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
+    .sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true }) || byRef(a.ref, b.ref));
 }
 
 /** Provenance, position prévue et accessoires (feuille de patch) d'un projecteur du spectacle. */
