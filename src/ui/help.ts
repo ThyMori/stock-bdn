@@ -48,7 +48,7 @@ const SECTIONS: Section[] = [
     '<b>Matériel demandé</b> : tu donnes modèle + lampe (PAR) + quantité ; l\'appli choisit seule les projecteurs et s\'adapte aux pannes, prêts et changements de lampe. S\'il en manque : « Gérer » pour un <b>prêt</b> ou une <b>location</b>.',
     '<b>Projecteurs affectés</b> : « Affecter manuellement » (liste avec filtre par type, ou scan QR en continu). Pour un PAR, la lampe montée est pré-sélectionnée. Un projecteur ne peut pas être dans deux spectacles qui se chevauchent, ni pendant un prêt ou un SAV.',
     '<b>Gélatines</b> : chaque projecteur peut en recevoir plusieurs (référence libre : L201, R80…). La couleur du badge est déduite de la référence.',
-    '<b>PDF</b> : « Générer la liste de prépa » (projecteurs à préparer par modèle et stock, ceux déjà en place du spectacle précédent à part, gélatines à couper, accessoires à préparer) et « Rapport de démontage » (ce qu\'il faut préparer, garder, rendre pour le spectacle suivant).',
+    '<b>PDF</b> : « Générer la liste de prépa » (projecteurs à préparer par modèle et stock, ceux déjà en place du spectacle précédent à part, gélatines à couper, accessoires à préparer) et « Rapport de démontage » (ce qu\'il faut préparer, garder, rendre pour le spectacle suivant, avec ses gélatines à couper et ses accessoires à préparer).',
     '<b>Régisseurs</b> : seul le régisseur assigné au spectacle (ou un régisseur général / admin) peut y affecter des projecteurs.'
   ] },
   { title: 'Patch / Focus', items: [

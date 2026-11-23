@@ -202,6 +202,9 @@ La liste « Position » de la feuille de patch est classée en 4 zones : **Cintr
 ## Feuille de patch : clavier (v1.35.5)
 **Tab** = colonne suivante (ordre normal du navigateur) ; **Entrée** = enregistre et descend au même champ de la ligne suivante (contenu sélectionné) ; sur la dernière ligne, Entrée valide et ferme le clavier. L'ordre des lignes ne bouge pas pendant la saisie. Le curseur n'est plus perdu quand une ligne est redessinée (courbe, modèle).
 
+## Rapport de démontage : gélatines et accessoires (v1.45.0)
+Le rapport de démontage / remontage se termine par les sections **Gélatines à couper** et **Accessoires à préparer** du **spectacle suivant** (les mêmes que dans la liste de prépa, partagées via `drawGelSection` / `drawAccessorySection` dans `src/prepPdf.ts`). Elles n'apparaissent que si le spectacle suivant a des gélatines ou des accessoires.
+
 ## Colonne « État » (v1.44.0)
 La colonne Focus est remplacée par **État** : vide par défaut ; 1er appui = **vert** (fait) ; 2e appui = **rouge** (à faire) + fenêtre pour noter ce qu'il y a à faire ; 3e appui = vide (la note est effacée). Annuler la fenêtre laisse l'état vert. La note (300 caractères au plus) apparaît en indice (pastille « i ») au survol (ordinateur) ou au toucher (téléphone, avec « Modifier la note »). Mêmes droits que l'ancienne case Focus (régisseur assigné, RG, admin). Tri : « à faire » d'abord, puis « fait ». En-tête : « 3 faits · 2 à faire ». PDF : coche verte / croix rouge, ligne surlignée (vert / rose), note numérotée en bas de la page. Base : colonnes `patch_lines.state` et `state_note` (les anciens « focus fait » deviennent verts à la migration) ; `focus` reste synchronisé pour les anciens appareils.
 

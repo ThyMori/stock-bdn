@@ -94,6 +94,67 @@ export function prepSections(rows: PrepRow[]): { key: 'prep' | 'monte'; title: s
   return [{ key: 'prep' as const, title: PREP_TITLE.prep, groups: group(prep) }, { key: 'monte' as const, title: PREP_TITLE.monte, groups: group(monte) }].filter((x) => x.groups.length);
 }
 
+/** Contexte de dessin partagé entre les PDF (prépa, démontage) : le document, les marges, la position courante et le saut de page. */
+export interface PdfCtx { doc: import('jspdf').jsPDF; M: number; W: number; y: number; ensure: (h: number) => void }
+
+/** Section « Gélatines à couper » d'un spectacle (par format de projecteur, lignes sans projecteur comprises). Dessine à la suite de ce qui est déjà écrit : `ctx.y` est la position courante, `ctx.ensure(h)` saute de page s'il manque de la place. */
+export function drawGelSection(ctx: PdfCtx, data: Data, showId: string, sub = ''): void {
+  const { doc, M, W } = ctx;
+  let y = ctx.y;
+  const ensure = (h: number) => { ctx.y = y; ctx.ensure(h); y = ctx.y; };   // le saut de page remet y en haut
+  // gélatines : par format (sous-titre), puis couleur
+  const gels = gelGroups(data, showId);
+  if (gels.length) {
+    ensure(30); y += 8;
+    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines à couper  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(sub, W - M - 2, y, { align: 'right' }); } doc.setTextColor(0);
+    y += 7; let lastTitle = '';
+    for (const g of gels) {
+      if (g.title !== lastTitle) {
+        ensure(18); if (lastTitle) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0); doc.text(g.title, M + 2, y); if (g.size) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`(${g.size})`, W - M - 2, y, { align: 'right' }); doc.setTextColor(0); }
+        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastTitle = g.title;
+      }
+      ensure(9);
+      const hex = GEL_COLORS.find(([n]) => n === g.color)?.[1] ?? '#8d6e63';
+      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
+      doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setLineWidth(0.2); doc.rect(M + 13, y - 3.4, 4, 4, 'FD');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.ref, M + 24, y, { maxWidth: 62 });
+      doc.text(`x ${g.qty}`, M + 90, y);
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
+      y += 7;
+    }
+  }
+  ctx.y = y;
+}
+
+/** Section « Accessoires à préparer » d'un spectacle (par modèle, avec les numéros de projecteurs). Dessine à la suite de ce qui est déjà écrit : `ctx.y` est la position courante, `ctx.ensure(h)` saute de page s'il manque de la place. */
+export function drawAccessorySection(ctx: PdfCtx, data: Data, showId: string, sub = ''): void {
+  const { doc, M, W } = ctx;
+  let y = ctx.y;
+  const ensure = (h: number) => { ctx.y = y; ctx.ensure(h); y = ctx.y; };   // le saut de page remet y en haut
+  // accessoires à préparer : par modèle, avec les numéros des projecteurs concernés (feuille de patch, lignes sans projecteur comprises)
+  const acc = accessoryList(buildRows(data, showId, data.patchLines));
+  if (acc.length) {
+    ensure(30); y += 8;
+    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Accessoires à préparer  (${acc.reduce((n, a) => n + a.qty, 0)})`, M + 2, y); if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(sub, W - M - 2, y, { align: 'right' }); } doc.setTextColor(0);
+    y += 7; let lastModel = '';
+    for (const a of acc) {
+      if (a.model !== lastModel) {
+        ensure(18); if (lastModel) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(a.model, M + 2, y);
+        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastModel = a.model;
+      }
+      ensure(9);
+      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`${a.accessory}`, M + 14, y); doc.text(`x ${a.qty}`, M + 50, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90); doc.text(`n° ${a.ids}`, M + 66, y, { maxWidth: W - M - (M + 66) }); doc.setTextColor(0);
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
+      y += 7;
+    }
+  }
+  ctx.y = y;
+}
+
 /** Génère le PDF (jsPDF chargé à la demande pour ne pas alourdir l'appli). */
 export async function buildPrepPdf(data: Data, showId: string, now = new Date()): Promise<{ blob: Blob; filename: string }> {
   const show = data.shows.find((s) => s.id === showId);
@@ -176,48 +237,10 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
       doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 5.2, W - M, y + 5.2); y += 10;
     }
   }
-  // gélatines : par format (sous-titre), puis couleur
-  const gels = gelGroups(data, showId);
-  if (gels.length) {
-    ensure(30); y += 8;
-    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines à couper  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); doc.setTextColor(0);
-    y += 7; let lastTitle = '';
-    for (const g of gels) {
-      if (g.title !== lastTitle) {
-        ensure(18); if (lastTitle) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0); doc.text(g.title, M + 2, y); if (g.size) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`(${g.size})`, W - M - 2, y, { align: 'right' }); doc.setTextColor(0); }
-        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastTitle = g.title;
-      }
-      ensure(9);
-      const hex = GEL_COLORS.find(([n]) => n === g.color)?.[1] ?? '#8d6e63';
-      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
-      doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setLineWidth(0.2); doc.rect(M + 13, y - 3.4, 4, 4, 'FD');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.ref, M + 24, y, { maxWidth: 62 });
-      doc.text(`x ${g.qty}`, M + 90, y);
-      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
-      y += 7;
-    }
-  }
-  // accessoires à préparer : par modèle, avec les numéros des projecteurs concernés (feuille de patch, lignes sans projecteur comprises)
-  const acc = accessoryList(buildRows(data, showId, data.patchLines));
-  if (acc.length) {
-    ensure(30); y += 8;
-    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Accessoires à préparer  (${acc.reduce((n, a) => n + a.qty, 0)})`, M + 2, y); doc.setTextColor(0);
-    y += 7; let lastModel = '';
-    for (const a of acc) {
-      if (a.model !== lastModel) {
-        ensure(18); if (lastModel) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(a.model, M + 2, y);
-        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastModel = a.model;
-      }
-      ensure(9);
-      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`${a.accessory}`, M + 14, y); doc.text(`x ${a.qty}`, M + 50, y);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90); doc.text(`n° ${a.ids}`, M + 66, y, { maxWidth: W - M - (M + 66) }); doc.setTextColor(0);
-      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
-      y += 7;
-    }
-  }
+  // gélatines à couper puis accessoires à préparer (mêmes sections que dans le rapport de démontage)
+  const ctx: PdfCtx = { doc, M, W, get y() { return y; }, set y(v: number) { y = v; }, ensure };
+  drawGelSection(ctx, data, showId);
+  drawAccessorySection(ctx, data, showId);
   footer();
   const safe = show.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'spectacle';
   return { blob: doc.output('blob'), filename: `prepa-${safe}-${show.start_date}.pdf` };

@@ -3,6 +3,8 @@ import { describe } from './ref';
 import { appReference } from './pdfHeader';
 import { externalLabel } from './alerts';
 import { patchPosition, positionBefore, posLabel } from './position';
+import { drawAccessorySection, drawGelSection } from './prepPdf';
+import type { PdfCtx } from './prepPdf';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
@@ -138,6 +140,10 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
       doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2); y += 7;
     }
   }
+  // remontage : gélatines à couper et accessoires à préparer pour le spectacle suivant (mêmes sections que la liste de prépa)
+  const ctx: PdfCtx = { doc, M, W, get y() { return y; }, set y(v: number) { y = v; }, ensure };
+  drawGelSection(ctx, data, nextId, `pour ${next.name}`);
+  drawAccessorySection(ctx, data, nextId, `pour ${next.name}`);
   footer();
   const safe = show.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'spectacle';
   return { blob: doc.output('blob'), filename: `demontage-${safe}-${show.end_date}.pdf` };
