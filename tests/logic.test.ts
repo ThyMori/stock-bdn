@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
-import { prepRows, gelGroups, externalRows, prepSections } from '../src/prepPdf';
+import { prepRows, gelGroups, gelsByRef, externalRows, prepSections } from '../src/prepPdf';
 import { gelColorOf } from '../src/gels';
 import { compareShows, teardownPlan } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
@@ -202,6 +202,14 @@ t('gélatines : classées par référence (Lee avant Rosco, puis par numéro)', 
   const mk = (ref: string) => ({ show_id: 's', item_id: 1, ref, color: 'Bleu' });
   const d = { shows: [], items: [{ id: 1, model_id: 'm' }], models: [{ id: 'm', name: 'PAR64' }], types: [], families: [], lamps: [], sockets: [], filterSizes: [], patchLines: [], showGels: ['R80', 'L201', 'LEE 106', '#26', 'L20', 'Rosco 3202'].map(mk) } as unknown as Data;
   assert.deepEqual(gelGroups(d, 's').map((x) => x.ref), ['L20', 'LEE 106', 'L201', '#26', 'R80', 'Rosco 3202']);
+});
+t('gélatines à couper : d\'abord par référence, puis par format', () => {
+  const g = (item: number, ref: string) => ({ show_id: 's', item_id: item, ref, color: ref.startsWith('R') ? 'Bleu' : 'Rouge' });
+  const d = { shows: [], items: [{ id: 1, model_id: 'a' }, { id: 2, model_id: 'b' }, { id: 3, model_id: 'a' }], models: [{ id: 'a', name: 'PAR64' }, { id: 'b', name: '614 SX' }], types: [], families: [], lamps: [], sockets: [], filterSizes: [], patchLines: [],
+    showGels: [g(1, 'R80'), g(2, 'L106'), g(3, 'L106'), g(1, 'L106'), g(2, 'R80')] } as unknown as Data;
+  const r = gelsByRef(d, 's');
+  assert.deepEqual(r.map((x) => [x.ref, x.total]), [['L106', 3], ['R80', 2]], 'une entrée par référence, Lee avant Rosco');
+  assert.deepEqual(r[0].rows.map((x) => [x.title, x.qty]), [['614 SX', 1], ['PAR64', 2]], 'sous chaque référence : les modèles');
 });
 t('gélatines : couleur déduite de la référence (Lee / Rosco)', () => {
   assert.equal(gelColorOf('L201'), 'Correction (CTO/CTB)');

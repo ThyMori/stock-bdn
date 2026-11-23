@@ -18,6 +18,14 @@ export interface PrepRow { id: number; model: string; type: string; lamp: string
   origin: Origin; /** stockage normal : dessous, ou 3e (pastille bleue) */ storage: 'dessous' | 'stock3'; /** d'où il vient (« P2 (Avant) », « stock 3e »…) */ from: string; /** position prévue sur la feuille de patch */ position: string; accessories: string[] }
 export interface GelGroup { title: string; size: string; color: string; ref: string; qty: number; items: number[] }
 
+// classement par référence : Lee (L, LEE) avant Rosco (R, #), puis par numéro (106 avant 201), puis par le reste du texte
+const refKey = (ref: string): [number, number, string] => {
+  const m = ref.toLowerCase().replace(/\s+/g, '').match(/^(lee|l|rosco|roscolux|rosc|r|#)?(\d+)(.*)$/);
+  if (!m) return [2, 0, ref.toLowerCase()];                              // référence inhabituelle : à la fin, par ordre alphabétique
+  return [!m[1] || m[1] === 'lee' || m[1] === 'l' ? 0 : 1, Number(m[2]), m[3]];
+};
+export const byRef = (a: string, b: string): number => { const x = refKey(a), y = refKey(b); return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2], 'fr'); };
+
 /** Gélatines du spectacle : une section par « format de projecteur » (PAR64, 613 SX / 614 SX…).
  *  Les modèles qui ont la même taille de porte-filtre sont regroupés dans une même section ; sans taille connue, un modèle = une section.
  *  Dans chaque section : couleur la plus proche, puis référence. */
@@ -43,15 +51,20 @@ export function gelGroups(data: Data, showId: string): GelGroup[] {
     const cur = map.get(key) ?? { title: titleOf(r.key), size: r.size, color: r.g.color, ref: r.g.ref.trim(), qty: 0, items: [] };
     cur.qty++; if (r.g.item_id) cur.items.push(r.g.item_id); map.set(key, cur);
   }
-  // classement par référence : Lee (L, LEE) avant Rosco (R, #), puis par numéro (106 avant 201), puis par le reste du texte
-  const refKey = (ref: string): [number, number, string] => {
-    const m = ref.toLowerCase().replace(/\s+/g, '').match(/^(lee|l|rosco|roscolux|rosc|r|#)?(\d+)(.*)$/);
-    if (!m) return [2, 0, ref.toLowerCase()];                              // référence inhabituelle : à la fin, par ordre alphabétique
-    return [!m[1] || m[1] === 'lee' || m[1] === 'l' ? 0 : 1, Number(m[2]), m[3]];
-  };
-  const byRef = (a: string, b: string): number => { const x = refKey(a), y = refKey(b); return x[0] - y[0] || x[1] - y[1] || x[2].localeCompare(y[2], 'fr'); };
   return [...map.values()].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
     .sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true }) || byRef(a.ref, b.ref));
+}
+
+export interface GelRef { ref: string; color: string; total: number; rows: { title: string; size: string; qty: number }[] }
+/** Gélatines à couper dans l'ordre de travail du technicien : d'abord par référence (il sort un rouleau), puis, pour chaque référence, par format / modèle de projecteur. */
+export function gelsByRef(data: Data, showId: string): GelRef[] {
+  const m = new Map<string, GelRef>();
+  for (const g of gelGroups(data, showId)) {
+    const key = g.ref.toLowerCase().replace(/\s+/g, '') + '|' + g.color;
+    const e = m.get(key) ?? { ref: g.ref, color: g.color, total: 0, rows: [] };
+    e.total += g.qty; e.rows.push({ title: g.title, size: g.size, qty: g.qty }); m.set(key, e);
+  }
+  return [...m.values()].map((e) => ({ ...e, rows: e.rows.sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true })) })).sort((a, b) => byRef(a.ref, b.ref));
 }
 
 /** Provenance, position prévue et accessoires (feuille de patch) d'un projecteur du spectacle. */
@@ -108,26 +121,30 @@ export function drawGelSection(ctx: PdfCtx, data: Data, showId: string, sub = ''
   const { doc, M, W } = ctx;
   let y = ctx.y;
   const ensure = (h: number) => { ctx.y = y; ctx.ensure(h); y = ctx.y; };   // le saut de page remet y en haut
-  // gélatines : par format (sous-titre), puis couleur
-  const gels = gelGroups(data, showId);
-  if (gels.length) {
+  // gélatines : une référence après l'autre (un rouleau à la fois), avec en dessous les formats / modèles à couper dans cette référence
+  const refs = gelsByRef(data, showId);
+  if (refs.length) {
     ensure(30); y += 8;
     doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
-    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines à couper  (${gels.reduce((n, g) => n + g.qty, 0)})`, M + 2, y); if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(sub, W - M - 2, y, { align: 'right' }); } doc.setTextColor(0);
-    y += 7; let lastTitle = '';
-    for (const g of gels) {
-      if (g.title !== lastTitle) {
-        ensure(18); if (lastTitle) y += 3; doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(0); doc.text(g.title, M + 2, y); if (g.size) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`(${g.size})`, W - M - 2, y, { align: 'right' }); doc.setTextColor(0); }
-        doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 7; lastTitle = g.title;
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Gélatines à couper  (${refs.reduce((n, r) => n + r.total, 0)})`, M + 2, y); if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(sub, W - M - 2, y, { align: 'right' }); } doc.setTextColor(0);
+    y += 7;
+    for (const r of refs) {
+      ensure(8 + Math.min(r.rows.length, 3) * 6); y += 2;
+      const hex = GEL_COLORS.find(([n]) => n === r.color)?.[1] ?? '#8d6e63';
+      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 2, y - 3.4, 4, 4);   // case à cocher : rouleau sorti
+      doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setLineWidth(0.2); doc.rect(M + 9, y - 3.4, 4, 4, 'FD');
+      doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(r.ref, M + 16, y, { maxWidth: 60 });
+      doc.setFontSize(10); doc.text(`x ${r.total}`, M + 80, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(r.color, W - M - 2, y, { align: 'right' }); doc.setTextColor(0);
+      doc.setDrawColor(0); doc.setLineWidth(0.2); doc.line(M, y + 1.8, W - M, y + 1.8); y += 6.5;
+      for (const row of r.rows) {   // formats / modèles de cette référence
+        ensure(7);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(row.title, M + 16, y, { maxWidth: 70 });
+        if (row.size) { doc.setFontSize(8); doc.setTextColor(110); doc.text(`(${row.size})`, M + 90, y); doc.setTextColor(0); }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`x ${row.qty}`, M + 120, y);
+        doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M + 16, y + 2.2, W - M, y + 2.2);
+        y += 6;
       }
-      ensure(9);
-      const hex = GEL_COLORS.find(([n]) => n === g.color)?.[1] ?? '#8d6e63';
-      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
-      doc.setFillColor(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)); doc.setLineWidth(0.2); doc.rect(M + 13, y - 3.4, 4, 4, 'FD');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(g.ref, M + 24, y, { maxWidth: 62 });
-      doc.text(`x ${g.qty}`, M + 90, y);
-      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
-      y += 7;
     }
   }
   ctx.y = y;
