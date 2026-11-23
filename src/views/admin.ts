@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { esc, fmtDate } from '../logic';
 import { ROLE_LABEL, ROLE_RANK, ROLES, fullName } from '../types';
 import type { AccountRow, Role } from '../types';
+import { openForm } from '../ui/dialog';
 
 const opts = (list: { id: string; name?: string; label?: string }[], sel?: string | null, empty = '—') =>
   `<option value="">${empty}</option>` + list.map((o) => `<option value="${o.id}" ${o.id === sel ? 'selected' : ''}>${esc(o.name ?? o.label)}</option>`).join('');
@@ -121,11 +122,11 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
       if (section === 'refs') {
         const simple = (title: string, table: string, list: { id: string; name: string }[]) => `
           <div class="card stack"><h2>${title}</h2>
-            ${list.map((x) => `<div class="row"><span class="grow">${esc(x.name)}</span><button class="btn small danger" data-t="${table}" data-del="${x.id}">Supprimer</button></div>`).join('')}
+            ${list.map((x) => `<div class="row"><span class="grow">${esc(x.name)}</span><button class="btn small" data-t="${table}" data-edit="${x.id}">Modifier</button><button class="btn small danger" data-t="${table}" data-del="${x.id}">Supprimer</button></div>`).join('')}
             <form class="row" data-t="${table}"><input name="name" placeholder="Nouveau…" required><button class="btn small primary">Ajouter</button></form></div>`;
         body.innerHTML = simple('Familles', 'families', d.families) + simple('Types', 'item_types', d.types) + simple('Douilles', 'sockets', d.sockets) +
           `<div class="card stack"><h2>Porte-filtres</h2>
-            ${d.filterSizes.map((x) => `<div class="row"><span class="grow">${esc(x.label)} <span class="muted">· LEE ${x.sheets_lee ?? '–'} · Rosco ${x.sheets_rosco ?? '–'}</span></span><button class="btn small danger" data-t="filter_sizes" data-del="${x.id}">Supprimer</button></div>`).join('')}
+            ${d.filterSizes.map((x) => `<div class="row"><span class="grow">${esc(x.label)} <span class="muted">· LEE ${x.sheets_lee ?? '–'} · Rosco ${x.sheets_rosco ?? '–'}</span></span><button class="btn small" data-t="filter_sizes" data-edit="${x.id}">Modifier</button><button class="btn small danger" data-t="filter_sizes" data-del="${x.id}">Supprimer</button></div>`).join('')}
             <form class="stack" id="fs"><input name="label" placeholder="Taille (ex. 180 x 180)" required>
               <div class="row"><input name="lee" type="number" placeholder="Feuilles LEE"><input name="rosco" type="number" placeholder="Feuilles Rosco"></div>
               <button class="btn small primary">Ajouter</button></form></div>`;
@@ -137,6 +138,28 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           e.preventDefault(); const fd = new FormData(e.target as HTMLFormElement);
           void run(supabase.from('filter_sizes').insert({ label: str(fd.get('label')), sheets_lee: num(fd.get('lee')), sheets_rosco: num(fd.get('rosco')) }), 'Ajouté.');
         });
+        // Modifier (faute de frappe…) : l'identifiant ne change pas, donc le nouveau nom apparaît partout (modèles, projecteurs, feuilles de patch)
+        body.querySelectorAll<HTMLElement>('[data-edit]').forEach((b) => b.addEventListener('click', () => void (async () => {
+          const table = b.dataset.t!, id = b.dataset.edit!;
+          const dup = (m: string) => (/duplicate|unique/i.test(m) ? 'Ce nom existe déjà.' : m);   // nom déjà pris : message clair
+          const run2 = async (p: PromiseLike<{ error: { message: string } | null }>) => {
+            if (!navigator.onLine) { say('Cette action nécessite une connexion.', true); return; }
+            const { error } = await p; if (error) say('Erreur : ' + dup(error.message), true); else { say('Modifié.'); await refresh(); }
+          };
+          if (table === 'filter_sizes') {
+            const x = view().filterSizes.find((q) => q.id === id); if (!x) return;
+            const f = await openForm('Modifier le porte-filtre', [
+              { name: 'label', label: 'Taille', required: true, value: x.label },
+              { name: 'lee', label: 'Feuilles LEE', type: 'number', value: x.sheets_lee === null ? '' : String(x.sheets_lee) },
+              { name: 'rosco', label: 'Feuilles Rosco', type: 'number', value: x.sheets_rosco === null ? '' : String(x.sheets_rosco) }], { submit: 'Enregistrer' });
+            if (f) await run2(supabase.from('filter_sizes').update({ label: f.label.trim(), sheets_lee: f.lee === '' ? null : Number(f.lee), sheets_rosco: f.rosco === '' ? null : Number(f.rosco) }).eq('id', id));
+            return;
+          }
+          const list = (table === 'families' ? view().families : table === 'item_types' ? view().types : view().sockets) as { id: string; name: string }[];
+          const x = list.find((q) => q.id === id); if (!x) return;
+          const f = await openForm('Modifier le nom', [{ name: 'name', label: 'Nom', required: true, value: x.name }], { submit: 'Enregistrer' });
+          if (f && f.name.trim() !== x.name) await run2(supabase.from(table).update({ name: f.name.trim() }).eq('id', id));
+        })()));
         body.querySelectorAll<HTMLElement>('[data-del]').forEach((b) => b.addEventListener('click', () => {
           if (window.confirm('Supprimer cet élément ?')) void run(supabase.from(b.dataset.t!).delete().eq('id', b.dataset.del!), 'Supprimé.');
         }));

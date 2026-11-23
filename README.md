@@ -131,6 +131,9 @@ Quand un lot contient un PAR (scan, saisie d'un n° ou liste), la lampe actuelle
 ### Fiche de spectacle : zones distinctes (v1.22.0)
 Ordre : Mur, Régisseurs, **Projecteurs** (étiquette « manuel »), puis **Matériel demandé** (étiquette « auto », cadre en pointillés, repliable d'un appui sur son titre ; replié, il garde l'étiquette « manque N »). Chaque zone a un liseré de couleur en haut. Les types de projecteurs portent le libellé « Filtre : » (liste des projecteurs et sélecteur d'ajout).
 
+### Référentiels modifiables (v1.45.6)
+Administration → Référentiels : chaque famille, type, douille et porte-filtre a un bouton **Modifier** (nom ; pour un porte-filtre, taille et nombre de feuilles LEE / Rosco), en plus d'Ajouter / Supprimer. L'identifiant ne change pas : le nouveau nom apparaît partout (modèles, projecteurs, feuilles de patch). Un nom déjà pris est refusé (« Ce nom existe déjà »). Modèles et lampes se modifiaient déjà. Aucun changement Supabase (la règle « admin seulement » existait).
+
 ### Journal : une couleur par personne (v1.45.5)
 Dans le journal (Plus → Journal), le nom de chaque personne est dans une pastille colorée, en plus de la couleur par type d'action. Couleur déduite de l'identifiant du compte (`personColor`), donc **la même que sur les murs**. Deux personnes peuvent avoir des teintes proches (12 couleurs).
 
