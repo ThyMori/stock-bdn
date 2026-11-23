@@ -58,7 +58,7 @@ export interface Immo {
   id: string; item_id: number; kind: 'pret' | 'sav' | 'show'; show_id?: string; who: string | null; note: string | null;
   start_date: string; end_date: string | null; closed_date: string | null; created_by_label?: string | null; pending?: boolean;
 }
-export interface AppLog { id: number; at: string; actor_label: string | null; kind: string; message: string }
+export interface AppLog { id: number; at: string; actor?: string | null; actor_label: string | null; kind: string; message: string }
 export interface FaultLog {
   id: string; fault_id: string; kind: 'note' | 'edit'; text: string; old_text: string | null;
   by_label: string | null; at: string; pending?: boolean;

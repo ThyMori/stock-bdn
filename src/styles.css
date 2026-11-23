@@ -201,7 +201,7 @@ nav.tabs .n { position: absolute; top: 4px; left: calc(50% + 8px); background: v
 .term .ln { padding: 1px 10px; white-space: pre-wrap; word-break: break-word; cursor: pointer; }
 .term .ln.sel { background: #26324a; outline: 1px solid #5b7bd5; }
 .term .ln.dim, .term .ln.err { cursor: default; } .term .ln.err { color: #ff6b6b; } .term .dim { color: #777; }
-.term .ts { color: #7f7f7f; } .term .who { color: #9ad; }
+.term .ts { color: #7f7f7f; } .term .who { background: var(--pc, #475569); color: #fff; padding: 0 6px; border-radius: 3px; font-weight: 700; }   /* une couleur par personne (la même que sur les murs) */
 .term .k { font-weight: 700; }
 .k-STATUT { color: #ffd500; } .k-PANNE { color: #ff5a4f; } .k-RESOLU { color: #3be07a; } .k-INFO, .k-MODIF { color: #4fd8ff; }
 .k-PROJECTEUR, .k-CATALOGUE { color: #ff7ae0; } .k-COMPTE { color: #ffa94d; } .k-CONNEXION { color: #aaa; } .k-JOURNAL { color: #fff; }

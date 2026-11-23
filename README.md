@@ -131,6 +131,9 @@ Quand un lot contient un PAR (scan, saisie d'un n° ou liste), la lampe actuelle
 ### Fiche de spectacle : zones distinctes (v1.22.0)
 Ordre : Mur, Régisseurs, **Projecteurs** (étiquette « manuel »), puis **Matériel demandé** (étiquette « auto », cadre en pointillés, repliable d'un appui sur son titre ; replié, il garde l'étiquette « manque N »). Chaque zone a un liseré de couleur en haut. Les types de projecteurs portent le libellé « Filtre : » (liste des projecteurs et sélecteur d'ajout).
 
+### Journal : une couleur par personne (v1.45.5)
+Dans le journal (Plus → Journal), le nom de chaque personne est dans une pastille colorée, en plus de la couleur par type d'action. Couleur déduite de l'identifiant du compte (`personColor`), donc **la même que sur les murs**. Deux personnes peuvent avoir des teintes proches (12 couleurs).
+
 ### Personnes en ligne, connexions et départs au journal (v1.21.0)
 - **Pastille verte** en haut à droite, visible de tous les comptes : nombre de personnes en ligne ; un appui affiche leurs noms. « En ligne » = app ouverte et visible (un signe de vie par minute, `src/presence.ts`).
 - **Journal (admins seulement)** : une ligne « connexion » à l'ouverture de l'app, une ligne « départ » quand la personne ne donne plus signe de vie depuis 5 min (heure du dernier signe de vie) ou se déconnecte. Une absence de moins de 5 minutes ne fait pas de bruit.

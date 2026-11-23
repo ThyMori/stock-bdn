@@ -2,6 +2,7 @@ import type { ViewFactory } from '../router';
 import { supabase } from '../supabase';
 import { esc } from '../logic';
 import type { AppLog } from '../types';
+import { personColor } from '../wall';
 
 const MAX = 1000, POLL_MS = 10_000;
 const DAY = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
@@ -36,14 +37,14 @@ export const logView: ViewFactory = () => ({
       const rows = visible();
       const atBottom = term.scrollHeight - term.scrollTop - term.clientHeight < 40;
       term.innerHTML = error ? `<div class="ln err">${esc(error)}</div>` : rows.length
-        ? rows.map((l) => `<div class="ln${picked.has(l.id) ? ' sel' : ''}" data-id="${l.id}"><span class="ts">${DAY(l.at)} ${HMS(l.at)}</span> <span class="who">${esc(l.actor_label ?? '—')}</span> <span class="k k-${esc(l.kind)}">${esc(l.kind)}</span> ${esc(l.message)}</div>`).join('')
+        ? rows.map((l) => `<div class="ln${picked.has(l.id) ? ' sel' : ''}" data-id="${l.id}"><span class="ts">${DAY(l.at)} ${HMS(l.at)}</span> <span class="who" style="--pc:${personColor(l.actor ?? l.actor_label)}">${esc(l.actor_label ?? '—')}</span> <span class="k k-${esc(l.kind)}">${esc(l.kind)}</span> ${esc(l.message)}</div>`).join('')
         : '<div class="ln dim">Aucune ligne.</div>';
       if (follow || atBottom) term.scrollTop = term.scrollHeight;
       delBtn.disabled = picked.size === 0; delBtn.textContent = picked.size ? `Supprimer (${picked.size})` : 'Supprimer';
       root.querySelector('#live')!.innerHTML = live ? '<span class="dot on"></span> temps réel' : '<span class="dot"></span> actualisé toutes les 10 s';
     }
     async function load() {
-      const { data, error: e } = await supabase.from('app_log').select('id,at,actor_label,kind,message').order('id', { ascending: false }).limit(MAX);
+      const { data, error: e } = await supabase.from('app_log').select('id,at,actor,actor_label,kind,message').order('id', { ascending: false }).limit(MAX);
       if (e) { error = 'Journal indisponible : ' + e.message + ' (le schema.sql à jour a-t-il été exécuté dans Supabase ?)'; }
       else { error = ''; lines = (data as AppLog[]).reverse(); for (const id of [...picked]) if (!lines.some((l) => l.id === id)) picked.delete(id); }
       paint();
