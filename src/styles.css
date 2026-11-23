@@ -425,12 +425,9 @@ table.patch .idlink { font-size: 1.05rem; }
 .pin { width: 100%; min-width: 0; min-height: 40px; padding: 6px 8px; background: transparent; border: 0; border-bottom: 2px solid color-mix(in srgb, var(--ink) 30%, transparent); font-size: 16px; }
 .pin:focus { background: var(--paper); border-bottom-color: var(--ink); outline: none; }
 select.pin { appearance: auto; }
-.stwrap { display: inline-flex; align-items: flex-start; gap: 1px; white-space: nowrap; }
-.stbtn { width: 34px; height: 34px; min-width: 34px; border-radius: 50%; border: 2px solid var(--muted); background: transparent; color: #fff; font: 800 1.1rem/1 var(--font-display, inherit); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.stbtn { touch-action: manipulation; width: 34px; height: 34px; min-width: 34px; border-radius: 50%; border: 2px solid var(--muted); background: transparent; color: #fff; font: 800 1.1rem/1 var(--font-display, inherit); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
 .stbtn.st-ok { background: var(--green); border-color: var(--green); }   /* vert : focus fait */
 .stbtn.st-todo { background: var(--red); border-color: var(--red); }     /* rouge : à faire */
-.stnote { width: 17px; height: 17px; min-width: 17px; border-radius: 50%; border: 1.5px solid var(--red); background: var(--paper); color: var(--red); font: 800 .68rem/1 var(--font-display, inherit); padding: 0; cursor: pointer; position: relative; top: -4px; display: inline-flex; align-items: center; justify-content: center; }   /* petite note en indice */
-.stnote::after { content: ''; position: absolute; inset: -14px -10px -10px -10px; }   /* zone tactile élargie sans grossir la pastille */
 .stpop { position: fixed; z-index: 60; max-width: min(280px, calc(100vw - 12px)); background: var(--paper); color: var(--ink); border: 2px solid var(--red); padding: 8px 10px; box-shadow: 3px 3px 0 var(--red); display: grid; gap: 8px; font-size: .9rem; }
 .stpop p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 table.patch tr.todo td { background: color-mix(in srgb, var(--red) 9%, transparent); }   /* à faire */

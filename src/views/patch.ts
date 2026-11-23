@@ -252,9 +252,9 @@ export const patchView: ViewFactory = ([showId]) => {
         return chips || add ? `<span class="gels">${chips}${add}</span>` : '<i class="muted">—</i>';
       }
       case 'position': return can_ ? `<select class="pin" data-k="position" aria-label="Position"><option value="">—</option>${POSITION_GROUPS.map((g) => `<optgroup label="${esc(g.label)}">${g.items.map((p) => `<option ${p === r.position ? 'selected' : ''}>${esc(p)}</option>`).join('')}</optgroup>`).join('')}</select>` : `<span>${esc(r.position) || '<i class="muted">—</i>'}</span>`;
-      case 'state': {   // état : vide → vert (fait) → rouge (à faire, avec une note) → vide
+      case 'state': {   // état : clic = vert / vide ; double clic = rouge (à faire) ; clic sur rouge = la note ; double clic sur rouge = vide
         const st = r.state, lab = st === 'ok' ? 'Focus fait' : st === 'todo' ? 'À faire' : 'Pas d\'état';
-        return `<span class="stwrap"><button type="button" class="stbtn st-${st || 'none'}" data-act="state" aria-label="État : ${lab}${can_ ? '. Toucher pour changer' : ''}"><span aria-hidden="true">${st === 'ok' ? '✓' : st === 'todo' ? '!' : ''}</span></button>${st === 'todo' && r.stateNote ? '<button type="button" class="stnote" data-act="state-note" aria-label="Voir la note">i</button>' : ''}</span>`;
+        return `<button type="button" class="stbtn st-${st || 'none'}" data-act="state" aria-label="État : ${lab}${can_ ? '. Entrée : cocher ou décocher, Maj + Entrée : à faire' : ''}${st === 'todo' && r.stateNote ? ' (note disponible)' : ''}"><span aria-hidden="true">${st === 'ok' ? '✓' : st === 'todo' ? '!' : ''}</span></button>`;
       }
       case 'notes': return can_ ? `<input class="pin" data-k="notes" value="${esc(r.notes)}" maxlength="500" autocomplete="off" aria-label="Notes">` : `<span>${esc(r.notes) || '<i class="muted">—</i>'}</span>`;
     }
@@ -370,18 +370,28 @@ export const patchView: ViewFactory = ([showId]) => {
   const rowLabel = (r: PatchRow): string => (r.itemId === null ? 'ligne N/C' : `projecteur ${r.itemId}`) + (r.circuit ? ` (circuit ${r.circuit})` : '');
   /** Fenêtre de saisie de la note « à faire » ; renvoie le texte, ou null si on annule. */
   const askNote = async (r: PatchRow): Promise<string | null> => {
-    const f = await openForm('À faire : ' + rowLabel(r), [{ name: 'note', label: 'Qu\'y a-t-il à faire ?', type: 'textarea', value: r.stateNote, hint: '300 caractères au plus. La note s\'affiche en touchant (ou en survolant) la petite pastille « i ».' }], { submit: 'Enregistrer' });
+    const f = await openForm('À faire : ' + rowLabel(r), [{ name: 'note', label: 'Qu\'y a-t-il à faire ?', type: 'textarea', value: r.stateNote, hint: '300 caractères au plus. La note s\'affiche en touchant (ou en survolant) le rond rouge.' }], { submit: 'Enregistrer' });
     return f ? f.note.trim().slice(0, 300) : null;
   };
-  /** Le tour de l'état d'une ligne. */
-  const cycleState = async (root: HTMLElement, key: string) => {
-    const r = rowsNow().find((x) => x.key === key); if (!r || stBusy.has(key) || !edSet().has('state')) return;
+  /** Un clic (après 0,28 s sans second clic) : vide ↔ vert ; sur un rouge, montre la note. Un double clic : rouge + fenêtre de note ; sur un rouge, retour à vide. */
+  const stateTimers = new Map<string, number>();
+  const stateAct = async (root: HTMLElement, key: string, dbl: boolean, btn: HTMLElement) => {
+    const r = rowsNow().find((x) => x.key === key); if (!r || stBusy.has(key)) return;
+    if (r.state === 'todo' && !dbl) { if (pop && popPinned && pop.dataset.key === key) hidePop(); else showPop(root, btn, true); return; }   // clic sur rouge : bulle de la note (touchable aussi pour les non-éditeurs)
+    if (!edSet().has('state')) return;
     stBusy.add(key); hidePop();
     try {
-      if (r.state === '') await save(root, key, 'state', { s: 'ok' });                                   // 1er appui : vert
-      else if (r.state === 'ok') { const note = await askNote(r); if (note !== null) await save(root, key, 'state', { s: 'todo', note }); }   // 2e appui : rouge + note (annuler = reste vert)
-      else await save(root, key, 'state', { s: '' });                                                    // 3e appui : on efface
+      if (!dbl) await save(root, key, 'state', { s: r.state === 'ok' ? '' : 'ok' });                       // clic : vert, ou retour à vide
+      else if (r.state === 'todo') await save(root, key, 'state', { s: '' });                                // double clic sur rouge : vide
+      else { const note = await askNote(r); if (note !== null) await save(root, key, 'state', { s: 'todo', note }); }   // double clic : rouge + note (annuler = rien ne change)
     } finally { stBusy.delete(key); }
+  };
+  /** Gère un clic sur le rond : un second clic dans les 0,28 s devient un double clic (détecté à la main : fiable aussi au toucher). */
+  const stateClick = (root: HTMLElement, key: string, btn: HTMLElement, forceDouble = false) => {
+    const t = stateTimers.get(key);
+    if (t !== undefined) { window.clearTimeout(t); stateTimers.delete(key); void stateAct(root, key, true, btn); return; }
+    if (forceDouble) { void stateAct(root, key, true, btn); return; }
+    stateTimers.set(key, window.setTimeout(() => { stateTimers.delete(key); void stateAct(root, key, false, btn); }, 280));
   };
   const editNote = async (root: HTMLElement, key: string) => {
     const r = rowsNow().find((x) => x.key === key); if (!r || r.state !== 'todo' || stBusy.has(key)) return;
@@ -395,7 +405,7 @@ export const patchView: ViewFactory = ([showId]) => {
     const key = btn.closest<HTMLElement>('tr[data-key]')?.dataset.key, r = key ? rowsNow().find((x) => x.key === key) : undefined; if (!r || !key) return;
     hidePop();
     const el = document.createElement('div'); el.className = 'stpop'; el.setAttribute('role', 'tooltip'); el.dataset.key = key;
-    const p = document.createElement('p'); p.textContent = r.stateNote; el.append(p);
+    const p = document.createElement('p'); p.textContent = r.stateNote || 'Pas de note.'; el.append(p);
     if (pinned && edSet().has('state')) {   // « Modifier la note » : seulement quand la bulle est ouverte par un toucher
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn mini'; b.textContent = 'Modifier la note';
       b.addEventListener('click', () => void editNote(root, key)); el.append(b);
@@ -431,9 +441,7 @@ export const patchView: ViewFactory = ([showId]) => {
           return;
         }
         const sb = t.closest<HTMLElement>('[data-act="state"]');
-        if (sb) { const k = sb.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (k) void cycleState(root, k); return; }
-        const sn = t.closest<HTMLElement>('[data-act="state-note"]');
-        if (sn) { e.stopPropagation(); if (pop && popPinned && pop.dataset.key === sn.closest<HTMLElement>('tr[data-key]')?.dataset.key) hidePop(); else showPop(root, sn, true); return; }   // toucher : ouvre / referme
+        if (sb) { const k = sb.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (k) stateClick(root, k, sb, (e as MouseEvent).detail === 0 && (e as MouseEvent).shiftKey); return; }   // détail 0 = clavier : Maj + Entrée = « à faire »
         const clr = t.closest<HTMLElement>('[data-act="clear-circuits"], [data-act="clear-gels"]');
         if (clr) {   // vider les circuits (gradas gardées) ou les gélatines + accessoires, pour repartir d'un montage déjà patché
           clr.closest('details')?.removeAttribute('open');   // le menu se referme
@@ -519,9 +527,9 @@ export const patchView: ViewFactory = ([showId]) => {
         save(root, key, k, t.value.trim());
       });
       const hoverOk = () => window.matchMedia('(hover: hover)').matches;   // survol : ordinateur seulement
-      root.addEventListener('mouseover', (e) => { const n = (e.target as HTMLElement).closest<HTMLElement>('[data-act="state-note"]'); if (n && hoverOk() && !popPinned) { window.clearTimeout(popTimer); showPop(root, n, false); } });
-      root.addEventListener('mouseout', (e) => { if ((e.target as HTMLElement).closest('[data-act="state-note"]') && !popPinned) popTimer = window.setTimeout(hidePop, 150); });
-      const outside = (e: Event) => { if (pop && popPinned && !pop.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('[data-act="state-note"]')) hidePop(); };
+      root.addEventListener('mouseover', (e) => { const n = (e.target as HTMLElement).closest<HTMLElement>('.stbtn.st-todo'); if (n && hoverOk() && !popPinned) { window.clearTimeout(popTimer); showPop(root, n, false); } });
+      root.addEventListener('mouseout', (e) => { if ((e.target as HTMLElement).closest('.stbtn.st-todo') && !popPinned) popTimer = window.setTimeout(hidePop, 150); });
+      const outside = (e: Event) => { if (pop && popPinned && !pop.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('.stbtn.st-todo')) hidePop(); };
       document.addEventListener('click', outside);
       // menu des accessoires : posé en « fixed » sous la case (ou au-dessus s'il manque de place), pour ne pas être coupé par la zone de défilement du tableau
       root.addEventListener('toggle', (e) => {
