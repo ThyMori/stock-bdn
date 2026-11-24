@@ -109,7 +109,7 @@ Onglet « Spectacles » : catalogue des spectacles (nom, dates de début et de f
 - Un **régisseur général** (ou admin) assigne un ou plusieurs régisseurs à un spectacle depuis sa fiche, et peut leur envoyer une **invitation par mail** : l'appli ouvre ton client mail avec le message prêt (destinataire, lien vers le spectacle). Aucun service d'envoi à configurer ; il faut appuyer sur « Envoyer » dans ton client mail.
 - Un **régisseur** ne peut assigner ou retirer des projecteurs que sur les spectacles où il est assigné (règle appliquée côté base). Régisseurs généraux et admins agissent sur tous les spectacles.
 
-### Assignation automatique (v1.9)
+### Assignation automatique (v1.9) — remplacée par la v1.46.0 (objectifs de quantité)
 Un spectacle exprime des **demandes** (modèle + lampe pour les PAR + quantité) ; la base choisit les projecteurs (`reallocate_all`, déclenché par les changements d'état, de lampe, de pannes, de prêts/SAV, de dates et de demandes). Règles : on préfère les PAR déjà montés avec la bonne lampe, puis ceux à relamper ; on évite les projecteurs indisponibles (SAV/prêt aux dates du spectacle, panne ouverte, autre spectacle aux mêmes dates) ; en cas de chevauchement, le spectacle qui commence le plus tôt est prioritaire. **Changer** remplace un projecteur automatique par un autre du même modèle (le choix est « épinglé » et gardé ; **Auto** le rend à l'automatique ; ses gels suivent). « Choisir à la main » (ancien mode) reste disponible. Si la demande ne peut pas être satisfaite (`show_demands.missing`) ou si un projecteur assigné devient indisponible (`show_items.problem`), une **alerte rouge** clignotante s'affiche en haut de l'appli, sur la fiche et la liste des spectacles, et dans le PDF de prépa. Tables/fonctions : `show_demands`, `set_demand`, `swap_show_item`, `release_show_item`.
 
 ### En-tête toujours visible (v1.22.6)
@@ -136,6 +136,20 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
+
+### Matériel demandé = objectifs de quantité (v1.46.0)
+**Changement de philosophie.** Une demande (modèle, lampe pour un PAR, quantité) est un **objectif**, pris par exemple sur une fiche technique ou un plan de feu. L'appli ne choisit plus aucun projecteur : les n° précis s'affectent à la main (« Projecteurs affectés », scan, feuille de patch). Cela remplace l'assignation automatique de la v1.9 et le « projecteur du patch = matériel demandé » de la v1.36.0.
+
+Calcul du manque (SQL `reallocate_all`, rejoué à chaque panne, SAV, prêt, changement de dates, de demande ou d'affectation), **jour par jour** sur les spectacles en cours ou à venir :
+- **Capacité** d'un modèle un jour donné = ses projecteurs sans panne ouverte et sans SAV / prêt ce jour-là (une panne n'a pas de date : le projecteur est exclu dès aujourd'hui).
+- **Besoin** d'un spectacle pour un modèle = le plus grand de (quantités demandées non couvertes par prêts / locations) et (projecteurs déjà affectés).
+- **Disponibles** pour un spectacle (`show_demands.available`) = capacité − besoins des *autres* spectacles du jour, au pire jour de ses dates. Le stock est donc partagé entre spectacles qui se chevauchent.
+- **Manque** = besoin − disponibles, sans dépasser la quantité demandée moins les projecteurs affectés utilisables ; réparti sur les demandes du modèle (la dernière ajoutée d'abord). Il s'affiche sur chaque spectacle concerné (deux spectacles qui se disputent 4 projecteurs affichent chacun « manque 4 »).
+- PAR : le compte se fait par modèle (la lampe reste une information). Spectacles passés ignorés.
+- Affecter ou retirer un projecteur **ne modifie plus la demande**. Les lignes de patch « à louer / à emprunter » ajoutent toujours 1 à la demande (v1.37.0).
+- Fiche du spectacle : chaque ligne montre « Demandé · Affectés · Disponibles » et « manque N » / « complet ». Disparus : étiquettes « auto » / « choisi », boutons « Changer » et « Auto » (fonctions `swap_show_item` et `release_show_item` supprimées).
+- **Reprise de l'existant** (au rejeu du SQL) : les projecteurs choisis automatiquement deviennent des projecteurs affectés à la main (aucun n'est retiré) ; les demandes restent comme objectifs.
+- Droits et notifications inchangés : régisseur général, admin et régisseurs assignés modifient les demandes (contrôle par la base).
 
 ### SAV + panne en une fois (v1.45.7)
 Fiche d'un projecteur → « SAV » : le formulaire propose **« Déclarer aussi une panne ? »** (Oui par défaut ; motif « Réparation » proposé). Si Oui, la panne est créée en même temps (description saisie, sinon le motif du SAV, sinon « Passé en SAV »). Même mécanisme que le remplacement dans la feuille de patch. Fonctionne hors ligne (file d'attente). Aucun changement Supabase.
@@ -182,7 +196,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
-## Projecteur du patch = matériel demandé (v1.36.0)
+## Projecteur du patch = matériel demandé (v1.36.0) — remplacé par la v1.46.0
 - Un projecteur mis dans la feuille de patch (ID du stock, « nouvel ID », remplacement) est **compté dans le matériel demandé** : la demande « modèle + lampe » monte de 1 (créée si absente), ou, si elle avait un manque, le projecteur le comble sans changer la quantité. Il y est épinglé.
 - Remplacé par un autre modèle : l'ancienne demande baisse de 1, la nouvelle monte de 1. Même modèle : rien ne change.
 - Retiré du spectacle depuis la feuille : la demande baisse de 1 (jamais sous les prêts / locations déjà saisis ; supprimée à 0).
@@ -270,6 +284,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` bloc v1.23 | `patch_lines`, `set_patch_field` | v1.23.0 |
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
 | `schema.sql` (v1.44.0) | `patch_lines.state` / `state_note` (+ reprise des anciens focus), `set_patch_field` accepte le champ `state` | v1.44.0 |
+| `schema.sql` (v1.46.0) | `reallocate_all` réécrit (calcul du manque jour par jour, stock partagé), colonne `show_demands.available`, projecteurs « auto » repris comme affectés à la main, `swap_show_item` / `release_show_item` supprimées | v1.46.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |

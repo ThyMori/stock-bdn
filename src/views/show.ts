@@ -5,7 +5,7 @@ import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf } from '../gels';
-import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
+import { alertText, externalLabel, showAlerts } from '../alerts';
 import { toast } from '../ui/toast';
 import { esc, fmtDateTime, parseScan, sortShows, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
@@ -105,28 +105,26 @@ export const showView: ViewFactory = ([id]) => {
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     if (modelFilter && !selModels.some((m) => m.id === modelFilter)) modelFilter = '';   // plus aucun projecteur de ce modèle : on retire le filtre
     const shown = modelFilter ? mine.filter((s) => modelOf(s.item_id) === modelFilter) : mine;   // lignes affichées
-    const origin = (s: (typeof mine)[number]) => (s.demand_id ? ` <span class="tag auto">${s.pinned ? 'choisi' : 'auto'}</span>` : '')
-      + (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
+    const origin = (s: (typeof mine)[number]) => (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
     const assigned = shown.map((s) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
       return `<div class="item sitem">${canAssign ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
         <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${origin(s)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
-        ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button>${s.demand_id
-          ? `<button class="btn" data-act="swap" data-v="${s.item_id}" aria-label="Changer le projecteur ${s.item_id}">Changer</button>${s.pinned ? `<button class="btn" data-act="release" data-v="${s.item_id}" aria-label="Remettre le projecteur ${s.item_id} en automatique">Auto</button>` : ''}`
-          : `<button class="btn" data-act="remove" data-v="${s.item_id}" aria-label="Retirer le projecteur ${s.item_id}">Retirer</button>`}</div>` : ''}</div>`;
+        ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button><button class="btn" data-act="remove" data-v="${s.item_id}" aria-label="Retirer le projecteur ${s.item_id}">Retirer</button></div>` : ''}</div>`;
     }).join('');
 
     const demands = d.showDemands.filter((x) => x.show_id === id).map((x) => ({ x, m: d.models.find((m) => m.id === x.model_id), l: lampName(x.lamp_id) }))
       .sort((a, b) => (a.m?.name ?? '').localeCompare(b.m?.name ?? '', 'fr', { numeric: true }) || (a.l ?? '').localeCompare(b.l ?? ''));
-    const own = (demId: string) => d.showItems.filter((r) => r.show_id === id && r.demand_id === demId && !r.problem).length;
+    // projecteurs affectés (utilisables) qui comptent pour cette demande : même modèle, et même lampe pour un PAR
+    const own = (x: (typeof demands)[number]['x']) => d.showItems.filter((r) => r.show_id === id && !r.problem && d.items.find((i) => i.id === r.item_id)?.model_id === x.model_id && (!x.lamp_id || r.lamp_id === x.lamp_id)).length;
     const extQty = (demId: string) => d.showExternals.filter((e) => e.demand_id === demId).reduce((n, e) => n + e.qty, 0);
     const myAlert = showAlerts(d, '0000-00-00').find((a) => a.show.id === id);
     const alertCard = myAlert && show.end_date >= today ? `<div class="alert-card" role="alert">⚠ ALERTE MATÉRIEL : ${esc(alertText(myAlert))}<br>À réparer, louer ou emprunter.
       <ul>${myAlert.missing.map((m) => `<li>manque ${m.n} × ${esc(m.label)}</li>`).join('')}${myAlert.problems.map((p) => `<li>n° ${p.item} : ${esc(p.why)}</li>`).join('')}</ul></div>` : '';
     const missingTotal = demands.reduce((n, r) => n + r.x.missing, 0);
-    const demandCard = `<div class="card sec sec-dem"><div class="row wrap"><button class="fold grow" data-act="dem-fold" aria-expanded="${!demFolded}" aria-label="${demFolded ? 'Déplier' : 'Replier'} le matériel demandé"><span aria-hidden="true">${demFolded ? '▸' : '▾'}</span> <h2>Matériel demandé (${demands.reduce((n, r) => n + r.x.qty, 0)})</h2></button><span class="tag auto">auto</span>${demFolded && missingTotal ? `<span class="tag late">manque ${missingTotal}</span>` : ''}${canAssign && !demFolded ? '<button class="btn primary" data-act="dem-add">+ Demande</button>' : ''}</div>
-      ${demFolded ? '' : `<div class="sub">Partie automatique : l'appli assigne seule les projecteurs et s'adapte aux pannes et changements de lampe.</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">${own(x.id)} assigné${own(x.id) > 1 ? 's' : ''}${extQty(x.id) ? ` + ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''} sur ${x.qty}</div></div>
+    const demandCard = `<div class="card sec sec-dem"><div class="row wrap"><button class="fold grow" data-act="dem-fold" aria-expanded="${!demFolded}" aria-label="${demFolded ? 'Déplier' : 'Replier'} le matériel demandé"><span aria-hidden="true">${demFolded ? '▸' : '▾'}</span> <h2>Matériel demandé (${demands.reduce((n, r) => n + r.x.qty, 0)})</h2></button><span class="tag auto">objectif</span>${demFolded && missingTotal ? `<span class="tag late">manque ${missingTotal}</span>` : ''}${canAssign && !demFolded ? '<button class="btn primary" data-act="dem-add">+ Demande</button>' : ''}</div>
+      ${demFolded ? '' : `<div class="sub">Objectifs de quantité (fiche technique, plan de feu) : l'appli les compare aux projecteurs disponibles aux dates du spectacle, en partageant le stock avec les autres spectacles. Les n° précis se choisissent dans « Projecteurs affectés ».</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">Demandé ${x.qty} · Affectés ${own(x)}${extQty(x.id) ? ` · ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''}${x.available != null ? ` · Disponibles ${Math.max(0, x.available)}` : ''}</div></div>
         ${x.missing > 0 ? `<span class="tag late">manque ${x.missing}</span>` : '<span class="tag ok">complet</span>'}
         ${canAssign && x.missing > 0 ? `<button class="btn primary" data-act="ext-add" data-v="${x.id}">Gérer</button>` : ''}
         ${canAssign ? `<button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
@@ -356,36 +354,6 @@ export const showView: ViewFactory = ([id]) => {
           if (!window.confirm('Supprimer cette demande ? Les projecteurs assignés automatiquement seront libérés (ceux que tu as choisis restent).')) return;
           await sendDemand(x.model_id, x.lamp_id ?? '', 0);
         }
-        else if (act === 'swap') {
-          const dd = view(); const row = dd.showItems.find((r) => r.show_id === id && r.item_id === Number(v)); const it = dd.items.find((i) => i.id === Number(v)); if (!row || !it) return;
-          const lampName = (lid: string | null) => dd.lamps.find((l) => l.id === lid)?.name;
-          const taken = new Set(dd.showItems.filter((r) => r.show_id === id).map((r) => r.item_id));
-          const cs = dd.shows.find((x) => x.id === id);
-          const cands = dd.items.filter((i) => i.model_id === it.model_id && !taken.has(i.id) && (!cs || !blockedReason(dd, i.id, cs)))
-            .sort((a, b) => Number(b.lamp_id === row.lamp_id) - Number(a.lamp_id === row.lamp_id) || a.id - b.id);
-          if (!cands.length) { err('Aucun autre projecteur de ce modèle n\'est disponible pendant ce spectacle (déjà pris, SAV, prêt ou en panne).'); return; }
-          const st = (i: (typeof cands)[number]) => ({ dispo: 'disponible', utilise: 'utilisé', sav: 'SAV', en_pret: 'en prêt' }[i.eff ?? i.status]);
-          const f = await openForm(`Remplacer le projecteur ${v}`, [{ name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true,
-            options: cands.map((i): [string, string] => [String(i.id), `n° ${i.id} · ${lampName(i.lamp_id) ?? 'sans lampe'} · ${st(i)}`]),
-            // QR code scanné : accepté seulement s'il fait partie des candidats ; sinon on explique pourquoi pas
-            scan: (text) => {
-              const n = parseScan(text); if (n === null) return { error: `QR non reconnu : « ${text.slice(0, 40)} »` };
-              if (cands.some((c) => c.id === n)) return { value: String(n) };
-              const other = dd.items.find((i) => i.id === n);
-              if (!other) return { error: `Projecteur n° ${n} introuvable dans la base.` };
-              if (n === Number(v)) return { error: `Le n° ${n} est le projecteur à remplacer.` };
-              if (other.model_id !== it.model_id) return { error: `Le n° ${n} n'est pas du même modèle (${dd.models.find((m) => m.id === it.model_id)?.name ?? '?'} attendu).` };
-              if (taken.has(n)) return { error: `Le n° ${n} est déjà assigné à ce spectacle.` };
-              return { error: `Le n° ${n} n'est pas disponible : ${(cs && blockedReason(dd, n, cs)) || 'indisponible'}.` };
-            } }], { submit: 'Remplacer' });
-          if (!f) return;
-          const r = await rpcCall('swap_show_item', { p_show: id, p_old: Number(v), p_new: Number(f.to) });
-          if (r.error) err(r.error);
-        }
-        else if (act === 'release') {
-          const r = await rpcCall('release_show_item', { p_show: id, p_item: Number(v) });
-          if (r.error) err(r.error);
-        }
         else if (act === 'gel-del') {
           const r = await rpcCall('delete_gel', { p_id: v });
           if (r.error) err(r.error);
@@ -415,9 +383,9 @@ export const showView: ViewFactory = ([id]) => {
         }
         else if (act === 'remove-sel') {
           const rows = view().showItems.filter((r) => r.show_id === id && rsel.has(r.item_id));
-          const list = rows.filter((r) => !r.demand_id).map((r) => r.item_id).sort((a, b) => a - b), auto = rows.length - list.length;
-          if (!list.length) { err('Ces projecteurs viennent d\'une demande : change la quantité de la demande, ou utilise « Changer ».'); return; }
-          if (!window.confirm(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?${auto ? `\n${auto} projecteur${auto > 1 ? 's' : ''} issu${auto > 1 ? 's' : ''} d'une demande ne seront pas retirés.` : ''}`)) return;
+          const list = rows.map((r) => r.item_id).sort((a, b) => a - b);
+          if (!list.length) return;
+          if (!window.confirm(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?`)) return;
           const r = await rpcCall('unassign_items', { p_show: id, p_items: list });
           if (r.error) err(r.error); else { rsel.clear(); toast(`${list.length} projecteur${list.length > 1 ? 's' : ''} retiré${list.length > 1 ? 's' : ''}.`, 'ok'); }
         }

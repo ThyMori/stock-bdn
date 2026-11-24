@@ -166,7 +166,7 @@ export const patchView: ViewFactory = ([showId]) => {
       const old = r.itemId, opts = candidates(r);
       if (!opts.length) { toast('Aucun projecteur du stock n\'est disponible pendant ce spectacle.'); return; }
       const f = await openForm(`Remplacer le projecteur ${old}`, [
-        { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), scanWarn: (v) => modelGap(r, Number(v)), hint: r.auto ? 'Ce projecteur vient d\'une demande : choisis le même modèle.' : 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
+        { name: 'to', label: 'Par le projecteur', type: 'select', search: true, required: true, options: opts, scan: scanReply(opts), scanWarn: (v) => modelGap(r, Number(v)), hint: 'Le projecteur remplacé est retiré du spectacle ; circuit, gélatines, etc. restent sur la ligne.' },
         { name: 'fault', label: `Déclarer une panne sur le projecteur ${old} ?`, type: 'select', options: [['', 'Non'], ['oui', 'Oui, en même temps']], value: '' },
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea' }], { submit: 'Remplacer' });
       if (!f) return;

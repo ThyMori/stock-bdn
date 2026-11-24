@@ -47,7 +47,7 @@ export interface ShowItem { show_id: string; item_id: number; lamp_id: string | 
 /** Matériel prêté / loué pour combler un manque (une fiche par prêt ou location). */
 export interface ShowExternal { id: string; show_id: string; demand_id: string; kind: 'pret' | 'location'; provider: string; qty: number; delivery_date: string; return_date: string; note?: string | null }
 /** Demande de matériel d'un spectacle (modèle + lampe pour les PAR + quantité) ; `missing` = projecteurs que l'on n'arrive pas à fournir. */
-export interface ShowDemand { id: string; show_id: string; model_id: string; lamp_id: string | null; qty: number; missing: number }
+export interface ShowDemand { id: string; show_id: string; model_id: string; lamp_id: string | null; qty: number; missing: number; available?: number | null }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;
