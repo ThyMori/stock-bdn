@@ -105,14 +105,25 @@ export const showView: ViewFactory = ([id]) => {
     const selModels = [...new Set(mine.map((s) => modelOf(s.item_id)))].map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', ids: mine.filter((s) => modelOf(s.item_id) === m).map((s) => s.item_id) }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     if (modelFilter && !selModels.some((m) => m.id === modelFilter)) modelFilter = '';   // plus aucun projecteur de ce modèle : on retire le filtre
-    const shown = modelFilter ? mine.filter((s) => modelOf(s.item_id) === modelFilter) : mine;   // lignes affichées
+    const shown = modelFilter ? mine.filter((s) => modelOf(s.item_id) === modelFilter) : [];   // lignes du modèle déployé
     const origin = (s: (typeof mine)[number]) => (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
-    const assigned = shown.map((s) => {
+    const itemRow = (s: (typeof mine)[number]) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;
       return `<div class="item sitem">${canAssign ? `<input type="checkbox" class="rsel" data-act="rtoggle" data-v="${s.item_id}" ${rsel.has(s.item_id) ? 'checked' : ''} aria-label="Sélectionner le projecteur ${s.item_id}">` : ''}<a class="num" href="#/item/${s.item_id}">${s.item_id}</a>
-        <div class="grow"><div class="t">${esc(ds?.model?.name)}</div><div class="s">${esc(ds?.type?.name)}${origin(s)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
+        <div class="grow"><div class="s">${esc(ds?.model?.name)}${origin(s)}${want ? ` · lampe requise : <b>${esc(want)}</b>` : ''}${gelChips(s.item_id)}${want && cur && cur !== want ? ` ${can('technicien') ? `<button class="tag late fixlamp" data-act="fix-lamp" data-v="${s.item_id}" data-l="${s.lamp_id}">passer en ${esc(want)}</button>` : '<span class="tag late">changer la lampe</span>'}` : ''}</div></div>
         ${canAssign ? `<div class="btns"><button class="btn" data-act="gel" data-v="${s.item_id}" aria-label="Ajouter un gel au projecteur ${s.item_id}">Gel</button><button class="btn" data-act="remove" data-v="${s.item_id}" aria-label="Retirer le projecteur ${s.item_id}">Retirer</button></div>` : ''}</div>`;
+    };
+
+    // un groupe par modèle (affectés + modèles seulement demandés) : replié par défaut, un seul déployé à la fois ; « demandé » = somme des demandes du modèle
+    const demOf = (m: string) => d.showDemands.filter((x) => x.show_id === id && x.model_id === m).reduce((n, x) => n + x.qty, 0);
+    const grpIds = [...new Set([...selModels.map((m) => m.id), ...d.showDemands.filter((x) => x.show_id === id).map((x) => x.model_id)])];
+    const groups = grpIds.map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', rows: mine.filter((s) => modelOf(s.item_id) === m), dem: demOf(m) }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
+    const assigned = groups.map((g) => {
+      const open = modelFilter === g.id && g.rows.length > 0, bad = g.rows.filter((r) => r.problem).length;
+      const gap = g.dem > g.rows.length ? ' short' : '';   // moins d'affectés que demandés : repère discret
+      return `<div class="mgrp${open ? ' open' : ''}"><button class="mhead${gap}" ${g.rows.length ? `data-act="rmodel" data-v="${esc(g.id)}" aria-expanded="${open}"` : 'disabled'}><span aria-hidden="true">${g.rows.length ? (open ? '▾' : '▸') : '·'}</span> <span class="t grow">${esc(g.name)}</span><span class="s">Demandé ${g.dem} · Affectés ${g.rows.length}</span>${bad ? `<span class="tag late">${bad} indispo.</span>` : ''}</button>${open ? `<div class="list">${g.rows.map(itemRow).join('')}</div>` : ''}</div>`;
     }).join('');
 
     const demands = d.showDemands.filter((x) => x.show_id === id).map((x) => ({ x, m: d.models.find((m) => m.id === x.model_id), l: lampName(x.lamp_id) }))
@@ -180,13 +191,11 @@ export const showView: ViewFactory = ([id]) => {
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${alertCard}
       ${wall}
-      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button><span class="tag manual">manuel</span>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Affecter manuellement</button>' : ''}</div>
-        ${itemsFolded ? '' : `<div class="sub">Partie manuelle : ajoute, retire, change, mets des gels.</div>
-        ${picker}
-        ${selModels.length > 1 ? `<div class="selbar" role="group" aria-label="Filtrer par type de projecteur"><span class="sub">Filtre :</span>${selModels.map((m) => `<button class="chip" data-act="rmodel" data-v="${esc(m.id)}" aria-pressed="${modelFilter === m.id}">${esc(m.name)} (${m.ids.length})</button>`).join('')}</div>` : ''}
-        ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${shown.length && shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'}${modelFilter ? ` (${shown.length})` : ''}</button>
+      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Affecter manuellement</button>' : ''}</div>
+        ${itemsFolded ? '' : `${picker}
+        ${shown.length > 1 || rsel.size ? `<div class="selbar">${shown.length > 1 ? `<button class="btn" data-act="rall">${shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'} (${shown.length})</button>` : ''}
           ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
-        <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
+        <div class="mlist">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
       ${demandCard}
       <div class="card stack sec sec-reg"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
         ${regs.map((r) => `<div class="stack reg"><div class="t">${esc(r.label)}</div>${canEdit ? `<div class="row wrap"><button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button></div>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
@@ -417,7 +426,7 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'wall-fold') { wallFolded = !wallFolded; paint(root); }   // replie / déplie le mur
         else if (act === 'dem-fold') { demFolded = !demFolded; paint(root); }   // replie / déplie le matériel demandé
         else if (act === 'rmodel') {
-          modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui filtre la liste sur ce type ; un second appui retire le filtre
+          modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui déploie ce modèle (et replie le précédent) ; un second appui le replie
           paint(root);
         }
         else if (act === 'gel-sel') {

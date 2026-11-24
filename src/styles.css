@@ -568,3 +568,11 @@ table.patch.sel th[data-c="circuit"], table.patch.sel td[data-c="circuit"] { lef
 table.patch.sel th[data-c="model"], table.patch.sel td[data-c="model"] { left: calc(var(--cw) + 44px); }
 .selbox { width: 28px; height: 28px; accent-color: var(--ink); }
 table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--paper)); }
+
+/* projecteurs affectés : un groupe par modèle, replié par défaut */
+.mlist { display: grid; gap: 6px; }
+.mhead { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 44px; padding: 6px 10px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.mhead:disabled { cursor: default; opacity: .8; }
+.mhead.short .s { color: var(--red); font-weight: 700; }
+.mgrp.open > .mhead { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+.mgrp > .list { border: 2px solid var(--ink); border-top: 0; padding: 4px 8px; }

@@ -137,6 +137,9 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Projecteurs affectés rangés par modèle (v1.49.2)
+- Carte « Projecteurs affectés » plus sobre : un groupe par modèle, **replié par défaut**, avec « Demandé N · Affectés M » (demandé = somme des demandes du modèle, toutes lampes confondues ; un modèle seulement demandé apparaît avec 0 affecté, non déployable). Déployer un modèle replie le précédent ; « indispo. » signale les projecteurs bloqués ; le chiffre passe en rouge quand il y a moins d'affectés que demandés. Les anciennes pastilles de filtre et l'étiquette « manuel » disparaissent ; « Tout cocher » agit sur le modèle déployé. Aucun changement Supabase.
+
 ### Effacer toute la feuille et sélection par lots (v1.49.0)
 - Menu **Effacer…** de la feuille de patch : « Effacer la feuille, garder les projecteurs affectés » (`patch_clear_all`). Supprime toutes les lignes (y compris sans projecteur / « à louer », dont le +1 de demande est retiré), circuits, gradas, courbes, DMX, positions, accessoires, gélatines, états, notes. Gardés : projecteurs affectés, demandes et leurs gels, prêts / locations. Droits : régisseur assigné, régisseur général, admin ; confirmation ; une ligne au journal.
 - Bouton **Sélectionner** : case par ligne (colonne fixe à gauche), Maj + clic = plage, « Tout » = lignes affichées (2e appui : décoche), barre fixe dans l'en-tête (nombre, Modifier…, Supprimer…, ✕). Le mode se ferme après un succès ; en cas d'erreur la sélection reste.
