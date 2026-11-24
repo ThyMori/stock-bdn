@@ -131,6 +131,9 @@ Quand un lot contient un PAR (scan, saisie d'un n° ou liste), la lampe actuelle
 ### Fiche de spectacle : zones distinctes (v1.22.0)
 Ordre : Mur, Régisseurs, **Projecteurs** (étiquette « manuel »), puis **Matériel demandé** (étiquette « auto », cadre en pointillés, repliable d'un appui sur son titre ; replié, il garde l'étiquette « manque N »). Chaque zone a un liseré de couleur en haut. Les types de projecteurs portent le libellé « Filtre : » (liste des projecteurs et sélecteur d'ajout).
 
+### Fiche de spectacle : Régisseurs en dernier (v1.45.11)
+Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**, puis **Régisseurs** en dernier. (Remplace l'ordre de la v1.22.0.) Aucun changement Supabase.
+
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 

@@ -177,9 +177,6 @@ export const showView: ViewFactory = ([id]) => {
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${alertCard}
       ${wall}
-      <div class="card stack sec sec-reg"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
-        ${regs.map((r) => `<div class="stack reg"><div class="t">${esc(r.label)}</div>${canEdit ? `<div class="row wrap"><button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button></div>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
-        ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>
       <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button><span class="tag manual">manuel</span>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Affecter manuellement</button>' : ''}</div>
         ${itemsFolded ? '' : `<div class="sub">Partie manuelle : ajoute, retire, change, mets des gels.</div>
         ${picker}
@@ -187,7 +184,10 @@ export const showView: ViewFactory = ([id]) => {
         ${sels.length > 1 || rsel.size ? `<div class="selbar"><button class="btn" data-act="rall">${shown.length && shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'}${modelFilter ? ` (${shown.length})` : ''}</button>
           ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
         <div class="list">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
-      ${demandCard}`;
+      ${demandCard}
+      <div class="card stack sec sec-reg"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
+        ${regs.map((r) => `<div class="stack reg"><div class="t">${esc(r.label)}</div>${canEdit ? `<div class="row wrap"><button class="btn" data-act="reg-mail" data-v="${r.user_id}">Inviter par mail</button><button class="btn" data-act="reg-del" data-v="${r.user_id}" aria-label="Retirer ${esc(r.label)}">Retirer</button></div>` : ''}</div>`).join('') || '<div class="sub">Aucun régisseur assigné : seuls les régisseurs généraux peuvent agir sur ce spectacle.</div>'}
+        ${!canAssign && can('regisseur') ? '<div class="sub warn">Tu n\'es pas assigné à ce spectacle : consultation seulement.</div>' : ''}</div>`;
     if (composer) root.querySelector('#wallhost')?.replaceChildren(composer);
     const pl = root.querySelector('.pick-list'); if (pl) pl.scrollTop = listTop;
     window.scrollTo(0, pageTop);
