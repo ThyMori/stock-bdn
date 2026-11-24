@@ -555,3 +555,6 @@ table.patch th[data-c="circuit"] .rz { right: 0; }
 details.eraser > summary.btn { display: inline-flex; border-bottom-width: 2px; }
 details.eraser .opts { min-width: 230px; gap: 6px; }
 details.eraser .opts .btn { width: 100%; text-align: left; }
+
+/* bouton « Utiliser le matériel d'un autre spectacle » : texte long, il passe à la ligne au lieu de déborder de la carte (écran 360 px) */
+.btn[data-act="copy-from"] { max-width: 100%; white-space: normal; text-align: center; }

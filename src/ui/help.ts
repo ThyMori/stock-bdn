@@ -74,7 +74,7 @@ const SECTIONS: Section[] = [
     '<b>PDF</b> : bouton « PDF », A4 paysage, avec la date et l\'heure de génération sur chaque page (important si le kit change) et la dernière modification de la feuille.'
   ] },
   { title: 'Le mur et les notifications', items: [
-    '<b>Mur</b> : chaque spectacle a son mur (to-do, passation, horaires, problèmes techniques…). L\'onglet <b>Mur</b> réunit tous les messages ; un filtre permet de ne voir qu\'un spectacle.',
+    '<b>Mur</b> : chaque spectacle a son mur (to-do, passation, horaires, problèmes techniques…). L\'onglet <b>Mur</b> réunit tous les messages ; un filtre permet de ne voir qu\'un spectacle. Sur la fiche d\'un spectacle, le mur est <b>replié</b> (dernier message seulement) : touche son titre pour le déplier, lire tous les messages et écrire.',
     'Chaque message est signé, avec la couleur de son auteur. <b>@</b> cite une personne (elle est notifiée), <b>#219</b> cite un projecteur (lien vers sa fiche). Tu modifies ou effaces tes propres messages.',
     '<b>Notifications</b> : Plus → Activer les notifications. Sur iPhone, l\'appli doit d\'abord être installée sur l\'écran d\'accueil (iOS 16.4 minimum).'
   ] },

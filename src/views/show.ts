@@ -30,7 +30,7 @@ export const showView: ViewFactory = ([id]) => {
   let composer: HTMLElement | null = null;
   let gref = '';
   const rsel = new Set<number>();
-  let demFolded = true, itemsFolded = true;   // « Matériel demandé » et « Projecteurs affectés » : repliés au départ (pas mémorisé)
+  let demFolded = true, itemsFolded = true, wallFolded = true;   // « Matériel demandé » et « Projecteurs affectés » : repliés au départ (pas mémorisé)
   let modelFilter = '';   // modèle affiché dans la liste des projecteurs ('' = tous) : un filtre, pas une sélection
 
   /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
@@ -82,8 +82,8 @@ export const showView: ViewFactory = ([id]) => {
     const regs = d.showRegisseurs.filter((r) => r.show_id === id).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
     const myId = state.profile?.id, admin = can('admin');
     const posts = d.showPosts.filter((p) => p.show_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const wall = `<div class="card stack mur sec sec-wall"><div class="row"><h2 class="grow">Mur (${posts.length})</h2></div><div id="wallhost"></div>
-      <div class="posts">${posts.map((p) => {
+    const wall = `<div class="card stack mur sec sec-wall"><div class="row wrap"><button class="fold grow" data-act="wall-fold" aria-expanded="${!wallFolded}" aria-label="${wallFolded ? 'Déplier' : 'Replier'} le mur"><span aria-hidden="true">${wallFolded ? '▸' : '▾'}</span> <h2>Mur (${posts.length})</h2></button></div>${wallFolded ? '' : '<div id="wallhost"></div>'}
+      <div class="posts">${(wallFolded ? posts.slice(0, 1) : posts).map((p) => {   // replié : seulement le dernier message (le plus récent)
         const own = !!myId && p.author_id === myId, me = !!myId && mentionedIds(p.body).includes(myId);
         return `<article class="post${me ? ' tome' : ''}" style="--pc:${personColor(p.author_id)}"><header><b class="who">${esc(p.author_label ?? 'Compte supprimé')}</b>
           <time datetime="${esc(p.created_at)}">${esc(fmtDateTime(p.created_at))}</time>${p.edited_at ? ' <span class="muted">(modifié)</span>' : ''}${me ? ' <span class="tag late">te cite</span>' : ''}</header>
@@ -398,6 +398,7 @@ export const showView: ViewFactory = ([id]) => {
           paint(root);
         }
         else if (act === 'items-fold') { itemsFolded = !itemsFolded; paint(root); }   // replie / déplie les projecteurs affectés
+        else if (act === 'wall-fold') { wallFolded = !wallFolded; paint(root); }   // replie / déplie le mur
         else if (act === 'dem-fold') { demFolded = !demFolded; paint(root); }   // replie / déplie le matériel demandé
         else if (act === 'rmodel') {
           modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui filtre la liste sur ce type ; un second appui retire le filtre

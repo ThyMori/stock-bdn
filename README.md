@@ -131,6 +131,9 @@ Quand un lot contient un PAR (scan, saisie d'un n° ou liste), la lampe actuelle
 ### Fiche de spectacle : zones distinctes (v1.22.0)
 Ordre : Mur, Régisseurs, **Projecteurs** (étiquette « manuel »), puis **Matériel demandé** (étiquette « auto », cadre en pointillés, repliable d'un appui sur son titre ; replié, il garde l'étiquette « manque N »). Chaque zone a un liseré de couleur en haut. Les types de projecteurs portent le libellé « Filtre : » (liste des projecteurs et sélecteur d'ajout).
 
+### Mur repliable sur la fiche d'un spectacle (v1.45.10)
+Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
+
 ### SAV + panne en une fois (v1.45.7)
 Fiche d'un projecteur → « SAV » : le formulaire propose **« Déclarer aussi une panne ? »** (Oui par défaut ; motif « Réparation » proposé). Si Oui, la panne est créée en même temps (description saisie, sinon le motif du SAV, sinon « Passé en SAV »). Même mécanisme que le remplacement dans la feuille de patch. Fonctionne hors ligne (file d'attente). Aucun changement Supabase.
 
