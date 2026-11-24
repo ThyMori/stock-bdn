@@ -190,7 +190,7 @@ export const showView: ViewFactory = ([id]) => {
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${alertCard}
       ${wall}
-      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Affecter manuellement</button>' : ''}</div>
+      <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="start">+ Affecter manuellement</button>' : ''}</div>
         ${itemsFolded ? '' : `${picker}
         <div class="mlist">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
       ${demandCard}
@@ -285,7 +285,7 @@ export const showView: ViewFactory = ([id]) => {
           const miss = (r.data as { missing?: number } | null)?.missing ?? 0;
           err(miss > 0 ? `⚠ Impossible de tout fournir : il manque ${miss} projecteur${miss > 1 ? 's' : ''} (à réparer, louer ou emprunter).` : '');
         };
-        if (act === 'mode') { mode = v as Mode; msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); if (mode === 'pick') root.querySelector('.picker')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }   // la fenêtre d'ajout s'ouvre en haut de la liste, bien visible
+        if (act === 'mode') {   /* « Affecter manuellement » : Scan QR sur téléphone (écran tactile), liste sur ordinateur */ mode = v === 'start' ? (window.matchMedia('(pointer: coarse)').matches ? 'scan' : 'pick') : (v as Mode); msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); if (mode === 'pick') root.querySelector('.picker')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }   // la fenêtre d'ajout s'ouvre en haut de la liste, bien visible
         else if (act === 'mount') { const r = await rpcCall('set_show_mounted', { p_show: id, p_value: v === '1' }); err(r.error ?? ''); }
         else if (act === 'type') { type = v ?? ''; paint(root); }
         else if (act === 'toggle') {
