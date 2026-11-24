@@ -1,7 +1,9 @@
 import type { ViewFactory } from '../router';
 import { can, resolveFault, view } from '../store';
-import { esc, fmtDate, fmtDateTime } from '../logic';
+import { esc, fmtDate, fmtDateTime, todayStr } from '../logic';
 import { describe } from '../ref';
+import { keepText } from '../keepFault';
+import { fmtDay } from './agenda';
 
 let showClosed = false;
 
@@ -41,7 +43,7 @@ function paint(root: HTMLElement) {
     return `<div class="item">
       <a class="num" href="#/item/${f.item_id}">${f.item_id}</a>
       <div class="grow"><div class="t"><a href="#/fault/${f.id}">${esc(f.description || 'Sans description')}</a>${f.pending ? ' <span class="pending">en attente</span>' : ''}</div>
-        <div class="s">${esc(d?.model?.name ?? '')} · ${esc(f.reported_by_label ?? 'moi')} · ${fmtDateTime(f.reported_at)}${f.resolved_at ? ` · résolue le ${fmtDate(f.resolved_at)}${f.resolved_by_label ? ' par ' + esc(f.resolved_by_label) : ''}` : ''}</div></div>
+        <div class="s">${keepText(f, todayStr(), fmtDay) ? `<span class="tag keep">${esc(keepText(f, todayStr(), fmtDay))}</span> ` : ''}${esc(d?.model?.name ?? '')} · ${esc(f.reported_by_label ?? 'moi')} · ${fmtDateTime(f.reported_at)}${f.resolved_at ? ` · résolue le ${fmtDate(f.resolved_at)}${f.resolved_by_label ? ' par ' + esc(f.resolved_by_label) : ''}` : ''}</div></div>
       ${!showClosed && tech ? `<button class="btn small" data-act="resolve" data-v="${f.id}">Résolue</button>` : ''}</div>`;
   }).join('') : `<div class="empty">${showClosed ? 'Aucune panne résolue.' : 'Aucune panne en cours 🎉'}</div>`;
 }

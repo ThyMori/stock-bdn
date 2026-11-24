@@ -74,10 +74,15 @@ export async function handleRevoked() {
   location.reload();
 }
 
+let lastSavSync = 0;   // dernière activation des SAV planifiés (au plus une fois toutes les 5 minutes)
 export async function pull() {
   if (state.session) {
     await loadProfile(state.session.user.id);
     if (state.profile && state.profile.active === false) { await handleRevoked(); throw new Error('Accès révoqué'); }
+    if (Date.now() - lastSavSync > 300000) {   // un SAV planifié (panne non bloquante) a pu commencer : le projecteur passe à « SAV » ; sans effet ni erreur si rien à faire ou base pas à jour
+      lastSavSync = Date.now();
+      try { await supabase.rpc('activate_scheduled_sav'); } catch { /* hors ligne : tant pis */ }
+    }
   }
   const q = (t: string) => supabase.from(t).select('*');
   const [fam, typ, soc, fs, lamps, models, items, faults, flog, imm, shw, shi, shr, shp, sgl, sdm, sex, ssb, sdg, ptl] = await Promise.all([
@@ -113,7 +118,9 @@ async function runOp(op: Op) {
       return supabase.rpc('apply_status', { p_event: op.id, p_item: op.item, p_status: op.status, p_note: op.note ?? null, p_at: op.at,
         p_who: op.who ?? null, p_from: op.from ?? null, p_until: op.until ?? null });
     case 'fault':
-      return supabase.rpc('report_fault', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at });
+      return op.keep
+        ? supabase.rpc('report_fault_keep', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at, p_show: op.keep.show, p_until: op.keep.until })   // panne non bloquante + SAV planifié
+        : supabase.rpc('report_fault', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at });
     case 'resolve':
       return supabase.rpc('resolve_fault', { p_event: op.id, p_fault: op.fault, p_resolution: op.resolution ?? null, p_at: op.at });
     case 'fault_note':
@@ -179,8 +186,8 @@ export async function rpcCall(fn: string, params: Record<string, unknown>): Prom
   await pull(); emit();
   return { error: null, data };
 }
-export const reportFault = (item: number, description: string) =>
-  enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now() });
+export const reportFault = (item: number, description: string, keep?: { show: string | null; until: string | null }) =>
+  enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now(), ...(keep ? { keep } : {}) });
 export const resolveFault = (fault: string, resolution?: string) =>
   enqueue({ id: uuid(), kind: 'resolve', fault, resolution: resolution?.trim() || undefined, at: now() });
 

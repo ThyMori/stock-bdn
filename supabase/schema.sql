@@ -205,6 +205,10 @@ create table if not exists shows (
   created_at       timestamptz not null default now(),
   constraint shows_dates check (end_date >= start_date)
 );
+-- v1.51.0 : panne « non bloquante » : le projecteur reste en service jusqu'à keep_until (inclus) ; un SAV sans date de fin (keep_immo) démarre le lendemain.
+alter table faults add column if not exists keep_until date;                                         -- dernier jour d'usage ; null = panne normale
+alter table faults add column if not exists keep_show uuid references shows(id) on delete set null; -- spectacle dont la date de fin est suivie (null = date figée)
+alter table faults add column if not exists keep_immo uuid;                                          -- le SAV planifié (immos.id)
 alter table shows add column if not exists color text check (color ~ '^#[0-9a-f]{6}$');
 create table if not exists show_items (
   show_id        uuid not null references shows(id) on delete cascade,
@@ -343,6 +347,7 @@ begin
    returning item_id into it;
   get diagnostics n = row_count;
   if n > 0 then
+    delete from immos where id = (select keep_immo from faults where id = p_fault) and closed_date is null and start_date > current_date;   -- panne résolue avant son SAV prévu : plus de SAV
     insert into item_events (id, item_id, kind, note, created_by, created_by_label, at)
     values (p_event, it, 'fault_resolved', p_resolution, auth.uid(), lbl, p_at)
     on conflict (id) do nothing;
@@ -535,6 +540,11 @@ begin
     col := pick_show_color(p_id, p_start, p_end);
   end if;
   update shows set name = trim(p_name), start_date = p_start, end_date = p_end, note = nullif(trim(p_note), ''), color = col where id = p_id;
+  -- pannes « non bloquantes » qui suivent la fin de ce spectacle (SAV pas encore commencé) : la date de fin d'usage et le début du SAV suivent
+  update immos m set start_date = p_end + 1 from faults f
+   where f.keep_show = p_id and f.resolved_at is null and f.keep_immo = m.id and m.closed_date is null and m.start_date > current_date;
+  update faults f set keep_until = p_end
+   where f.keep_show = p_id and f.resolved_at is null and exists (select 1 from immos m where m.id = f.keep_immo and m.start_date = p_end + 1);
   perform reallocate_all();
   perform log_event('SPECTACLE', format('« %s » modifié (%s → %s)', trim(p_name), to_char(p_start, 'DD/MM/YYYY'), to_char(p_end, 'DD/MM/YYYY')));
 end $$;
@@ -970,6 +980,64 @@ revoke all on function edit_fault(uuid,uuid,text,timestamptz) from public;
 grant execute on function add_fault_note(uuid,uuid,text,timestamptz) to authenticated;
 grant execute on function edit_fault(uuid,uuid,text,timestamptz) to authenticated;
 
+-- ======================= v1.51.0 : panne « non bloquante » =======================
+-- Le projecteur reste en service jusqu'à la fin d'usage (fin du spectacle, ou date choisie) ; un SAV SANS date de fin est créé tout de suite,
+-- il démarre le lendemain (immos : le projecteur est bloqué pour les spectacles qui jouent après). Aucune tâche planifiée : tout est calculé sur les dates.
+drop function if exists report_fault_keep(uuid, int, text, timestamptz, uuid, date);
+create or replace function report_fault_keep(p_id uuid, p_item int, p_description text, p_at timestamptz, p_show uuid, p_until date)
+returns void language plpgsql security definer set search_path = public as $$
+declare lbl text; n int; until date; d date; iid uuid := gen_random_uuid(); sh shows;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  d := (p_at at time zone 'Europe/Paris')::date;
+  if p_show is not null then
+    select * into sh from shows where id = p_show;
+    if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
+    if not exists (select 1 from show_items where show_id = p_show and item_id = p_item) then raise exception 'Ce projecteur n''est pas affecté à ce spectacle' using errcode = '22023'; end if;
+    until := sh.end_date;
+  else
+    until := p_until;
+  end if;
+  if until is null then raise exception 'Date de fin d''usage obligatoire' using errcode = '22023'; end if;
+  if until < d then raise exception 'La date de fin d''usage est déjà passée : déclare une panne normale' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into faults (id, item_id, description, reported_by, reported_by_label, reported_at, keep_until, keep_show, keep_immo)
+  values (p_id, p_item, nullif(trim(p_description), ''), auth.uid(), lbl, p_at, until, p_show, iid)
+  on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then
+    insert into immos (id, item_id, kind, note, start_date, end_date, created_by, created_by_label)
+    values (iid, p_item, 'sav', coalesce(nullif(trim(p_description), ''), 'Panne signalée') , until + 1, null, auth.uid(), lbl);   -- SAV sans date de fin
+    insert into item_events (id, item_id, kind, note, created_by, created_by_label, at)
+    values (gen_random_uuid(), p_item, 'fault', p_description, auth.uid(), lbl, p_at);
+    perform log_event('PANNE', format('#%s : panne déclarée (reste en service jusqu''au %s, SAV ensuite)%s', p_item, to_char(until, 'DD/MM/YYYY'), coalesce(' — ' || nullif(trim(p_description), ''), '')));
+    perform reallocate_all();
+  end if;
+end $$;
+
+-- Quand le SAV planifié commence, le projecteur passe à l'état « SAV » (appelée à l'ouverture de l'appli ; sans effet si rien n'est à faire).
+create or replace function activate_scheduled_sav() returns int
+language plpgsql security definer set search_path = public as $$
+declare r record; n int := 0; lbl text;
+begin
+  if auth.uid() is null then return 0; end if;
+  for r in select f.id as fault, f.item_id, f.description, m.start_date from faults f join immos m on m.id = f.keep_immo
+            join items i on i.id = f.item_id
+           where f.resolved_at is null and m.closed_date is null and m.start_date <= current_date and i.status = 'dispo'
+  loop
+    update items set status = 'sav', status_at = now(), updated_at = now() where id = r.item_id;
+    insert into item_events (id, item_id, kind, status, note, created_by_label, at)
+    values (gen_random_uuid(), r.item_id, 'status', 'sav', 'SAV automatique après la panne signalée' || coalesce(' : ' || r.description, ''), 'Appli', now());
+    perform log_event('STATUT', format('#%s : dispo → SAV (automatique, panne signalée en cours de spectacle)', r.item_id));
+    n := n + 1;
+  end loop;
+  return n;
+end $$;
+revoke all on function report_fault_keep(uuid,int,text,timestamptz,uuid,date) from public;
+revoke all on function activate_scheduled_sav() from public;
+grant execute on function report_fault_keep(uuid,int,text,timestamptz,uuid,date) to authenticated;
+grant execute on function activate_scheduled_sav() to authenticated;
+
 -- ======================= Assignation automatique (v1.9) =======================
 -- Un spectacle exprime des DEMANDES (modèle + lampe pour les PAR + quantité) ; l'appli choisit les projecteurs.
 -- Elle préfère les PAR déjà montés avec la bonne lampe, évite les projecteurs indisponibles (SAV, prêt, panne ouverte,
@@ -1067,7 +1135,7 @@ begin
     from immos m
    where m.item_id = p_item and m.start_date <= p_end and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p_start limit 1;
   if r is not null then return r; end if;
-  if exists (select 1 from faults f where f.item_id = p_item and f.resolved_at is null) then return 'en panne'; end if;
+  if exists (select 1 from faults f where f.item_id = p_item and f.resolved_at is null and f.keep_until is null) then return 'en panne'; end if;   -- panne « non bloquante » : le SAV planifié (immos) prend le relais le lendemain
   return null;
 end $$;
 
@@ -1111,7 +1179,7 @@ begin
     select p.model_id, p.day,
            (select count(*) from items i
              where i.model_id = p.model_id
-               and not exists (select 1 from faults f where f.item_id = i.id and f.resolved_at is null)
+               and not exists (select 1 from faults f where f.item_id = i.id and f.resolved_at is null and f.keep_until is null)
                and not exists (select 1 from immos m where m.item_id = i.id and m.start_date <= p.day
                                and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p.day))::int as c
       from pairs p),
@@ -1770,7 +1838,7 @@ begin
 
   -- new / replace : le projecteur vient du stock
   if exists (select 1 from show_items where show_id = p_show and item_id = p_target) then raise exception 'Le projecteur % est déjà affecté à ce spectacle (choisis-le dans la liste)', p_target using errcode = '22023'; end if;
-  if exists (select 1 from faults where item_id = p_target and resolved_at is null) then raise exception 'Le projecteur % est en panne', p_target using errcode = '22023'; end if;
+  if exists (select 1 from faults where item_id = p_target and resolved_at is null and keep_until is null) then raise exception 'Le projecteur % est en panne', p_target using errcode = '22023'; end if;
   if p_mode = 'replace' then
     select * into oldsi from show_items where show_id = p_show and item_id = p_item;
     select model_id into m1 from items where id = p_item; select model_id into m2 from items where id = p_target;

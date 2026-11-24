@@ -10,6 +10,8 @@ import { mentionedItems, personColor, renderBody } from '../wall';
 import { STATUS_LABEL, STATUSES, showColor } from '../types';
 import type { ItemEvent } from '../types';
 import { supabase } from '../supabase';
+import { toast } from '../ui/toast';
+import { keepShowFor, keepText } from '../keepFault';
 
 export const itemView: ViewFactory = ([idStr], query) => {
   const id = Number(idStr);
@@ -25,6 +27,9 @@ export const itemView: ViewFactory = ([idStr], query) => {
         <details class="card" id="faultForm"><summary>Signaler une panne</summary>
           <form class="stack" style="margin-top:12px">
             <textarea name="d" placeholder="Que se passe-t-il ? (ex. condenseur explosé, presse-étoupe…)"></textarea>
+            <div id="keepbox" hidden><label class="f">Le projecteur peut-il rester en service ?<select name="keep"></select></label>
+              <label class="f" id="keepdate" hidden>Dernier jour d'usage<input type="date" name="until"></label>
+              <div class="sub">Un SAV sans date de fin sera créé tout seul le lendemain.</div></div>
             <button class="btn primary">Envoyer le signalement</button>
           </form></details>
         <div id="adm"></div>
@@ -37,10 +42,14 @@ export const itemView: ViewFactory = ([idStr], query) => {
         e.preventDefault();
         const form = e.target as HTMLFormElement;
         const d = (form.elements.namedItem('d') as HTMLTextAreaElement).value;
-        await reportFault(id, d);
+        const kv = (form.elements.namedItem('keep') as HTMLSelectElement | null)?.value ?? '';
+        const until = (form.elements.namedItem('until') as HTMLInputElement | null)?.value ?? '';
+        if (kv === 'date' && !until) { toast('Choisis le dernier jour d\'usage.'); return; }
+        await reportFault(id, d, kv === '' ? undefined : kv === 'date' ? { show: null, until } : { show: kv, until: null });   // « reste en service » : panne non bloquante + SAV planifié
         form.reset();
         (root.querySelector('#faultForm') as HTMLDetailsElement).open = false;
       });
+      root.addEventListener('change', (e) => { const t = e.target as HTMLSelectElement; if (t.name === 'keep') root.querySelector<HTMLElement>('#keepdate')!.hidden = t.value !== 'date'; });   // date libre seulement pour « une autre date »
       root.addEventListener('click', async (e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
         if (!el) return;
@@ -210,10 +219,21 @@ export const itemView: ViewFactory = ([idStr], query) => {
       </div>
       <div class="card stack"><h2>Pannes ${open.length ? `<span class="warn">(${open.length} en cours)</span>` : ''}</h2>
         ${open.map((x) => `<div class="row"><div class="grow"><div><a href="#/fault/${x.id}">${esc(x.description || 'Sans description')}</a>${x.pending ? ' <span class="pending">en attente</span>' : ''}</div>
-            <div class="sub">${esc(x.reported_by_label ?? 'moi')} · ${fmtDateTime(x.reported_at)}</div></div>
+            <div class="sub">${esc(x.reported_by_label ?? 'moi')} · ${fmtDateTime(x.reported_at)}</div>
+            ${keepText(x, today, fmtDay) ? `<div><span class="tag keep">${esc(keepText(x, today, fmtDay))}</span></div>` : x.keep_until && !x.resolved_at ? `<div><span class="tag late">SAV sans date de fin en cours depuis le ${esc(fmtDay(x.keep_until))}</span></div>` : ''}</div>
             ${canResolve ? `<button class="btn small" data-act="resolve" data-v="${x.id}">Résolue</button>` : ''}</div>`).join('') || '<div class="sub">Aucune panne en cours.</div>'}
         ${closed.length ? `<h3 class="muted">Résolues</h3>` + closed.map((x) => `<div class="sub">✓ <a href="#/fault/${x.id}">${esc(x.description || 'Sans description')}</a>${x.resolution ? ' → ' + esc(x.resolution) : ''} (${fmtDate(x.resolved_at)}${x.resolved_by_label ? ' par ' + esc(x.resolved_by_label) : ''})</div>`).join('') : ''}
       </div>`;
+    syncKeepBox(root);
+  }
+
+  /** Case « le projecteur peut rester en service » : proposée seulement si le projecteur est dans un spectacle en cours ou à venir (liste mise à jour sans effacer le choix en cours). */
+  function syncKeepBox(root: HTMLElement) {
+    const box = root.querySelector<HTMLElement>('#keepbox'), sel = root.querySelector<HTMLSelectElement>('select[name=keep]'); if (!box || !sel) return;
+    const sh = keepShowFor(view(), id, todayStr());
+    box.hidden = !sh;
+    const html = sh ? `<option value="">Non : à traiter tout de suite</option><option value="${esc(sh.id)}">Oui, jusqu'à la fin de « ${esc(sh.name)} » (${esc(fmtDay(sh.end_date))}), puis SAV</option><option value="date">Oui, jusqu'à une autre date, puis SAV…</option>` : '';
+    if (sel.dataset.sig !== html) { const keep = sel.value; sel.innerHTML = html; sel.dataset.sig = html; if ([...sel.options].some((o) => o.value === keep)) sel.value = keep; }
   }
 
   function renderAdmin(root: HTMLElement) {

@@ -6,6 +6,7 @@ import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf, splitGelRefs } from '../gels';
 import { POSITION_GROUPS } from '../patch';
+import { isKeeping } from '../keepFault';
 import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
 import { similarNames } from '../patchSuggest';
 import { toast } from '../ui/toast';
@@ -100,7 +101,8 @@ export const showView: ViewFactory = ([id]) => {
     const selModels = [...new Set(mine.map((s) => modelOf(s.item_id)))].map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', ids: mine.filter((s) => modelOf(s.item_id) === m).map((s) => s.item_id) }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     if (modelFilter && !selModels.some((m) => m.id === modelFilter)) modelFilter = '';   // plus aucun projecteur de ce modèle : on retire le filtre
-    const origin = (s: (typeof mine)[number]) => (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
+    const origin = (s: (typeof mine)[number]) => (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '')
+      + (d.faults.some((f) => f.item_id === s.item_id && isKeeping(f, today)) ? ` <span class="tag keep">panne connue : SAV après le spectacle</span>` : '');
     const itemRow = (s: (typeof mine)[number]) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
       const want = lampName(s.lamp_id), cur = it ? lampName(it.lamp_id) : undefined;

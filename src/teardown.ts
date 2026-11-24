@@ -4,6 +4,7 @@ import { appReference } from './pdfHeader';
 import { externalLabel } from './alerts';
 import { patchPosition, positionBefore, posLabel } from './position';
 import { drawAccessorySection, drawGelSection, drawHolderSection } from './prepPdf';
+import { sentToSav } from './keepFault';
 import type { PdfCtx } from './prepPdf';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
@@ -127,6 +128,19 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   section('À garder en place', 'même position dans les deux spectacles (cintres, allemandes, passerelles, sols, pont coupole…)', plan.keep, 'LAMPE', (r) => r.newPos);
   section('À déplacer', 'dans les deux spectacles, à une autre position', plan.move, 'LAMPE', (r) => `${r.oldPos || '?'} > ${r.newPos || '?'}`);
   section('À monter', 'nouveaux pour le spectacle suivant, avec leur provenance', plan.mount, 'LAMPE REQUISE', (r) => `${r.newPos || 'position ?'}  (de : ${r.origin})`);
+  const sav = sentToSav(data, curId);
+  if (sav.length) {   // pannes non bloquantes : le projecteur a joué ce spectacle, il part en SAV ensuite (SAV déjà créé sans date de fin)
+    ensure(30); y += 8;
+    doc.setFillColor(242, 194, 48); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`À envoyer en SAV (${sav.length})`, M + 2, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text('pannes signalées pendant le spectacle', W - M - 2, y, { align: 'right' }); y += 8;
+    for (const r of sav) {
+      ensure(9); doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`n° ${r.item}`, M + 14, y);
+      doc.setFont('helvetica', 'normal'); doc.text(r.text, M + 34, y, { maxWidth: W - 2 * M - 40 });
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2); y += 7;
+    }
+  }
   const exts = data.showExternals.filter((e) => e.show_id === curId).sort((a, b) => a.return_date.localeCompare(b.return_date));
   if (exts.length) {
     ensure(30); y += 8;

@@ -137,6 +137,17 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Panne non bloquante : le projecteur reste en service, SAV ensuite (v1.51.0)
+- Fiche du projecteur → « Signaler une panne » : si le projecteur est dans un spectacle en cours ou à venir, une liste propose « Non : à traiter tout de suite » (comportement d'avant), « Oui, jusqu'à la fin de « X », puis SAV » ou « Oui, jusqu'à une autre date ». Mêmes droits que la panne normale (technicien et plus) ; fonctionne hors ligne (file d'attente).
+- Fonction `report_fault_keep` : crée la panne (`faults.keep_until` = dernier jour d'usage inclus, `keep_show` = spectacle suivi, `keep_immo` = SAV planifié) **et un SAV sans date de fin** (`immos`, kind `sav`) qui démarre le lendemain. Aucune tâche planifiée : c'est le calcul sur les dates qui fait le travail.
+- Jusqu'à la date incluse : aucune alerte « indisponible » ni « manque » (`item_blocked`, calcul de disponibilité et `blockedReason` ignorent la panne), le projecteur reste affecté ; pastille jaune « panne connue · reste en service jusqu'au … · SAV ensuite » (fiche du projecteur, liste et fiche de la panne, ligne du projecteur dans la fiche du spectacle). Le lendemain : le SAV (immos) bloque le projecteur pour les spectacles suivants ; `activate_scheduled_sav()` (appelée à l'ouverture de l'appli, au plus toutes les 5 min) passe alors son état à « SAV » (une ligne d'historique « SAV automatique »).
+- **Indisponibilité planifiée** : dès la déclaration, le SAV sans date de fin existe dans l'agenda du projecteur ; il n'est donc **jamais compté disponible** pour un spectacle qui joue après la date de fin d'usage (calcul « Disponibles / manque » et alertes), même si le spectacle actuel continue de l'utiliser. Il reste compté pendant la période où il est en service. Testé en pglite (`test36`), et affiché tout de suite côté appli, y compris hors ligne.
+- Si la date de fin du spectacle change (`edit_show`), la fin d'usage et le début du SAV suivent (tant que le SAV n'a pas commencé) ; date choisie à la main ou spectacle supprimé : date figée. Panne résolue avant le début du SAV : le SAV planifié est supprimé. Une fois le SAV commencé, on le clôture comme d'habitude (changer l'état).
+- Rapport de démontage : section jaune « À envoyer en SAV » (projecteurs du spectacle ayant une panne non bloquante ouverte).
+- Pas repris : transformer après coup une panne bloquante en non bloquante (on rouvre une panne).
+- Logique pure : `src/keepFault.ts`, `tests/keep-fault.test.ts` ; test SQL pglite `test36`.
+- **Supabase : oui** — rejouer `schema.sql`.
+
 ### Scan d'un lot (v1.50.0)
 - Mode Scan QR : la caméra est **en haut** (l'écran défile pour la placer en haut, hauteur limitée) ; juste dessous, **Position du lot** (facultatif, liste des positions du patch, appliquée aux projecteurs assignés via `patch_batch`) ; puis les **badges du lot** ; puis la lampe de chaque PAR ; puis « …ou saisir un n° » tout en bas, juste avant le bouton Assigner (v1.50.2).
 - **Lampe par PAR** : chaque PAR du lot a sa ligne, lampe déjà montée présélectionnée, à valider ; assigner est refusé tant qu'un PAR n'a pas de lampe (un appel `assign_items` par lampe).
@@ -322,6 +333,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.47.0) | table `show_substitutions`, fonctions `add_substitution` / `delete_substitution`, `reallocate_all` tient compte des substitutions | v1.47.0 |
 | `schema.sql` (v1.48.0) | table `show_demand_gels`, fonctions `add_demand_gels` / `delete_demand_gel` | v1.48.0 |
 | `schema.sql` (v1.49.0) | fonctions `patch_clear_all`, `patch_batch` | v1.49.0 |
+| `schema.sql` (v1.51.0) | colonnes `faults.keep_until / keep_show / keep_immo`, fonctions `report_fault_keep`, `activate_scheduled_sav`, `item_blocked` / `reallocate_all` / `edit_show` / `resolve_fault` mis à jour | v1.51.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |

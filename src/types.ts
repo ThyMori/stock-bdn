@@ -55,6 +55,7 @@ export interface ShowDemand { id: string; show_id: string; model_id: string; lam
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;
+  keep_until?: string | null; keep_show?: string | null; keep_immo?: string | null;   // panne non bloquante : dernier jour d'usage, spectacle suivi, SAV planifié
 }
 /** Info ajoutée ou description modifiée sur une panne (la déclaration et la résolution sont dans Fault). */
 /** Immobilisation d'un projecteur (agenda) : prêt ou SAV. Sans closed_date = en cours ; sans end_date = fin non connue. */
@@ -87,7 +88,7 @@ export const EMPTY_DATA: Data = {
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */
 export type Op =
   | { id: string; kind: 'status'; item: number; status: Status; note?: string; who?: string; from?: string; until?: string; at: string }
-  | { id: string; kind: 'fault'; item: number; description: string; at: string }
+  | { id: string; kind: 'fault'; item: number; description: string; at: string; keep?: { show: string | null; until: string | null } }
   | { id: string; kind: 'resolve'; fault: string; resolution?: string; at: string }
   | { id: string; kind: 'fault_note'; fault: string; text: string; at: string }
   | { id: string; kind: 'fault_edit'; fault: string; description: string; at: string }

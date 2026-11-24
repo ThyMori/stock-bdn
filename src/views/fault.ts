@@ -1,7 +1,9 @@
 import type { ViewFactory } from '../router';
 import { addFaultNote, can, editFault, resolveFault, state, view } from '../store';
-import { esc, fmtDateTime } from '../logic';
+import { esc, fmtDateTime, todayStr } from '../logic';
 import { describe } from '../ref';
+import { keepText } from '../keepFault';
+import { fmtDay } from './agenda';
 
 /** Fiche d'une panne : déclaration, infos ajoutées, modifications, résolution — chacune datée et signée. */
 export const faultView: ViewFactory = ([id]) => ({
@@ -50,6 +52,7 @@ function paint(root: HTMLElement) {
         <div class="grow"><h1>${esc(d?.model?.name ?? 'Projecteur')}</h1>
           <div class="sub">${f.resolved_at ? 'Résolue' : '<span class="warn">En cours</span>'}</div></div></div>
       <div class="t">${esc(f.description || 'Sans description')}</div>
+      ${keepText(f, todayStr(), fmtDay) ? `<div><span class="tag keep">${esc(keepText(f, todayStr(), fmtDay))}</span></div>` : f.keep_until && !f.resolved_at ? `<div class="sub">Panne non bloquante : SAV sans date de fin en cours depuis le ${esc(fmtDay(f.keep_until))}.</div>` : ''}
       <div class="row wrap">
         ${can('technicien') ? '<button class="btn small" data-act="note">Ajouter une info</button>' : ''}
         ${canEdit ? '<button class="btn small" data-act="edit">Modifier la description</button>' : ''}

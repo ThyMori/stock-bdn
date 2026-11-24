@@ -25,7 +25,7 @@ export function blockedReason(data: Data, itemId: number, show: Show): string | 
   if (other) return `déjà dans « ${data.shows.find((s) => s.id === other.show_id)?.name ?? '?'} »`;
   const imm = data.immos.find((m) => m.item_id === itemId && m.start_date <= show.end_date && (m.closed_date ?? m.end_date ?? '9999-12-31') >= show.start_date);
   if (imm) return imm.kind === 'pret' ? 'prêt' : 'SAV';
-  if (data.faults.some((f) => f.item_id === itemId && !f.resolved_at)) return 'en panne';
+  if (data.faults.some((f) => f.item_id === itemId && !f.resolved_at && !f.keep_until)) return 'en panne';   // panne non bloquante : le SAV planifié (immos) prend le relais le lendemain
   return null;
 }
 
