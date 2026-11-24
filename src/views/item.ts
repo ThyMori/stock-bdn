@@ -82,11 +82,11 @@ export const itemView: ViewFactory = ([idStr], query) => {
       if (v) void setStatus(id, s, { who: v.who, from: v.from, until: v.until, note: v.note });
     } else if (s === 'sav') {
       const v = await openForm(`Passer le n° ${id} en SAV`, [
-        { name: 'note', label: 'Motif' },
+        { name: 'note', label: 'Motif', value: 'Réparation' },   // motif proposé par défaut
         { name: 'from', label: 'Début du SAV', type: 'date', required: true, value: today, max: today },
         { name: 'until', label: 'Fin prévue', type: 'date', min: today, hint: 'Laisse vide si la date de retour n\'est pas connue.' },
         // proposition de déclarer aussi une panne (même mécanisme que le remplacement dans la feuille de patch)
-        { name: 'fault', label: 'Déclarer aussi une panne ?', type: 'select', options: [['', 'Non'], ['oui', 'Oui, en même temps']], value: '' },
+        { name: 'fault', label: 'Déclarer aussi une panne ?', type: 'select', options: [['oui', 'Oui, en même temps'], ['', 'Non']], value: 'oui' },   // « Oui » proposé par défaut
         { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea', hint: 'Laisse vide pour reprendre le motif du SAV.' }], { submit: 'Passer en SAV', validate: dates });
       if (v) {
         void setStatus(id, s, { note: v.note, from: v.from, until: v.until });   // passe le projecteur en SAV
