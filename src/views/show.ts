@@ -153,9 +153,7 @@ export const showView: ViewFactory = ([id]) => {
           <button class="chip" data-act="mode" data-v="scan" aria-pressed="${mode === 'scan'}">Scan QR</button></div>
         ${mode === 'scan' ? `<div class="viewport"><video playsinline muted></video></div>
           ${posSelect()}
-          <div class="sub" id="lot">Lot : ${staged.length ? staged.map((n) => `<button class="chip" data-act="toggle" data-v="${n}" aria-pressed="true">${n} ✕</button>`).join(' ') : 'vide'}</div>
-          <form id="manual" class="row"><input name="n" inputmode="numeric" pattern="[0-9]*" placeholder="…ou saisir un n°" autocomplete="off" aria-label="Saisir un numéro de projecteur"><button class="btn">Ajouter</button></form>
-          <div class="sub" role="status">${esc(msg)}</div>`
+          <div class="sub" id="lot">Lot : ${staged.length ? staged.map((n) => `<button class="chip" data-act="toggle" data-v="${n}" aria-pressed="true">${n} ✕</button>`).join(' ') : 'vide'}</div>`
         : `<input id="q" type="search" placeholder="N°, modèle…" autocomplete="off" value="${esc(q)}">
           <div class="chips"><span class="sub">Filtre :</span><button class="chip" data-act="type" data-v="" aria-pressed="${type === ''}">Tous types</button>
             ${usedTypes.map((t) => `<button class="chip" data-act="type" data-v="${t.id}" aria-pressed="${type === t.id}">${esc(t.name)}</button>`).join('')}</div>
@@ -164,6 +162,8 @@ export const showView: ViewFactory = ([id]) => {
             <span class="badge ${i.eff ?? i.status}">${esc({ dispo: 'Disponible', utilise: 'Utilisé', sav: 'SAV', en_pret: 'En prêt' }[i.eff ?? i.status])}</span></label>`).join('') || '<div class="empty">Aucun projecteur</div>'}</div>`}
         ${mode === 'pick' ? posSelect() : ''}
         <div id="lamprows" class="stack">${lampRows(staged)}</div>
+        ${mode === 'scan' ? `<form id="manual" class="row"><input name="n" inputmode="numeric" pattern="[0-9]*" placeholder="…ou saisir un n°" autocomplete="off" aria-label="Saisir un numéro de projecteur"><button class="btn">Ajouter</button></form>
+          <div class="sub" role="status">${esc(msg)}</div>` : ''}
         <div id="aerr" class="sub warn" role="alert">${esc(mode === 'pick' ? msg : '')}</div>
         <div class="row"><button class="btn primary grow" data-act="assign" ${staged.length ? '' : 'disabled'}>Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}</button>
           <button class="btn" data-act="mode" data-v="view">Fermer</button></div></div>`;
