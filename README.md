@@ -137,6 +137,11 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Scan d'un lot (v1.50.0)
+- Mode Scan QR : la caméra est **en haut** (l'écran défile pour la placer en haut, hauteur limitée) ; juste dessous, **Position du lot** (facultatif, liste des positions du patch, appliquée aux projecteurs assignés via `patch_batch`) ; puis les **badges du lot** ; puis « …ou saisir un n° » ; puis la lampe de chaque PAR.
+- **Lampe par PAR** : chaque PAR du lot a sa ligne, lampe déjà montée présélectionnée, à valider ; assigner est refusé tant qu'un PAR n'a pas de lampe (un appel `assign_items` par lampe).
+- Le champ « Gel appliqué à tout le lot » est supprimé (les gels se mettent par projecteur, par sélection dans le modèle déployé, ou sur la feuille de patch). Aucun changement Supabase.
+
 ### Projecteurs affectés rangés par modèle (v1.49.2)
 - « + Affecter manuellement » s'ouvre directement sur **Scan QR** sur écran tactile (téléphone) et sur **Liste** sur ordinateur ; l'autre mode reste à un appui (v1.49.4).
 - Carte « Projecteurs affectés » plus sobre : un groupe par modèle, **replié par défaut**, avec « Demandé N · Affectés M » (demandé = somme des demandes du modèle, toutes lampes confondues ; un modèle seulement demandé apparaît avec 0 affecté, non déployable). Déployer un modèle replie le précédent ; « indispo. » signale les projecteurs bloqués ; le chiffre passe en rouge quand il y a moins d'affectés que demandés. Les anciennes pastilles de filtre et l'étiquette « manuel » disparaissent ; La barre « Tout cocher / Gel sur la sélection / Retirer la sélection » apparaît **dans le modèle déployé** (sous son en-tête, pas en haut de la carte) ; changer de modèle ou replier la carte vide la sélection (v1.49.3). Aucun changement Supabase.

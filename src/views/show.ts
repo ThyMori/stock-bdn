@@ -5,6 +5,7 @@ import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf, splitGelRefs } from '../gels';
+import { POSITION_GROUPS } from '../patch';
 import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
 import { similarNames } from '../patchSuggest';
 import { toast } from '../ui/toast';
@@ -26,10 +27,11 @@ type Mode = 'view' | 'pick' | 'scan';
 export const showView: ViewFactory = ([id]) => {
   let mode: Mode = 'view';
   const sel = new Set<number>();
-  let type = '', q = '', lamp = '', msg = '';
+  let type = '', q = '', msg = '';
+  let pos = '';                                  // position facultative donnée à tout le lot (feuille de patch)
+  const lampBy = new Map<number, string>();      // lampe validée pour chaque PAR du lot (par défaut : celle déjà montée dessus)
   let stopScan: (() => void) | null = null;
   let composer: HTMLElement | null = null;
-  let gref = '';
   const rsel = new Set<number>();
   let demFolded = true, itemsFolded = true, wallFolded = true;   // « Matériel demandé » et « Projecteurs affectés » : repliés au départ (pas mémorisé)
   let modelFilter = '';   // modèle affiché dans la liste des projecteurs ('' = tous) : un filtre, pas une sélection
@@ -54,25 +56,18 @@ export const showView: ViewFactory = ([id]) => {
     return list;
   };
 
-  /** Lampes actuellement montées sur les PAR du lot (nom → nombre), pour pré-sélectionner et prévenir si elles diffèrent. */
-  const lotLamps = (): Map<string, number> => {
-    const d = view(), m = new Map<string, number>();
-    for (const n of sel) {
-      const it = d.items.find((i) => i.id === n); if (!it || !isPar(n) || !it.lamp_id) continue;
-      const name = d.lamps.find((l) => l.id === it.lamp_id)?.name; if (name) m.set(name, (m.get(name) ?? 0) + 1);
-    }
-    return m;
-  };
-  /** Pré-sélectionne la lampe montée sur le PAR qu'on vient d'ajouter au lot (même si une autre lampe avait été choisie avant) ; sans effet si elle n'est pas dans les lampes proposées. */
+  /** PAR ajouté au lot : sa lampe montée est proposée par défaut (à valider) ; sans effet si elle n'est pas dans les lampes proposées. */
   const suggestLamp = (n: number): void => {
     const it = view().items.find((i) => i.id === n);
-    if (it && isPar(n) && it.lamp_id && lampOptions().some((l) => l.id === it.lamp_id)) lamp = it.lamp_id;
+    if (it && isPar(n)) lampBy.set(n, it.lamp_id && lampOptions().some((l) => l.id === it.lamp_id) ? it.lamp_id : '');
   };
-  /** Petite mention sous la liste des lampes : lampe montée, ou avertissement si le lot en mélange plusieurs. */
-  const lampHint = (): string => {
-    const m = lotLamps(); if (!m.size) return '';
-    return m.size === 1 ? `Montée actuellement : ${[...m.keys()][0]}` : `⚠ Lampes montées différentes : ${[...m].map(([k, c]) => `${k} ×${c}`).join(', ')}`;
-  };
+  /** Une ligne par PAR du lot : sa lampe, déjà choisie si elle est montée, à valider (obligatoire avant d'assigner). */
+  const lampRows = (staged: number[]): string => staged.filter(isPar).map((n) => {
+    const cur = lampBy.get(n) ?? '';
+    return `<label class="f lamprow">PAR n° ${n} : lampe<select data-lamp="${n}"><option value="">— choisir —</option>${lampOptions().map((l) => `<option value="${l.id}" ${l.id === cur ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>`;
+  }).join('');
+  /** Position facultative du lot : liste déroulante (zones du théâtre). */
+  const posSelect = (): string => `<label class="f">Position du lot (facultatif)<select id="lotpos"><option value="">— aucune —</option>${POSITION_GROUPS.map((g) => `<optgroup label="${esc(g.label)}">${g.items.map((i) => `<option value="${esc(i)}" ${i === pos ? 'selected' : ''}>${esc(i)}</option>`).join('')}</optgroup>`).join('')}</select></label>`;
 
   function paint(root: HTMLElement) {
     const d = view();
@@ -152,23 +147,23 @@ export const showView: ViewFactory = ([id]) => {
       const tokens = norm(q).split(/\s+/).filter(Boolean);
       const rows = d.items.filter((i) => !taken.has(i.id)).map((i) => ({ i, d: describe(d, i) }))
         .filter((r) => (!type || r.d.model?.type_id === type) && tokens.every((t) => norm(`${r.i.id} ${r.d.model?.name ?? ''} ${r.d.type?.name ?? ''}`).includes(t)));
-      const needLamp = [...sel].some(isPar);
       const staged = [...sel].sort((a, b) => a - b);
       picker = `<div class="card stack picker"><h2>${mode === 'scan' ? 'Scanner un lot' : 'Ajouter des projecteurs'}</h2>
         <div class="chips"><button class="chip" data-act="mode" data-v="pick" aria-pressed="${mode === 'pick'}">Liste</button>
           <button class="chip" data-act="mode" data-v="scan" aria-pressed="${mode === 'scan'}">Scan QR</button></div>
         ${mode === 'scan' ? `<div class="viewport"><video playsinline muted></video></div>
-          <form id="manual" class="row"><input name="n" inputmode="numeric" pattern="[0-9]*" placeholder="…ou saisir un n°" autocomplete="off"><button class="btn">Ajouter</button></form>
-          <div class="sub" role="status">${esc(msg)}</div>
-          <div class="sub">Lot : ${staged.length ? staged.map((n) => `<button class="chip" data-act="toggle" data-v="${n}" aria-pressed="true">${n} ✕</button>`).join(' ') : 'vide'}</div>`
+          ${posSelect()}
+          <div class="sub" id="lot">Lot : ${staged.length ? staged.map((n) => `<button class="chip" data-act="toggle" data-v="${n}" aria-pressed="true">${n} ✕</button>`).join(' ') : 'vide'}</div>
+          <form id="manual" class="row"><input name="n" inputmode="numeric" pattern="[0-9]*" placeholder="…ou saisir un n°" autocomplete="off" aria-label="Saisir un numéro de projecteur"><button class="btn">Ajouter</button></form>
+          <div class="sub" role="status">${esc(msg)}</div>`
         : `<input id="q" type="search" placeholder="N°, modèle…" autocomplete="off" value="${esc(q)}">
           <div class="chips"><span class="sub">Filtre :</span><button class="chip" data-act="type" data-v="" aria-pressed="${type === ''}">Tous types</button>
             ${usedTypes.map((t) => `<button class="chip" data-act="type" data-v="${t.id}" aria-pressed="${type === t.id}">${esc(t.name)}</button>`).join('')}</div>
           <div class="list pick-list">${rows.map(({ i, d: ds }) => `<label class="item"><input type="checkbox" data-act="toggle" data-v="${i.id}" ${sel.has(i.id) ? 'checked' : ''}>
             <div class="num">${i.id}</div><div class="grow"><div class="t">${esc(ds.model?.name)}</div><div class="s">${esc(ds.type?.name)}</div></div>
             <span class="badge ${i.eff ?? i.status}">${esc({ dispo: 'Disponible', utilise: 'Utilisé', sav: 'SAV', en_pret: 'En prêt' }[i.eff ?? i.status])}</span></label>`).join('') || '<div class="empty">Aucun projecteur</div>'}</div>`}
-        <div class="gelpick"><label class="f">Gel (facultatif, appliqué à tout le lot)<input id="gref" placeholder="Réf., ex. L201 ou R80" value="${esc(gref)}" autocomplete="off"></label></div>
-        ${needLamp ? `<label class="f">Lampe requise pour les PAR<select id="lamp"><option value="">— choisir —</option>${lampOptions().map((l) => `<option value="${l.id}" ${l.id === lamp ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select><span class="sub" id="lamphint">${esc(lampHint())}</span></label>` : ''}
+        ${mode === 'pick' ? posSelect() : ''}
+        <div id="lamprows" class="stack">${lampRows(staged)}</div>
         <div id="aerr" class="sub warn" role="alert">${esc(mode === 'pick' ? msg : '')}</div>
         <div class="row"><button class="btn primary grow" data-act="assign" ${staged.length ? '' : 'disabled'}>Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}</button>
           <button class="btn" data-act="mode" data-v="view">Fermer</button></div></div>`;
@@ -229,16 +224,13 @@ export const showView: ViewFactory = ([id]) => {
   /** Met à jour message / lot sans recréer la vidéo (sinon la caméra redémarre à chaque scan). */
   function repaintKeepVideo(root: HTMLElement) {
     const staged = [...sel].sort((a, b) => a - b);
+    for (const n of [...lampBy.keys()]) if (!sel.has(n)) lampBy.delete(n);   // un PAR sorti du lot n'a plus de lampe à valider
     const status = root.querySelector('[role="status"]'); if (status) status.textContent = msg;
-    const subs = root.querySelectorAll('.card .sub');
-    const lot = [...subs].find((x) => x.textContent?.startsWith('Lot'));
+    const lot = root.querySelector('#lot');
     if (lot) lot.innerHTML = `Lot : ${staged.length ? staged.map((n) => `<button class="chip" data-act="toggle" data-v="${n}" aria-pressed="true">${n} ✕</button>`).join(' ') : 'vide'}`;
+    const lr = root.querySelector('#lamprows'); if (lr) lr.innerHTML = lampRows(staged);   // la caméra n'est pas recréée
     const btn = root.querySelector<HTMLButtonElement>('[data-act="assign"]');
     if (btn) { btn.disabled = !staged.length; btn.textContent = `Assigner ${staged.length || ''} projecteur${staged.length > 1 ? 's' : ''}`; }
-    const need = staged.some(isPar);
-    if (need !== !!root.querySelector('#lamp')) { stopScan?.(); stopScan = null; paint(root); return; }
-    const ls = root.querySelector<HTMLSelectElement>('#lamp'); if (ls) ls.value = lamp;   // met à jour la présélection sans recréer la caméra
-    const hint = root.querySelector('#lamphint'); if (hint) hint.textContent = lampHint();
   }
 
   /** Ouvre le client mail avec une invitation prête à envoyer (aucun service d'envoi à configurer). */
@@ -259,10 +251,9 @@ export const showView: ViewFactory = ([id]) => {
       paint(root);
       root.addEventListener('input', (e) => {
         const t = e.target as HTMLInputElement;
-        if (t.id === 'gref') gref = t.value;
         if (t.id === 'q') { q = t.value; const pos = t.selectionStart; paint(root); const n = root.querySelector<HTMLInputElement>('#q'); n?.focus(); n?.setSelectionRange(pos, pos); }
       });
-      root.addEventListener('change', (e) => { const t = e.target as HTMLSelectElement; if (t.id === 'lamp') lamp = t.value; });
+      root.addEventListener('change', (e) => { const t = e.target as HTMLSelectElement; if (t.id === 'lotpos') pos = t.value; else if (t.dataset?.lamp) lampBy.set(Number(t.dataset.lamp), t.value); });
       root.addEventListener('submit', (e) => {
         if ((e.target as HTMLElement).id !== 'manual') return;
         e.preventDefault();
@@ -285,7 +276,7 @@ export const showView: ViewFactory = ([id]) => {
           const miss = (r.data as { missing?: number } | null)?.missing ?? 0;
           err(miss > 0 ? `⚠ Impossible de tout fournir : il manque ${miss} projecteur${miss > 1 ? 's' : ''} (à réparer, louer ou emprunter).` : '');
         };
-        if (act === 'mode') {   /* « Affecter manuellement » : Scan QR sur téléphone (écran tactile), liste sur ordinateur */ mode = v === 'start' ? (window.matchMedia('(pointer: coarse)').matches ? 'scan' : 'pick') : (v as Mode); msg = ''; if (mode === 'view') { sel.clear(); lamp = ''; } paint(root); if (mode === 'pick') root.querySelector('.picker')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }   // la fenêtre d'ajout s'ouvre en haut de la liste, bien visible
+        if (act === 'mode') {   /* « Affecter manuellement » : Scan QR sur téléphone (écran tactile), liste sur ordinateur */ mode = v === 'start' ? (window.matchMedia('(pointer: coarse)').matches ? 'scan' : 'pick') : (v as Mode); msg = ''; if (mode === 'view') { sel.clear(); lampBy.clear(); pos = ''; } paint(root); if (mode !== 'view') root.querySelector('.picker')?.scrollIntoView({ block: mode === 'scan' ? 'start' : 'nearest', behavior: 'smooth' }); }   // scan : la caméra en haut de l'écran, le lot visible dessous   // la fenêtre d'ajout s'ouvre en haut de la liste, bien visible
         else if (act === 'mount') { const r = await rpcCall('set_show_mounted', { p_show: id, p_value: v === '1' }); err(r.error ?? ''); }
         else if (act === 'type') { type = v ?? ''; paint(root); }
         else if (act === 'toggle') {
@@ -296,18 +287,25 @@ export const showView: ViewFactory = ([id]) => {
         }
         else if (act === 'assign') {
           const items = [...sel];
-          if (items.some(isPar) && !lamp) { msg = 'Choisis la lampe requise pour les PAR.'; const a = root.querySelector('#aerr'); if (a) a.textContent = msg; return; }
-          const r = await rpcCall('assign_items', { p_show: id, p_items: items, p_lamp: items.some(isPar) ? lamp : null });
-          if (r.error) { msg = r.error; const a = root.querySelector('#aerr'); if (a) a.textContent = msg; return; }
-          const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
-          const skipped = res?.skipped ?? [];
-          let gelNote = '';
-          if (gref.trim() && res?.added.length) {
-            const g = await rpcCall('add_gels', { p_show: id, p_items: res.added, p_ref: gref.trim(), p_color: gelColorOf(gref) });
-            gelNote = g.error ? ` Gel non ajouté : ${g.error}` : ` Gel ${gref.trim()} ajouté.`;
+          const pars = items.filter(isPar);
+          if (pars.some((n) => !lampBy.get(n))) { msg = 'Valide la lampe de chaque PAR du lot.'; const a = root.querySelector('#aerr'); if (a) a.textContent = msg; return; }
+          // un appel par lampe (assign_items prend une seule lampe) ; les autres projecteurs partent sans lampe
+          const groups = new Map<string, number[]>();
+          for (const n of items) { const k = isPar(n) ? lampBy.get(n)! : ''; groups.set(k, [...(groups.get(k) ?? []), n]); }
+          const added: number[] = [], skipped: { item: number; reason: string }[] = [];
+          for (const [k, list] of groups) {
+            const r = await rpcCall('assign_items', { p_show: id, p_items: list, p_lamp: k || null });
+            if (r.error) { msg = r.error; const a = root.querySelector('#aerr'); if (a) a.textContent = (added.length ? `${added.length} déjà assigné(s). ` : '') + msg; if (added.length) paint(root); return; }
+            const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
+            added.push(...(res?.added ?? [])); skipped.push(...(res?.skipped ?? []));
           }
-          sel.clear(); lamp = ''; gref = ''; mode = 'view'; paint(root);
-          err(`${res?.added.length ?? 0} assigné(s).` + gelNote + (skipped.length ? ' Refusés : ' + skipped.map((s) => `n° ${s.item} (${s.reason})`).join(' ; ') : ''));
+          let posNote = '';
+          if (pos && added.length) {   // position facultative : mise sur la feuille de patch de chaque projecteur assigné
+            const p = await rpcCall('patch_batch', { p_show: id, p_targets: added.map((n) => ({ item: n })), p_op: 'field', p_value: { field: 'position', value: pos } });
+            posNote = p.error ? ` Position non appliquée : ${p.error}` : ` Position ${pos} appliquée.`;
+          }
+          sel.clear(); lampBy.clear(); pos = ''; mode = 'view'; paint(root);
+          err(`${added.length} assigné(s).` + posNote + (skipped.length ? ' Refusés : ' + skipped.map((s) => `n° ${s.item} (${s.reason})`).join(' ; ') : ''));
         }
         else if (act === 'gel') {
           const used = [...new Set(view().showGels.filter((g) => g.show_id === id).map((g) => g.ref))].sort();

@@ -579,3 +579,5 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .mgrp > .selbar { border: 2px solid var(--ink); border-top: 0; padding: 6px 8px; gap: 6px; }
 .mgrp > .selbar + .list { border-top: 0; }
 .mgrp > .selbar .btn { min-height: 40px; padding: 4px 10px; font-size: .85rem; }
+.picker .viewport { aspect-ratio: 4 / 3; max-height: 34dvh; width: 100%; }   /* caméra moins haute : le lot reste visible pendant le scan */
+.lamprow select { min-width: 0; }
