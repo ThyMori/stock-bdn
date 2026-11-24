@@ -140,6 +140,7 @@ Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier m
 ### Scan d'un lot (v1.50.0)
 - Mode Scan QR : la caméra est **en haut** (l'écran défile pour la placer en haut, hauteur limitée) ; juste dessous, **Position du lot** (facultatif, liste des positions du patch, appliquée aux projecteurs assignés via `patch_batch`) ; puis les **badges du lot** ; puis la lampe de chaque PAR ; puis « …ou saisir un n° » tout en bas, juste avant le bouton Assigner (v1.50.2).
 - **Lampe par PAR** : chaque PAR du lot a sa ligne, lampe déjà montée présélectionnée, à valider ; assigner est refusé tant qu'un PAR n'a pas de lampe (un appel `assign_items` par lampe).
+- Si la lampe choisie pour un PAR diffère de celle montée, **la fiche du projecteur est aussi mise à jour** (`set_lamp`, journalisé, v1.50.3) ; un échec est signalé dans le message final sans bloquer l'assignation.
 - Le champ « Gel appliqué à tout le lot » est supprimé (les gels se mettent par projecteur, par sélection dans le modèle déployé, ou sur la feuille de patch). Aucun changement Supabase.
 
 ### Projecteurs affectés rangés par modèle (v1.49.2)

@@ -299,13 +299,22 @@ export const showView: ViewFactory = ([id]) => {
             const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
             added.push(...(res?.added ?? [])); skipped.push(...(res?.skipped ?? []));
           }
+          // lampe changée pendant l'affectation : la fiche du projecteur est mise à jour aussi (même fonction que « passer en CPxx »)
+          const lampNotes: string[] = [];
+          for (const n of added.filter(isPar)) {
+            const want = lampBy.get(n), cur = view().items.find((i) => i.id === n)?.lamp_id;
+            if (!want || want === cur) continue;
+            const r = await rpcCall('set_lamp', { p_item: n, p_lamp: want });
+            lampNotes.push(r.error ? `n° ${n} : lampe non changée (${r.error})` : `n° ${n} → ${(view().lamps.find((l) => l.id === want)?.name ?? want)}`);
+          }
+          const lampNote = lampNotes.length ? ` Lampe mise à jour sur la fiche : ${lampNotes.join(' ; ')}.` : '';
           let posNote = '';
           if (pos && added.length) {   // position facultative : mise sur la feuille de patch de chaque projecteur assigné
             const p = await rpcCall('patch_batch', { p_show: id, p_targets: added.map((n) => ({ item: n })), p_op: 'field', p_value: { field: 'position', value: pos } });
             posNote = p.error ? ` Position non appliquée : ${p.error}` : ` Position ${pos} appliquée.`;
           }
           sel.clear(); lampBy.clear(); pos = ''; mode = 'view'; paint(root);
-          err(`${added.length} assigné(s).` + posNote + (skipped.length ? ' Refusés : ' + skipped.map((s) => `n° ${s.item} (${s.reason})`).join(' ; ') : ''));
+          err(`${added.length} assigné(s).` + lampNote + posNote + (skipped.length ? ' Refusés : ' + skipped.map((s) => `n° ${s.item} (${s.reason})`).join(' ; ') : ''));
         }
         else if (act === 'gel') {
           const used = [...new Set(view().showGels.filter((g) => g.show_id === id).map((g) => g.ref))].sort();
