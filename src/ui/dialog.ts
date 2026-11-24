@@ -14,7 +14,7 @@ export interface Field {
 }
 
 /** Petite fenêtre de saisie. Renvoie les valeurs saisies, ou null si on annule. `validate` renvoie un message d'erreur ou null. */
-export function openForm(title: string, fields: Field[], opts: { submit?: string; validate?: (v: Record<string, string>) => string | null } = {}): Promise<Record<string, string> | null> {
+export function openForm(title: string, fields: Field[], opts: { submit?: string; focus?: string; validate?: (v: Record<string, string>) => string | null } = {}): Promise<Record<string, string> | null> {
   return new Promise((resolve) => {
     const dlg = document.createElement('dialog'); dlg.className = 'dlg';
     const input = (f: Field) => f.type === 'swatch'
@@ -99,5 +99,6 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
     // sur téléphone, une fenêtre de scan ne doit pas faire apparaître le clavier : on retire le focus du champ de filtre (il revient si on le touche)
     if (fields.some((f) => f.scan) && window.matchMedia('(pointer: coarse)').matches) (document.activeElement as HTMLElement | null)?.blur();
     else dlg.querySelector<HTMLElement>('input, textarea, select')?.focus();   // un champ de filtre passe en premier
+    if (opts.focus) dlg.querySelector<HTMLElement>(`[name="${opts.focus}"]`)?.focus();   // champ demandé par l'appelant : il prend le focus (curseur dedans)
   });
 }

@@ -87,7 +87,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
         { name: 'until', label: 'Fin prévue', type: 'date', min: today, hint: 'Laisse vide si la date de retour n\'est pas connue.' },
         // proposition de déclarer aussi une panne (même mécanisme que le remplacement dans la feuille de patch)
         { name: 'fault', label: 'Déclarer aussi une panne ?', type: 'select', options: [['oui', 'Oui, en même temps'], ['', 'Non']], value: 'oui' },   // « Oui » proposé par défaut
-        { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea', hint: 'Laisse vide pour reprendre le motif du SAV.' }], { submit: 'Passer en SAV', validate: dates });
+        { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea', hint: 'Laisse vide pour reprendre le motif du SAV.' }], { submit: 'Passer en SAV', focus: 'desc', validate: dates });
       if (v) {
         void setStatus(id, s, { note: v.note, from: v.from, until: v.until });   // passe le projecteur en SAV
         if (v.fault === 'oui') {                                               // l'utilisateur a choisi de déclarer une panne
