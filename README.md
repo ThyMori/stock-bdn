@@ -137,6 +137,14 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Substitution d'un modèle (v1.47.0)
+Sur une demande qui manque : **Gérer → Substitution : un autre modèle**. On choisit le modèle de remplacement (les modèles **similaires** d'abord — liste `SIMILAR` de `src/patchSuggest.ts`, la même que pour les suggestions du patch — puis les autres, avec le nombre de projecteurs « libres » : sans panne, SAV, prêt ni autre spectacle aux dates ; indicatif, il ne tient pas compte des objectifs des autres spectacles) et la quantité.
+- Table `show_substitutions` (demande, modèle, quantité). La **demande d'origine ne change pas** : « 4 × 614 SX demandés, dont 2 par 614 S ».
+- Calcul (`reallocate_all`) : les remplacés ne comptent plus dans le besoin du modèle d'origine ; ils comptent dans celui du modèle de remplacement, sur le stock partagé entre spectacles. Si le remplaçant manque à son tour, le manque **réapparaît sur la demande d'origine**.
+- Plusieurs substitutions possibles par demande ; chacune se retire (« Suppr. »). Quantité au plus égale à ce qui reste à couvrir (demande − prêts / locations − substitutions) ; la demande ne peut pas baisser sous ce total. Supprimer la demande supprime ses substitutions.
+- Les n° précis du modèle de remplacement s'affectent comme d'habitude (« Projecteurs affectés », patch) et comptent pour l'objectif.
+- Fonctions `add_substitution`, `delete_substitution` ; droits : régisseur général, admin et régisseurs assignés (comme prêts / locations) ; une ligne au journal à l'ajout et au retrait ; pas de notification. Pas de dates (vaut pour tout le spectacle), pas de lampe pour un PAR.
+
 ### Matériel demandé = objectifs de quantité (v1.46.0)
 **Changement de philosophie.** Une demande (modèle, lampe pour un PAR, quantité) est un **objectif**, pris par exemple sur une fiche technique ou un plan de feu. L'appli ne choisit plus aucun projecteur : les n° précis s'affectent à la main (« Projecteurs affectés », scan, feuille de patch). Cela remplace l'assignation automatique de la v1.9 et le « projecteur du patch = matériel demandé » de la v1.36.0.
 
@@ -285,6 +293,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` bloc v1.24 | `patch_set_item`, `patch_add_line`, `patch_delete_line`, `patch_add_gel`, `patch_delete_gel` | v1.24.0 |
 | `schema.sql` (v1.44.0) | `patch_lines.state` / `state_note` (+ reprise des anciens focus), `set_patch_field` accepte le champ `state` | v1.44.0 |
 | `schema.sql` (v1.46.0) | `reallocate_all` réécrit (calcul du manque jour par jour, stock partagé), colonne `show_demands.available`, projecteurs « auto » repris comme affectés à la main, `swap_show_item` / `release_show_item` supprimées | v1.46.0 |
+| `schema.sql` (v1.47.0) | table `show_substitutions`, fonctions `add_substitution` / `delete_substitution`, `reallocate_all` tient compte des substitutions | v1.47.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |

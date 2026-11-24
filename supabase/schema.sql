@@ -1014,6 +1014,21 @@ create index if not exists show_externals_show_idx on show_externals(show_id);
 alter table show_externals enable row level security;
 drop policy if exists show_externals_select on show_externals;
 create policy show_externals_select on show_externals for select using (has_role('technicien'));
+-- v1.46.2 : substitutions. Une part d'une demande est couverte par un AUTRE modèle (ex. 2 × 614 SX remplacés par 2 × 614 S).
+-- La demande d'origine ne change pas ; le modèle de remplacement consomme du stock (partagé avec les autres spectacles).
+create table if not exists show_substitutions (
+  id             uuid primary key default gen_random_uuid(),
+  show_id        uuid not null references shows(id) on delete cascade,
+  demand_id      uuid not null references show_demands(id) on delete cascade,
+  model_id       text not null references models(id),
+  qty            int  not null check (qty between 1 and 500),
+  added_by_label text,
+  added_at       timestamptz not null default now()
+);
+create index if not exists show_substitutions_show_idx on show_substitutions(show_id);
+alter table show_substitutions enable row level security;
+drop policy if exists show_substitutions_select on show_substitutions;
+create policy show_substitutions_select on show_substitutions for select using (has_role('technicien'));
 alter table show_demands enable row level security;
 drop policy if exists show_demands_select on show_demands;
 create policy show_demands_select on show_demands for select using (has_role('technicien'));
@@ -1053,18 +1068,24 @@ begin
   update show_items si set problem = item_blocked(si.item_id, si.show_id, s.start_date, s.end_date, true)
     from shows s where s.id = si.show_id and s.end_date >= current_date;
   with up as (select id, start_date, end_date from shows where end_date >= current_date),
-  dem as (   -- demandes, avec la part non couverte par les prêts / locations
+  dem as (   -- demandes, avec la part non couverte par les prêts / locations / substitutions
     select d.id, d.show_id, d.model_id, d.added_at, d.qty,
-           (d.qty - least(d.qty, coalesce((select sum(e.qty) from show_externals e where e.demand_id = d.id), 0)))::int as unc
+           (d.qty - least(d.qty, coalesce((select sum(e.qty) from show_externals e where e.demand_id = d.id), 0)
+                               + coalesce((select sum(b.qty) from show_substitutions b where b.demand_id = d.id), 0)))::int as unc
       from show_demands d join up on up.id = d.show_id),
+  claims as (   -- ce que chaque demande réclame au stock : sa part directe (k=0), puis ses substitutions (k=1)
+    select dm.id as demand_id, dm.show_id, dm.model_id, dm.unc as amt, 0 as k, dm.added_at, dm.id as cid from dem dm
+    union all
+    select sb.demand_id, sb.show_id, sb.model_id, sb.qty, 1, sb.added_at, sb.id
+      from show_substitutions sb join up on up.id = sb.show_id),
+  want as (select show_id, model_id, sum(amt)::int as w from claims group by show_id, model_id),
   asg as (   -- projecteurs déjà affectés, par spectacle et modèle
     select si.show_id, i.model_id, count(*)::int as n
       from show_items si join items i on i.id = si.item_id join up on up.id = si.show_id group by si.show_id, i.model_id),
   need as (
     select coalesce(a.show_id, b.show_id) as show_id, coalesce(a.model_id, b.model_id) as model_id,
-           greatest(coalesce(a.u, 0), coalesce(b.n, 0))::int as n
-      from (select show_id, model_id, sum(unc)::int as u from dem group by show_id, model_id) a
-      full join asg b on a.show_id = b.show_id and a.model_id = b.model_id),
+           coalesce(a.w, 0) as w, greatest(coalesce(a.w, 0), coalesce(b.n, 0))::int as n
+      from want a full join asg b on a.show_id = b.show_id and a.model_id = b.model_id),
   days as (
     select up.id as show_id, g::date as day
       from up, generate_series(greatest(up.start_date, current_date), up.end_date, interval '1 day') g),
@@ -1079,23 +1100,29 @@ begin
       from pairs p),
   tot as (select n.model_id, dy.day, sum(n.n)::int as t from need n join days dy on dy.show_id = n.show_id group by n.model_id, dy.day),
   av as (
-    select n.show_id, n.model_id, n.n, min(c.c - (t.t - n.n))::int as avail
+    select n.show_id, n.model_id, n.n, n.w, min(c.c - (t.t - n.n))::int as avail
       from need n
       join days dy on dy.show_id = n.show_id
       join cap c on c.model_id = n.model_id and c.day = dy.day
       join tot t on t.model_id = n.model_id and t.day = dy.day
-     group by n.show_id, n.model_id, n.n),
+     group by n.show_id, n.model_id, n.n, n.w),
   aok as (   -- projecteurs affectés et utilisables : ils comptent pour atteindre l'objectif
     select si.show_id, i.model_id, count(*)::int as n
       from show_items si join items i on i.id = si.item_id join up on up.id = si.show_id where si.problem is null group by si.show_id, i.model_id),
-  miss as (
-    select dm.id, a.avail,
-           least(dm.unc, greatest(0,
-             least(greatest(0, a.n - a.avail), greatest(0, sum(dm.unc) over (partition by dm.show_id, dm.model_id) - coalesce(ao.n, 0)))
-             - coalesce(sum(dm.unc) over (partition by dm.show_id, dm.model_id order by dm.added_at desc, dm.id rows between unbounded preceding and 1 preceding), 0)))::int as m
-      from dem dm join av a on a.show_id = dm.show_id and a.model_id = dm.model_id
-      left join aok ao on ao.show_id = dm.show_id and ao.model_id = dm.model_id)
-  update show_demands dd set missing = x.m, available = x.avail from miss x where dd.id = x.id;
+  alloc as (   -- manque d'un (spectacle, modèle), réparti sur les réclamations : parts directes d'abord, la dernière ajoutée en premier
+    select c.demand_id,
+           least(c.amt, greatest(0,
+             least(greatest(0, a.n - a.avail), greatest(0, a.w - coalesce(ao.n, 0)))
+             - coalesce(sum(c.amt) over (partition by c.show_id, c.model_id order by c.k, c.added_at desc, c.cid rows between unbounded preceding and 1 preceding), 0)))::int as m
+      from claims c
+      join av a on a.show_id = c.show_id and a.model_id = c.model_id
+      left join aok ao on ao.show_id = c.show_id and ao.model_id = c.model_id),
+  tm as (select demand_id, sum(m)::int as m from alloc group by demand_id)
+  update show_demands dd
+     set missing = least(dd.qty, coalesce(t.m, 0)),
+         available = (select a.avail from av a where a.show_id = dd.show_id and a.model_id = dd.model_id)
+    from dem dm left join tm t on t.demand_id = dm.id
+   where dd.id = dm.id;
 end $$;
 
 create or replace function reallocate_trg() returns trigger language plpgsql security definer set search_path = public as $$
@@ -1179,6 +1206,46 @@ begin
   perform reallocate_all();
 end $$;
 
+-- Substitution : une part d'une demande est couverte par un autre modèle de projecteur.
+create or replace function add_substitution(p_show uuid, p_demand uuid, p_model text, p_qty int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d show_demands; nm text; mo text; mn text; lbl text; rest int; miss int;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  select * into d from show_demands where id = p_demand and show_id = p_show;
+  if not found then raise exception 'Demande introuvable' using errcode = '22023'; end if;
+  select name into mn from models where id = p_model;
+  if mn is null then raise exception 'Modèle inconnu' using errcode = '22023'; end if;
+  if p_model = d.model_id then raise exception 'Choisis un autre modèle que celui demandé' using errcode = '22023'; end if;
+  if p_qty is null or p_qty < 1 or p_qty > 500 then raise exception 'Quantité invalide' using errcode = '22023'; end if;
+  rest := d.qty - coalesce((select sum(qty) from show_externals where demand_id = d.id), 0) - coalesce((select sum(qty) from show_substitutions where demand_id = d.id), 0);
+  if p_qty > rest then raise exception 'Quantité trop grande : il reste % à couvrir sur cette demande', greatest(rest, 0) using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  insert into show_substitutions (show_id, demand_id, model_id, qty, added_by_label) values (p_show, p_demand, p_model, p_qty, lbl);
+  select name into nm from shows where id = p_show; select name into mo from models where id = d.model_id;
+  perform log_event('SPECTACLE', format('« %s » : %s × %s remplacé%s par %s × %s (substitution)', nm, p_qty, mo, case when p_qty > 1 then 's' else '' end, p_qty, mn));
+  perform reallocate_all();
+  select coalesce(sum(missing), 0)::int into miss from show_demands where show_id = p_show;
+  return jsonb_build_object('missing', miss);
+end $$;
+
+create or replace function delete_substitution(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare b show_substitutions; nm text; mn text; mo text;
+begin
+  select * into b from show_substitutions where id = p_id;
+  if not found then return; end if;
+  if not can_act_show(b.show_id) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  delete from show_substitutions where id = p_id;
+  select name into nm from shows where id = b.show_id; select name into mn from models where id = b.model_id;
+  select m.name into mo from show_demands d join models m on m.id = d.model_id where d.id = b.demand_id;
+  perform log_event('SPECTACLE', format('« %s » : substitution %s × %s (pour %s) retirée', nm, b.qty, mn, coalesce(mo, '?')));
+  perform reallocate_all();
+end $$;
+revoke all on function add_substitution(uuid,uuid,text,int) from public;
+revoke all on function delete_substitution(uuid) from public;
+grant execute on function add_substitution(uuid,uuid,text,int) to authenticated;
+grant execute on function delete_substitution(uuid) to authenticated;
 revoke all on function add_external(uuid,uuid,text,text,int,date,date,text) from public;
 revoke all on function delete_external(uuid) from public;
 grant execute on function add_external(uuid,uuid,text,text,int,date,date,text) to authenticated;
@@ -1848,7 +1915,7 @@ create or replace function demand_dec(p_demand uuid) returns void
 language plpgsql security definer set search_path = public as $$
 declare ext int; nq int;
 begin
-  select coalesce(sum(qty), 0)::int into ext from show_externals where demand_id = p_demand;
+  select coalesce((select sum(qty) from show_externals where demand_id = p_demand), 0)::int + coalesce((select sum(qty) from show_substitutions where demand_id = p_demand), 0)::int into ext;   -- jamais sous les prêts / locations / substitutions déjà saisis
   select greatest(qty - 1, ext) into nq from show_demands where id = p_demand;
   if nq is null then return; end if;
   if nq <= 0 then delete from show_demands where id = p_demand;   -- plus rien demandé : la quantité 0 n'existe pas

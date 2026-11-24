@@ -5,7 +5,8 @@ import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf } from '../gels';
-import { alertText, externalLabel, showAlerts } from '../alerts';
+import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
+import { similarNames } from '../patchSuggest';
 import { toast } from '../ui/toast';
 import { esc, fmtDateTime, parseScan, sortShows, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
@@ -119,15 +120,17 @@ export const showView: ViewFactory = ([id]) => {
     // projecteurs affectés (utilisables) qui comptent pour cette demande : même modèle, et même lampe pour un PAR
     const own = (x: (typeof demands)[number]['x']) => d.showItems.filter((r) => r.show_id === id && !r.problem && d.items.find((i) => i.id === r.item_id)?.model_id === x.model_id && (!x.lamp_id || r.lamp_id === x.lamp_id)).length;
     const extQty = (demId: string) => d.showExternals.filter((e) => e.demand_id === demId).reduce((n, e) => n + e.qty, 0);
+    const subQty = (demId: string) => d.showSubstitutions.filter((b) => b.demand_id === demId).reduce((n, b) => n + b.qty, 0);   // part couverte par d'autres modèles
     const myAlert = showAlerts(d, '0000-00-00').find((a) => a.show.id === id);
     const alertCard = myAlert && show.end_date >= today ? `<div class="alert-card" role="alert">⚠ ALERTE MATÉRIEL : ${esc(alertText(myAlert))}<br>À réparer, louer ou emprunter.
       <ul>${myAlert.missing.map((m) => `<li>manque ${m.n} × ${esc(m.label)}</li>`).join('')}${myAlert.problems.map((p) => `<li>n° ${p.item} : ${esc(p.why)}</li>`).join('')}</ul></div>` : '';
     const missingTotal = demands.reduce((n, r) => n + r.x.missing, 0);
     const demandCard = `<div class="card sec sec-dem"><div class="row wrap"><button class="fold grow" data-act="dem-fold" aria-expanded="${!demFolded}" aria-label="${demFolded ? 'Déplier' : 'Replier'} le matériel demandé"><span aria-hidden="true">${demFolded ? '▸' : '▾'}</span> <h2>Matériel demandé (${demands.reduce((n, r) => n + r.x.qty, 0)})</h2></button><span class="tag auto">objectif</span>${demFolded && missingTotal ? `<span class="tag late">manque ${missingTotal}</span>` : ''}${canAssign && !demFolded ? '<button class="btn primary" data-act="dem-add">+ Demande</button>' : ''}</div>
-      ${demFolded ? '' : `<div class="sub">Objectifs de quantité (fiche technique, plan de feu) : l'appli les compare aux projecteurs disponibles aux dates du spectacle, en partageant le stock avec les autres spectacles. Les n° précis se choisissent dans « Projecteurs affectés ».</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">Demandé ${x.qty} · Affectés ${own(x)}${extQty(x.id) ? ` · ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''}${x.available != null ? ` · Disponibles ${Math.max(0, x.available)}` : ''}</div></div>
+      ${demFolded ? '' : `<div class="sub">Objectifs de quantité (fiche technique, plan de feu) : l'appli les compare aux projecteurs disponibles aux dates du spectacle, en partageant le stock avec les autres spectacles. Les n° précis se choisissent dans « Projecteurs affectés ».</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">Demandé ${x.qty} · Affectés ${own(x)}${extQty(x.id) ? ` · ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''}${subQty(x.id) ? ` · ${subQty(x.id)} en substitution` : ''}${x.available != null ? ` · Disponibles ${Math.max(0, x.available)}` : ''}</div></div>
         ${x.missing > 0 ? `<span class="tag late">manque ${x.missing}</span>` : '<span class="tag ok">complet</span>'}
         ${canAssign && x.missing > 0 ? `<button class="btn primary" data-act="ext-add" data-v="${x.id}">Gérer</button>` : ''}
         ${canAssign ? `<button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
+        ${d.showSubstitutions.filter((b) => b.demand_id === x.id).map((b) => `<div class="extline"><span class="tag ext">substitution</span><div class="grow">${b.qty} × ${esc(d.models.find((mm) => mm.id === b.model_id)?.name ?? '?')} à la place de ${esc(m?.name ?? '?')}</div>${canAssign ? `<button class="btn" data-act="sub-del" data-v="${b.id}" aria-label="Retirer cette substitution">Suppr.</button>` : ''}</div>`).join('')}
         ${d.showExternals.filter((e) => e.demand_id === x.id).map((e) => `<div class="extline"><span class="tag ext">${e.kind === 'pret' ? 'prêt' : 'location'}</span><div class="grow">${esc(externalLabel(d, e))}<br><span class="muted">livraison ${esc(fmtDay(e.delivery_date))} · reprise ${esc(fmtDay(e.return_date))}</span></div>${canAssign ? `<button class="btn" data-act="ext-del" data-v="${e.id}" aria-label="Retirer ce prêt ou cette location">Suppr.</button>` : ''}</div>`).join('')}`).join('') || '<div class="empty">Aucune demande : ajoute-en une, ou assigne des projecteurs à la main plus haut.</div>'}`}</div>`;
 
     let picker = '';
@@ -333,16 +336,42 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'ext-add') {
           const dd = view(); const x = dd.showDemands.find((r) => r.id === v); const cs = dd.shows.find((r) => r.id === id); if (!x || !cs) return;
           const m = dd.models.find((r) => r.id === x.model_id);
-          const f = await openForm(`Gérer le manque : ${m?.name ?? ''}`, [
-            { name: 'kind', label: 'Comment le récupérer ?', type: 'select', required: true, value: 'location', options: [['pret', 'Prêté par…'], ['location', 'Loué chez…']] },
-            { name: 'who', label: 'Nom du prêteur / loueur', required: true },
+          // 1re question : comment couvrir le manque ?
+          const way = await openForm(`Gérer le manque : ${m?.name ?? ''}`, [
+            { name: 'kind', label: 'Comment le couvrir ?', type: 'select', required: true, value: 'location', options: [['location', 'Loué chez…'], ['pret', 'Prêté par…'], ['sub', 'Substitution : un autre modèle']] }
+          ], { submit: 'Suivant' });
+          if (!way) return;
+          if (way.kind === 'sub') {
+            // modèles de remplacement : les modèles similaires d'abord, puis les autres ; « libres » = projecteurs sans panne, SAV, prêt ni autre spectacle aux dates
+            const free = (modelId: string) => dd.items.filter((i) => i.model_id === modelId && !blockedReason(dd, i.id, cs)).length;
+            const opts = dd.models.filter((o) => o.id !== x.model_id && dd.items.some((i) => i.model_id === o.id))
+              .map((o) => ({ o, sim: similarNames(m?.name ?? '', o.name), n: free(o.id) }))
+              .sort((p, q) => Number(q.sim) - Number(p.sim) || q.n - p.n || p.o.name.localeCompare(q.o.name, 'fr', { numeric: true }))
+              .map(({ o, sim, n }) => [o.id, `${o.name}${sim ? ' (similaire)' : ''} · ${n} libre${n > 1 ? 's' : ''}`] as [string, string]);
+            if (!opts.length) { err('Aucun autre modèle de projecteur en stock.'); return; }
+            const f = await openForm(`Substitution : ${m?.name ?? ''}`, [
+              { name: 'model', label: 'Remplacer par quel modèle ?', type: 'select', search: true, required: true, options: opts, hint: 'Les modèles similaires sont en premier. « libres » : projecteurs disponibles aux dates, sans tenir compte des objectifs des autres spectacles.' },
+              { name: 'qty', label: 'Combien remplacer ?', type: 'number', min: '1', max: '500', required: true, value: String(Math.max(1, x.missing)) }
+            ], { submit: 'Enregistrer', validate: (w) => !w.model ? 'Choisis un modèle.' : !/^\d+$/.test(w.qty) || Number(w.qty) < 1 ? 'Quantité invalide.' : null });
+            if (!f) return;
+            const r = await rpcCall('add_substitution', { p_show: id, p_demand: v, p_model: f.model, p_qty: Number(f.qty) });
+            if (r.error) err(r.error); else toast(`Substitution enregistrée${(r.data as { missing?: number } | null)?.missing ? ' : il manque encore du matériel.' : ' : manque comblé.'}`, 'ok');
+            return;
+          }
+          const f = await openForm(`${way.kind === 'pret' ? 'Prêt' : 'Location'} : ${m?.name ?? ''}`, [
+            { name: 'who', label: way.kind === 'pret' ? 'Nom du prêteur' : 'Nom du loueur', required: true },
             { name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: String(x.missing) },
             { name: 'from', label: 'Date de livraison', type: 'date', required: true, value: cs.start_date },
             { name: 'to', label: 'Date de reprise', type: 'date', required: true, value: cs.end_date }
           ], { submit: 'Enregistrer', validate: (w) => !w.who ? 'Indique le nom du prêteur / loueur.' : !/^\d+$/.test(w.qty) || Number(w.qty) < 1 ? 'Quantité invalide.' : !w.from || !w.to || w.to < w.from ? 'La reprise doit être le même jour ou après la livraison.' : null });
           if (!f) return;
-          const r = await rpcCall('add_external', { p_show: id, p_demand: v, p_kind: f.kind, p_provider: f.who, p_qty: Number(f.qty), p_from: f.from, p_to: f.to, p_note: null });
-          if (r.error) err(r.error); else toast(`${f.kind === 'pret' ? 'Prêt' : 'Location'} enregistré${(r.data as { missing?: number } | null)?.missing ? ' : il manque encore du matériel.' : ' : manque comblé.'}`, 'ok');
+          const r = await rpcCall('add_external', { p_show: id, p_demand: v, p_kind: way.kind, p_provider: f.who, p_qty: Number(f.qty), p_from: f.from, p_to: f.to, p_note: null });
+          if (r.error) err(r.error); else toast(`${way.kind === 'pret' ? 'Prêt' : 'Location'} enregistré${(r.data as { missing?: number } | null)?.missing ? ' : il manque encore du matériel.' : ' : manque comblé.'}`, 'ok');
+        }
+        else if (act === 'sub-del') {
+          if (!window.confirm('Retirer cette substitution ? Le manque réapparaîtra.')) return;
+          const r = await rpcCall('delete_substitution', { p_id: v });
+          if (r.error) err(r.error);
         }
         else if (act === 'ext-del') {
           if (!window.confirm('Retirer ce prêt / cette location ? Le manque réapparaîtra.')) return;
