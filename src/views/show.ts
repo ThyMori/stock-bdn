@@ -105,7 +105,6 @@ export const showView: ViewFactory = ([id]) => {
     const selModels = [...new Set(mine.map((s) => modelOf(s.item_id)))].map((m) => ({ id: m, name: d.models.find((x) => x.id === m)?.name ?? '?', ids: mine.filter((s) => modelOf(s.item_id) === m).map((s) => s.item_id) }))
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { numeric: true }));
     if (modelFilter && !selModels.some((m) => m.id === modelFilter)) modelFilter = '';   // plus aucun projecteur de ce modèle : on retire le filtre
-    const shown = modelFilter ? mine.filter((s) => modelOf(s.item_id) === modelFilter) : [];   // lignes du modèle déployé
     const origin = (s: (typeof mine)[number]) => (s.problem ? ` <span class="tag late">indisponible : ${esc(s.problem)}</span>` : '');
     const itemRow = (s: (typeof mine)[number]) => {
       const it = d.items.find((i) => i.id === s.item_id); const ds = it ? describe(d, it) : null;
@@ -123,7 +122,7 @@ export const showView: ViewFactory = ([id]) => {
     const assigned = groups.map((g) => {
       const open = modelFilter === g.id && g.rows.length > 0, bad = g.rows.filter((r) => r.problem).length;
       const gap = g.dem > g.rows.length ? ' short' : '';   // moins d'affectés que demandés : repère discret
-      return `<div class="mgrp${open ? ' open' : ''}"><button class="mhead${gap}" ${g.rows.length ? `data-act="rmodel" data-v="${esc(g.id)}" aria-expanded="${open}"` : 'disabled'}><span aria-hidden="true">${g.rows.length ? (open ? '▾' : '▸') : '·'}</span> <span class="t grow">${esc(g.name)}</span><span class="s">Demandé ${g.dem} · Affectés ${g.rows.length}</span>${bad ? `<span class="tag late">${bad} indispo.</span>` : ''}</button>${open ? `<div class="list">${g.rows.map(itemRow).join('')}</div>` : ''}</div>`;
+      return `<div class="mgrp${open ? ' open' : ''}"><button class="mhead${gap}" ${g.rows.length ? `data-act="rmodel" data-v="${esc(g.id)}" aria-expanded="${open}"` : 'disabled'}><span aria-hidden="true">${g.rows.length ? (open ? '▾' : '▸') : '·'}</span> <span class="t grow">${esc(g.name)}</span><span class="s">Demandé ${g.dem} · Affectés ${g.rows.length}</span>${bad ? `<span class="tag late">${bad} indispo.</span>` : ''}</button>${open ? `${g.rows.length > 1 || rsel.size ? `<div class="selbar">${g.rows.length > 1 ? `<button class="btn" data-act="rall">${g.rows.every((r) => rsel.has(r.item_id)) ? 'Tout décocher' : 'Tout cocher'} (${g.rows.length})</button>` : ''}${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}<div class="list">${g.rows.map(itemRow).join('')}</div>` : ''}</div>`;
     }).join('');
 
     const demands = d.showDemands.filter((x) => x.show_id === id).map((x) => ({ x, m: d.models.find((m) => m.id === x.model_id), l: lampName(x.lamp_id) }))
@@ -193,8 +192,6 @@ export const showView: ViewFactory = ([id]) => {
       ${wall}
       <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="pick">+ Affecter manuellement</button>' : ''}</div>
         ${itemsFolded ? '' : `${picker}
-        ${shown.length > 1 || rsel.size ? `<div class="selbar">${shown.length > 1 ? `<button class="btn" data-act="rall">${shown.every((s) => rsel.has(s.item_id)) ? 'Tout décocher' : 'Tout cocher'} (${shown.length})</button>` : ''}
-          ${rsel.size ? `<button class="btn primary" data-act="gel-sel">Gel sur la sélection (${rsel.size})</button><button class="btn" data-act="remove-sel">Retirer la sélection (${rsel.size})</button>` : ''}</div>` : ''}
         <div class="mlist">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
       ${demandCard}
       <div class="card stack sec sec-reg"><div class="row wrap"><h2 class="grow">Régisseurs (${regs.length})</h2>${canEdit ? '<button class="btn" data-act="reg-add">+ Assigner</button>' : ''}</div>
@@ -422,11 +419,11 @@ export const showView: ViewFactory = ([id]) => {
           if (all.length && all.every((n) => rsel.has(n))) all.forEach((n) => rsel.delete(n)); else all.forEach((n) => rsel.add(n));
           paint(root);
         }
-        else if (act === 'items-fold') { itemsFolded = !itemsFolded; paint(root); }   // replie / déplie les projecteurs affectés
+        else if (act === 'items-fold') { itemsFolded = !itemsFolded; rsel.clear(); paint(root); }   // replie / déplie les projecteurs affectés
         else if (act === 'wall-fold') { wallFolded = !wallFolded; paint(root); }   // replie / déplie le mur
         else if (act === 'dem-fold') { demFolded = !demFolded; paint(root); }   // replie / déplie le matériel demandé
         else if (act === 'rmodel') {
-          modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui déploie ce modèle (et replie le précédent) ; un second appui le replie
+          rsel.clear(); modelFilter = modelFilter === v ? '' : (v ?? '');   // un appui déploie ce modèle (et replie le précédent) ; un second appui le replie
           paint(root);
         }
         else if (act === 'gel-sel') {

@@ -576,3 +576,6 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .mhead.short .s { color: var(--red); font-weight: 700; }
 .mgrp.open > .mhead { background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
 .mgrp > .list { border: 2px solid var(--ink); border-top: 0; padding: 4px 8px; }
+.mgrp > .selbar { border: 2px solid var(--ink); border-top: 0; padding: 6px 8px; gap: 6px; }
+.mgrp > .selbar + .list { border-top: 0; }
+.mgrp > .selbar .btn { min-height: 40px; padding: 4px 10px; font-size: .85rem; }
