@@ -27,7 +27,7 @@ const SECTIONS: Section[] = [
     '<b>Position actuelle</b> : sur la fiche, où est le projecteur aujourd\'hui (position de la feuille de patch d\'un spectacle monté, stock dessous, stock 3e, PRÊT ou SAV).',
     '<b>Pastille bleue</b> : projecteur stocké au <b>3e</b> quand il ne joue pas. Seuls les régisseurs généraux et les admins la mettent ou l\'enlèvent (bouton sur la fiche). Filtre « Stocké au 3e » dans la liste.',
     '<b>PAR</b> : quatre boutons <b>CP62 · CP61 · CP60 · CP95</b> changent la lampe montée d\'un seul geste (technicien et plus).',
-    '<b>Prêt / SAV</b> (régisseur général et admin) : on indique à qui, depuis quand, retour prévu. Repasser « Disponible » clôt la période.'
+    '<b>Prêt / SAV</b> (régisseur général et admin) : on indique à qui, depuis quand, retour prévu. Repasser « Disponible » clôt la période. En passant en SAV, tu peux <b>déclarer une panne</b> en même temps.'
   ] },
   { title: 'Scanner un QR code', items: [
     'Onglet <b>Scan</b> : la caméra lit l\'étiquette collée sur le projecteur et ouvre sa fiche. La caméra demande l\'accès : autorise-le dans le navigateur.',
