@@ -137,6 +137,13 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Gélatines demandées et porte-filtres (v1.48.0)
+- Sous chaque demande : bouton **Gel** → une ou plusieurs références (séparateurs `+ , ; &` : `L201 + R119`, `L200, R114`, `L281+#132`) et le **nombre de projecteurs** concernés (1 à la quantité demandée). Chaque référence devient une ligne `show_demand_gels` (couleur déduite de la référence, comme pour les gels de projecteur). Pastille « L201 × 12 » avec croix pour retirer.
+- Une référence déjà demandée sur la demande est **additionnée** (insensible à la casse) ; le total ne peut pas dépasser la quantité demandée (message d'erreur sinon). Baisser la demande plafonne l'affichage et le calcul ; supprimer la demande supprime ses gels.
+- **Fusion** (`gelGroups` dans `src/prepPdf.ts`) : pour chaque couple (modèle, référence) on garde le **plus grand** de (gels demandés) et (gels posés sur projecteurs affectés + lignes de patch sans projecteur). Les n° des projecteurs gélatinés restent listés. Les lignes de patch sans projecteur prennent maintenant le format de leur modèle quand il est connu. Pas de stock de gélatines : pas d'alerte « manque ».
+- **Porte-filtres** (`holderRows`) : section « Porte-filtres à préparer » de la liste de prépa **et** du rapport de démontage (pour le spectacle suivant), après « Gélatines à couper ». Un projecteur avec 1 ou 2 gels n'utilise qu'**un** porte-filtre. Par modèle : le plus grand de (projecteurs réellement gélatinés, lignes sans projecteur comprises) et (le plus grand nombre demandé pour une référence : on suppose les gels demandés sur les mêmes projecteurs). Lignes nommées **par modèle** (« 614 SX x 12 », taille en gris).
+- Fonctions `add_demand_gels(p_show, p_demand, p_gels jsonb, p_qty)` et `delete_demand_gel(p_id)` ; droits : régisseur général, admin, régisseurs assignés (base) ; une ligne au journal ; pas de notification ; connexion requise. Les gels de la substitution : ils restent sur le modèle d'origine de la demande.
+
 ### Substitution d'un modèle (v1.47.0)
 Sur une demande qui manque : **Gérer → Substitution : un autre modèle**. On choisit le modèle de remplacement (les modèles **similaires** d'abord — liste `SIMILAR` de `src/patchSuggest.ts`, la même que pour les suggestions du patch — puis les autres, avec le nombre de projecteurs « libres » : sans panne, SAV, prêt ni autre spectacle aux dates ; indicatif, il ne tient pas compte des objectifs des autres spectacles) et la quantité.
 - Table `show_substitutions` (demande, modèle, quantité). La **demande d'origine ne change pas** : « 4 × 614 SX demandés, dont 2 par 614 S ».
@@ -294,6 +301,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.44.0) | `patch_lines.state` / `state_note` (+ reprise des anciens focus), `set_patch_field` accepte le champ `state` | v1.44.0 |
 | `schema.sql` (v1.46.0) | `reallocate_all` réécrit (calcul du manque jour par jour, stock partagé), colonne `show_demands.available`, projecteurs « auto » repris comme affectés à la main, `swap_show_item` / `release_show_item` supprimées | v1.46.0 |
 | `schema.sql` (v1.47.0) | table `show_substitutions`, fonctions `add_substitution` / `delete_substitution`, `reallocate_all` tient compte des substitutions | v1.47.0 |
+| `schema.sql` (v1.48.0) | table `show_demand_gels`, fonctions `add_demand_gels` / `delete_demand_gel` | v1.48.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |

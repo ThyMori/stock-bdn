@@ -30,29 +30,68 @@ export const byRef = (a: string, b: string): number => { const x = refKey(a), y 
  *  Les modèles qui ont la même taille de porte-filtre sont regroupés dans une même section ; sans taille connue, un modèle = une section.
  *  Dans chaque section : couleur la plus proche, puis référence. */
 export function gelGroups(data: Data, showId: string): GelGroup[] {
-  const rows = data.showGels.filter((x) => x.show_id === showId).map((g) => {
+  const sizeOfModel = (modelId: string | null | undefined) => data.filterSizes.find((f) => f.id === data.models.find((m) => m.id === modelId)?.filter_size_id)?.label ?? '';
+  // une « cellule » = un modèle + une référence : nombre de gels posés sur des projecteurs / lignes de patch (phys) et nombre demandé sur les demandes (req)
+  interface Cell { model: string; size: string; key: string; color: string; ref: string; phys: number; req: number; items: number[] }
+  const cells = new Map<string, Cell>();
+  const cell = (model: string, size: string, color: string, ref: string): Cell => {
+    const k = [model, color, ref.trim().toLowerCase()].join('|');
+    let c = cells.get(k);
+    if (!c) { c = { model, size, key: size || 'm:' + model, color, ref: ref.trim(), phys: 0, req: 0, items: [] }; cells.set(k, c); }
+    return c;
+  };
+  for (const g of data.showGels.filter((x) => x.show_id === showId)) {
     const it = data.items.find((i) => i.id === g.item_id);
     const d = it ? describe(data, it) : null;
-    const model = d?.model?.name ?? '?';
-    const size = d?.filter?.label ?? '';
-    return { g, model, size, key: size || 'm:' + model };
-  });
+    const c = cell(d?.model?.name ?? '?', d?.filter?.label ?? '', g.color, g.ref); c.phys++; c.items.push(g.item_id);
+  }
   // lignes de la feuille de patch sans projecteur (location, prêt, à louer) : leurs gélatines comptent aussi (modèle indiqué, pas de numéro)
   for (const l of data.patchLines.filter((x) => x.show_id === showId && x.item_id === null)) {
     const model = data.models.find((m) => m.id === l.model_id)?.name ?? (l.model_text || 'Sans modèle');
-    for (const g of l.gels ?? []) rows.push({ g: { show_id: showId, item_id: 0, ref: g.ref, color: g.color } as (typeof rows)[number]['g'], model, size: '', key: 'm:' + model });
+    for (const g of l.gels ?? []) cell(model, sizeOfModel(l.model_id), g.color, g.ref).phys++;
+  }
+  // gélatines demandées sur les demandes (sans n°) : jamais plus que la quantité demandée ; fusionnées avec les gels posés = le plus grand des deux
+  for (const dg of (data.showDemandGels ?? []).filter((x) => x.show_id === showId)) {
+    const dm = data.showDemands.find((x) => x.id === dg.demand_id), m = data.models.find((x) => x.id === dm?.model_id);
+    if (!dm || !m) continue;
+    cell(m.name, sizeOfModel(m.id), dg.color, dg.ref).req += Math.min(dg.qty, dm.qty);
   }
   const models = new Map<string, Set<string>>();
-  for (const r of rows) { const m = models.get(r.key) ?? new Set<string>(); m.add(r.model); models.set(r.key, m); }
+  for (const c of cells.values()) { const m = models.get(c.key) ?? new Set<string>(); m.add(c.model); models.set(c.key, m); }
   const titleOf = (k: string) => [...(models.get(k) ?? [])].sort((a, b) => a.localeCompare(b, 'fr', { numeric: true })).join(' / ');
   const map = new Map<string, GelGroup>();
-  for (const r of rows) {
-    const key = [r.key, r.g.color, r.g.ref.trim().toLowerCase()].join('|');
-    const cur = map.get(key) ?? { title: titleOf(r.key), size: r.size, color: r.g.color, ref: r.g.ref.trim(), qty: 0, items: [] };
-    cur.qty++; if (r.g.item_id) cur.items.push(r.g.item_id); map.set(key, cur);
+  for (const c of cells.values()) {
+    const key = [c.key, c.color, c.ref.toLowerCase()].join('|');
+    const cur = map.get(key) ?? { title: titleOf(c.key), size: c.size, color: c.color, ref: c.ref, qty: 0, items: [] };
+    cur.qty += Math.max(c.phys, c.req); cur.items.push(...c.items); map.set(key, cur);
   }
-  return [...map.values()].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
+  return [...map.values()].filter((g) => g.qty > 0).map((g) => ({ ...g, items: [...g.items].sort((a, b) => a - b) }))
     .sort((a, b) => a.title.localeCompare(b.title, 'fr', { numeric: true }) || byRef(a.ref, b.ref));
+}
+
+export interface HolderRow { model: string; size: string; qty: number }
+/** Porte-filtres à préparer, par modèle de projecteur. Un projecteur qui a 1 ou 2 gels n'utilise qu'UN porte-filtre.
+ *  Par modèle : le plus grand de (projecteurs réellement gélatinés : affectés, ou lignes de patch sans projecteur) et
+ *  (côté demandes, le plus grand nombre demandé pour une référence : on suppose les gels sur les mêmes projecteurs). */
+export function holderRows(data: Data, showId: string): HolderRow[] {
+  const sizeOf = (modelId: string | null | undefined) => data.filterSizes.find((f) => f.id === data.models.find((m) => m.id === modelId)?.filter_size_id)?.label ?? '';
+  const by = new Map<string, { size: string; items: Set<number>; lines: number; req: Map<string, number> }>();
+  const get = (model: string, size: string) => { let e = by.get(model); if (!e) { e = { size, items: new Set(), lines: 0, req: new Map() }; by.set(model, e); } return e; };
+  for (const g of data.showGels.filter((x) => x.show_id === showId)) {
+    const it = data.items.find((i) => i.id === g.item_id), d = it ? describe(data, it) : null;
+    get(d?.model?.name ?? '?', d?.filter?.label ?? '').items.add(g.item_id);
+  }
+  for (const l of data.patchLines.filter((x) => x.show_id === showId && x.item_id === null && (x.gels ?? []).length)) {
+    get(data.models.find((m) => m.id === l.model_id)?.name ?? (l.model_text || 'Sans modèle'), sizeOf(l.model_id)).lines++;
+  }
+  for (const dg of (data.showDemandGels ?? []).filter((x) => x.show_id === showId)) {
+    const dm = data.showDemands.find((x) => x.id === dg.demand_id), m = data.models.find((x) => x.id === dm?.model_id);
+    if (!dm || !m) continue;
+    const e = get(m.name, sizeOf(m.id)), k = dg.ref.trim().toLowerCase();
+    e.req.set(k, (e.req.get(k) ?? 0) + Math.min(dg.qty, dm.qty));
+  }
+  return [...by].map(([model, e]) => ({ model, size: e.size, qty: Math.max(e.items.size + e.lines, ...e.req.values(), 0) })).filter((r) => r.qty > 0)
+    .sort((a, b) => a.model.localeCompare(b.model, 'fr', { numeric: true }));
 }
 
 export interface GelRef { ref: string; color: string; total: number; rows: { title: string; size: string; qty: number }[] }
@@ -145,6 +184,30 @@ export function drawGelSection(ctx: PdfCtx, data: Data, showId: string, sub = ''
         doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M + 16, y + 2.2, W - M, y + 2.2);
         y += 6;
       }
+    }
+  }
+  ctx.y = y;
+}
+
+/** Section « Porte-filtres à préparer » : un porte-filtre par projecteur gélatiné, nommé par son modèle (la taille en gris). */
+export function drawHolderSection(ctx: PdfCtx, data: Data, showId: string, sub = ''): void {
+  const { doc, M, W } = ctx;
+  let y = ctx.y;
+  const ensure = (h: number) => { ctx.y = y; ctx.ensure(h); y = ctx.y; };   // le saut de page remet y en haut
+  const rows = holderRows(data, showId);
+  if (rows.length) {
+    ensure(30); y += 8;
+    doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Porte-filtres à préparer  (${rows.reduce((n, r) => n + r.qty, 0)})`, M + 2, y);
+    if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(sub, W - M - 2, y, { align: 'right' }); } doc.setTextColor(0);
+    y += 7;
+    for (const r of rows) {
+      ensure(9);
+      doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 6, y - 3.4, 4, 4);   // case à cocher : porte-filtres préparés
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(r.model, M + 14, y, { maxWidth: 70 }); doc.text(`x ${r.qty}`, M + 90, y);
+      if (r.size) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110); doc.text(`(${r.size})`, M + 106, y); doc.setTextColor(0); }
+      doc.setDrawColor(200); doc.setLineWidth(0.1); doc.line(M, y + 2.2, W - M, y + 2.2);
+      y += 7;
     }
   }
   ctx.y = y;
@@ -263,6 +326,7 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
   // gélatines à couper puis accessoires à préparer (mêmes sections que dans le rapport de démontage)
   const ctx: PdfCtx = { doc, M, W, get y() { return y; }, set y(v: number) { y = v; }, ensure };
   drawGelSection(ctx, data, showId);
+  drawHolderSection(ctx, data, showId);
   drawAccessorySection(ctx, data, showId);
   footer();
   const safe = show.name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'spectacle';

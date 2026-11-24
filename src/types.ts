@@ -49,6 +49,8 @@ export interface ShowExternal { id: string; show_id: string; demand_id: string; 
 /** Demande de matériel d'un spectacle (modèle + lampe pour les PAR + quantité) ; `missing` = projecteurs que l'on n'arrive pas à fournir. */
 /** Substitution : une part d'une demande couverte par un autre modèle de projecteur. */
 export interface ShowSubstitution { id: string; show_id: string; demand_id: string; model_id: string; qty: number }
+/** Gélatine demandée sur une demande : `qty` projecteurs de la demande la reçoivent (sans n° de projecteur). */
+export interface ShowDemandGel { id: string; show_id: string; demand_id: string; ref: string; color: string; qty: number }
 export interface ShowDemand { id: string; show_id: string; model_id: string; lamp_id: string | null; qty: number; missing: number; available?: number | null }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
@@ -76,10 +78,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[]; showExternals: ShowExternal[]; showSubstitutions: ShowSubstitution[]; patchLines: PatchLine[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[]; showExternals: ShowExternal[]; showSubstitutions: ShowSubstitution[]; showDemandGels: ShowDemandGel[]; patchLines: PatchLine[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: [], showExternals: [], showSubstitutions: [], patchLines: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: [], showExternals: [], showSubstitutions: [], showDemandGels: [], patchLines: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */

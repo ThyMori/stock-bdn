@@ -40,3 +40,14 @@ export function gelColorOf(ref: string): string {
   const n = Number(m[2]);
   return /^(r|ro|#)/.test(m[1] ?? '') || m[1] === 'rosco' || m[1] === 'roscolux' || m[1] === 'rosc' ? rosco(n) : lee(n);
 }
+
+/** Découpe une saisie de plusieurs références : « L201 + R119 », « L200, R114 », « L281+#132 »… (séparateurs : + , ; &).
+ *  Les espaces autour sont retirés, les vides et les doublons (sans tenir compte de la casse) disparaissent. Garde l'ordre saisi. */
+export function splitGelRefs(text: string): string[] {
+  const out: string[] = [];
+  for (const part of text.split(/[+,;&]/)) {
+    const ref = part.trim();
+    if (ref && !out.some((o) => o.toLowerCase() === ref.toLowerCase())) out.push(ref);
+  }
+  return out;
+}

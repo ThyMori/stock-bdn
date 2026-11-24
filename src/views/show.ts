@@ -4,7 +4,7 @@ import { go } from '../router';
 import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
 import { supabase } from '../supabase';
 import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
-import { gelColorOf } from '../gels';
+import { gelColorOf, splitGelRefs } from '../gels';
 import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
 import { similarNames } from '../patchSuggest';
 import { toast } from '../ui/toast';
@@ -129,7 +129,9 @@ export const showView: ViewFactory = ([id]) => {
       ${demFolded ? '' : `<div class="sub">Objectifs de quantité (fiche technique, plan de feu) : l'appli les compare aux projecteurs disponibles aux dates du spectacle, en partageant le stock avec les autres spectacles. Les n° précis se choisissent dans « Projecteurs affectés ».</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">Demandé ${x.qty} · Affectés ${own(x)}${extQty(x.id) ? ` · ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''}${subQty(x.id) ? ` · ${subQty(x.id)} en substitution` : ''}${x.available != null ? ` · Disponibles ${Math.max(0, x.available)}` : ''}</div></div>
         ${x.missing > 0 ? `<span class="tag late">manque ${x.missing}</span>` : '<span class="tag ok">complet</span>'}
         ${canAssign && x.missing > 0 ? `<button class="btn primary" data-act="ext-add" data-v="${x.id}">Gérer</button>` : ''}
-        ${canAssign ? `<button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
+        ${canAssign ? `<button class="btn" data-act="dgel-add" data-v="${x.id}" aria-label="Demander des gélatines pour cette demande">Gel</button><button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
+        ${(() => { const gs = d.showDemandGels.filter((g) => g.demand_id === x.id).sort((a, b) => a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
+          return gs.length ? `<div class="gels">${gs.map((g) => `<span class="gel"><i style="background:${gelCss(g.color)}"></i>${esc(g.ref)} × ${Math.min(g.qty, x.qty)}${canAssign ? `<button class="gx" data-act="dgel-del" data-v="${g.id}" aria-label="Retirer le gel ${esc(g.ref)} de la demande">×</button>` : ''}</span>`).join('')}</div>` : ''; })()}
         ${d.showSubstitutions.filter((b) => b.demand_id === x.id).map((b) => `<div class="extline"><span class="tag ext">substitution</span><div class="grow">${b.qty} × ${esc(d.models.find((mm) => mm.id === b.model_id)?.name ?? '?')} à la place de ${esc(m?.name ?? '?')}</div>${canAssign ? `<button class="btn" data-act="sub-del" data-v="${b.id}" aria-label="Retirer cette substitution">Suppr.</button>` : ''}</div>`).join('')}
         ${d.showExternals.filter((e) => e.demand_id === x.id).map((e) => `<div class="extline"><span class="tag ext">${e.kind === 'pret' ? 'prêt' : 'location'}</span><div class="grow">${esc(externalLabel(d, e))}<br><span class="muted">livraison ${esc(fmtDay(e.delivery_date))} · reprise ${esc(fmtDay(e.return_date))}</span></div>${canAssign ? `<button class="btn" data-act="ext-del" data-v="${e.id}" aria-label="Retirer ce prêt ou cette location">Suppr.</button>` : ''}</div>`).join('')}`).join('') || '<div class="empty">Aucune demande : ajoute-en une, ou assigne des projecteurs à la main plus haut.</div>'}`}</div>`;
 
@@ -367,6 +369,23 @@ export const showView: ViewFactory = ([id]) => {
           if (!f) return;
           const r = await rpcCall('add_external', { p_show: id, p_demand: v, p_kind: way.kind, p_provider: f.who, p_qty: Number(f.qty), p_from: f.from, p_to: f.to, p_note: null });
           if (r.error) err(r.error); else toast(`${way.kind === 'pret' ? 'Prêt' : 'Location'} enregistré${(r.data as { missing?: number } | null)?.missing ? ' : il manque encore du matériel.' : ' : manque comblé.'}`, 'ok');
+        }
+        else if (act === 'dgel-add') {
+          const x = view().showDemands.find((r) => r.id === v); if (!x) return;
+          const m = view().models.find((r) => r.id === x.model_id);
+          const f = await openForm(`Gélatines demandées : ${m?.name ?? ''}`, [
+            { name: 'refs', label: 'Référence(s) du gel', required: true, hint: 'Plusieurs gels sur le même projecteur : L201 + R119, ou L200, R114, ou L281+#132. Une référence déjà demandée voit sa quantité additionnée.' },
+            { name: 'qty', label: `Sur combien de projecteurs ? (demande de ${x.qty})`, type: 'number', min: '1', max: String(x.qty), required: true, value: String(x.qty) }
+          ], { submit: 'Ajouter', validate: (w) => !splitGelRefs(w.refs).length ? 'Indique au moins une référence.' : splitGelRefs(w.refs).length > 10 ? '10 références au maximum.'
+            : !/^\d+$/.test(w.qty.trim()) || Number(w.qty) < 1 || Number(w.qty) > x.qty ? `Quantité : un nombre entre 1 et ${x.qty}.` : null });
+          if (!f) return;
+          const gels = splitGelRefs(f.refs).map((ref) => ({ ref, color: gelColorOf(ref) }));   // la couleur est déduite de chaque référence
+          const r = await rpcCall('add_demand_gels', { p_show: id, p_demand: v, p_gels: gels, p_qty: Number(f.qty) });
+          if (r.error) err(r.error); else toast(`${gels.length > 1 ? gels.length + ' gels demandés' : 'Gel demandé'} sur ${f.qty} projecteur${Number(f.qty) > 1 ? 's' : ''}.`, 'ok');
+        }
+        else if (act === 'dgel-del') {
+          const r = await rpcCall('delete_demand_gel', { p_id: v });
+          if (r.error) err(r.error);
         }
         else if (act === 'sub-del') {
           if (!window.confirm('Retirer cette substitution ? Le manque réapparaîtra.')) return;

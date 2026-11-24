@@ -1029,6 +1029,23 @@ create index if not exists show_substitutions_show_idx on show_substitutions(sho
 alter table show_substitutions enable row level security;
 drop policy if exists show_substitutions_select on show_substitutions;
 create policy show_substitutions_select on show_substitutions for select using (has_role('technicien'));
+-- v1.48.0 : gélatines demandées sur une demande (sans n° de projecteur) : « L201 sur 12 projecteurs ». Fusionnées côté appli avec les gels posés
+-- sur des projecteurs précis (le plus grand des deux par modèle et référence). Pas de stock de gélatines, donc pas d'alerte.
+create table if not exists show_demand_gels (
+  id             uuid primary key default gen_random_uuid(),
+  show_id        uuid not null references shows(id) on delete cascade,
+  demand_id      uuid not null references show_demands(id) on delete cascade,
+  ref            text not null check (length(trim(ref)) between 1 and 60),
+  color          text not null,
+  qty            int  not null check (qty between 1 and 500),   -- nombre de projecteurs de la demande qui reçoivent ce gel
+  added_by_label text,
+  added_at       timestamptz not null default now()
+);
+create unique index if not exists show_demand_gels_uq on show_demand_gels (demand_id, lower(trim(ref)));
+create index if not exists show_demand_gels_show_idx on show_demand_gels(show_id);
+alter table show_demand_gels enable row level security;
+drop policy if exists show_demand_gels_select on show_demand_gels;
+create policy show_demand_gels_select on show_demand_gels for select using (has_role('technicien'));
 alter table show_demands enable row level security;
 drop policy if exists show_demands_select on show_demands;
 create policy show_demands_select on show_demands for select using (has_role('technicien'));
@@ -1242,6 +1259,49 @@ begin
   perform log_event('SPECTACLE', format('« %s » : substitution %s × %s (pour %s) retirée', nm, b.qty, mn, coalesce(mo, '?')));
   perform reallocate_all();
 end $$;
+-- Gélatines d'une demande : p_gels = [{ref, color}, ...] (plusieurs références d'un coup, ex. « L201 + R119 »), p_qty = nombre de projecteurs.
+-- Une référence déjà présente voit sa quantité additionnée ; le total ne peut pas dépasser la quantité demandée.
+create or replace function add_demand_gels(p_show uuid, p_demand uuid, p_gels jsonb, p_qty int) returns void
+language plpgsql security definer set search_path = public as $$
+declare d show_demands; g jsonb; r text; c text; cur int; lbl text; nm text; mn text; done text[] := '{}';
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  select * into d from show_demands where id = p_demand and show_id = p_show;
+  if not found then raise exception 'Demande introuvable' using errcode = '22023'; end if;
+  if p_qty is null or p_qty < 1 or p_qty > 500 then raise exception 'Quantité invalide' using errcode = '22023'; end if;
+  if jsonb_typeof(p_gels) is distinct from 'array' or jsonb_array_length(p_gels) not between 1 and 10 then raise exception 'Indique de 1 à 10 références de gel' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  for g in select * from jsonb_array_elements(p_gels) loop
+    r := trim(coalesce(g ->> 'ref', '')); c := g ->> 'color';
+    if r = '' or length(r) > 60 then raise exception 'Référence du gel obligatoire (60 caractères maximum)' using errcode = '22023'; end if;
+    if not (c = any (gel_colors())) then raise exception 'Couleur de gel inconnue' using errcode = '22023'; end if;
+    if lower(r) = any (done) then continue; end if;   -- même référence deux fois dans la saisie : comptée une fois
+    done := done || lower(r);
+    select coalesce(sum(qty), 0)::int into cur from show_demand_gels where demand_id = p_demand and lower(trim(ref)) = lower(r);
+    if cur + p_qty > d.qty then raise exception 'Le gel % est déjà demandé sur % projecteur(s) : ajoute % au maximum (demande de %)', r, cur, d.qty - cur, d.qty using errcode = '22023'; end if;
+    insert into show_demand_gels (show_id, demand_id, ref, color, qty, added_by_label) values (p_show, p_demand, r, c, p_qty, lbl)
+    on conflict (demand_id, (lower(trim(ref)))) do update set qty = show_demand_gels.qty + excluded.qty;
+  end loop;
+  select s.name into nm from shows s where s.id = p_show; select name into mn from models where id = d.model_id;
+  perform log_event('SPECTACLE', format('« %s » : gel %s demandé sur %s × %s', nm, array_to_string(done, ' + '), p_qty, mn));
+end $$;
+
+create or replace function delete_demand_gel(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare g show_demand_gels; nm text; mn text;
+begin
+  select * into g from show_demand_gels where id = p_id;
+  if not found then return; end if;
+  if not can_act_show(g.show_id) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  delete from show_demand_gels where id = p_id;
+  select s.name into nm from shows s where s.id = g.show_id;
+  select m.name into mn from show_demands d join models m on m.id = d.model_id where d.id = g.demand_id;
+  perform log_event('SPECTACLE', format('« %s » : gel %s retiré de la demande %s', nm, g.ref, coalesce(mn, '?')));
+end $$;
+revoke all on function add_demand_gels(uuid,uuid,jsonb,int) from public;
+revoke all on function delete_demand_gel(uuid) from public;
+grant execute on function add_demand_gels(uuid,uuid,jsonb,int) to authenticated;
+grant execute on function delete_demand_gel(uuid) to authenticated;
 revoke all on function add_substitution(uuid,uuid,text,int) from public;
 revoke all on function delete_substitution(uuid) from public;
 grant execute on function add_substitution(uuid,uuid,text,int) to authenticated;

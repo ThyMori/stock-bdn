@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { fromEditable, toEditable, mentionedIds, mentionedItems, renderBody, personColor } from '../src/wall';
-import { prepRows, gelGroups, gelsByRef, externalRows, prepSections } from '../src/prepPdf';
+import { prepRows, gelGroups, gelsByRef, externalRows, prepSections, holderRows } from '../src/prepPdf';
+import { splitGelRefs } from '../src/gels';
 import { gelColorOf } from '../src/gels';
 import { compareShows, teardownPlan } from '../src/teardown';
 import { showAlerts, alertText, blockedReason, calendarExternals } from '../src/alerts';
@@ -459,5 +460,43 @@ t('look cahier : tremblé déterministe, extrémités exactes', () => {
   assert.deepEqual(a[0], [0, 10]); assert.deepEqual(a[a.length - 1], [100, 10]);
   assert.ok(a.every(([, y]) => Math.abs(y - 10) <= 0.3 + 1e-9), 'écart maximal respecté');
   assert.equal(wobblePoints(5, 5, 5, 5).length, 2, 'trait nul : deux points');
+});
+t('saisie de plusieurs références de gel', () => {
+  assert.deepEqual(splitGelRefs('L201 + R119'), ['L201', 'R119']);
+  assert.deepEqual(splitGelRefs('L200, R114'), ['L200', 'R114']);
+  assert.deepEqual(splitGelRefs('L281+#132'), ['L281', '#132'], '# reste dans la référence');
+  assert.deepEqual(splitGelRefs(' L201 ; l201 & R80 ,, '), ['L201', 'R80'], 'doublons (casse) et vides retirés');
+  assert.deepEqual(splitGelRefs('1/2 CTO'), ['1/2 CTO'], 'la barre oblique n\'est pas un séparateur');
+  assert.deepEqual(splitGelRefs('  '), []);
+});
+t('gélatines demandées : fusion (le plus grand des deux) et porte-filtres', () => {
+  const mkGel = (item: number, ref: string) => ({ show_id: 's', item_id: item, ref, color: 'Bleu' });
+  const d = { ...EMPTY_DATA,
+    filterSizes: [{ id: 'f1', label: '180 x 180' }, { id: 'f2', label: '245 x 245' }],
+    models: [{ id: 'a', name: '614 SX', filter_size_id: 'f1' }, { id: 'b', name: 'PAR64', filter_size_id: 'f2' }],
+    items: [{ id: 1, model_id: 'a' }, { id: 2, model_id: 'a' }, { id: 3, model_id: 'b' }],
+    showDemands: [{ id: 'd1', show_id: 's', model_id: 'a', lamp_id: null, qty: 12, missing: 0 }, { id: 'd2', show_id: 's', model_id: 'b', lamp_id: null, qty: 4, missing: 0 }],
+    // posés : 614 SX n°1 et n°2 ont L201 ; n°1 a aussi R119 ; PAR64 n°3 a R80
+    showGels: [mkGel(1, 'L201'), mkGel(2, 'L201'), mkGel(1, 'R119'), mkGel(3, 'R80')],
+    // demandés : 12 × L201 et 4 × R119 sur les 614 SX ; 9 × R80 sur 4 PAR (plafonné à 4)
+    showDemandGels: [{ id: 'g1', show_id: 's', demand_id: 'd1', ref: 'L201', color: 'Bleu', qty: 12 }, { id: 'g2', show_id: 's', demand_id: 'd1', ref: 'R119', color: 'Bleu', qty: 4 },
+      { id: 'g3', show_id: 's', demand_id: 'd2', ref: 'R80', color: 'Bleu', qty: 9 }] } as unknown as Data;
+  const q = (ref: string) => gelGroups(d, 's').find((g) => g.ref === ref)?.qty;
+  assert.equal(q('L201'), 12, 'demandé 12, posé 2 : 12 (pas 14)');
+  assert.equal(q('R119'), 4, 'demandé 4, posé 1 : 4');
+  assert.equal(q('R80'), 4, 'demandé plafonné à la demande (4), posé 1 : 4');
+  const posed = gelGroups(d, 's').find((g) => g.ref === 'L201')!; assert.deepEqual(posed.items, [1, 2], 'les n° posés restent listés');
+  // posé plus grand que demandé : le posé l'emporte
+  const d2 = { ...d, showGels: [...Array.from({ length: 5 }, (_, i) => mkGel(10 + i, 'R119')), ...d.showGels], items: [...d.items, ...Array.from({ length: 5 }, (_, i) => ({ id: 10 + i, model_id: 'a' }))] } as unknown as Data;
+  assert.equal(gelGroups(d2, 's').find((g) => g.ref === 'R119')?.qty, 6, '6 posés (5 + n°1) > 4 demandés');
+  // porte-filtres : un par projecteur gélatiné, nommé par modèle
+  const h = holderRows(d, 's');
+  assert.deepEqual(h.map((x) => [x.model, x.size, x.qty]), [['614 SX', '180 x 180', 12], ['PAR64', '245 x 245', 4]], '614 SX : max(2 projecteurs, 12 demandés) = 12 ; PAR64 : max(1, 4) = 4');
+  const only = holderRows({ ...d, showDemandGels: [] } as unknown as Data, 's');
+  assert.deepEqual(only.map((x) => [x.model, x.qty]), [['614 SX', 2], ['PAR64', 1]], 'n°1 avec 2 gels = un seul porte-filtre : 2 projecteurs, pas 3 gels');
+  // ligne de patch sans projecteur, avec gels : un porte-filtre
+  const line = { show_id: 's', item_id: null, model_id: 'b', model_text: '', gels: [{ ref: 'R80', color: 'Bleu' }, { ref: 'R10', color: 'Bleu' }] };
+  assert.equal(holderRows({ ...d, showDemandGels: [], showGels: [], patchLines: [line] } as unknown as Data, 's')[0].qty, 1, 'une ligne à 2 gels = 1 porte-filtre');
+  assert.deepEqual(holderRows({ ...EMPTY_DATA } as Data, 's'), []);
 });
 console.log(`\n${n} tests OK`);
