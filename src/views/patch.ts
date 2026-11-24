@@ -3,7 +3,7 @@ import { can, canActShow, reportFault, rpcCall, view } from '../store';
 import { supabase } from '../supabase';
 import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
-import { gelColorOf } from '../gels';
+import { gelColorOf, splitGelRefs } from '../gels';
 import { ACCESSORIES, COLS, CURVES, POSITION_GROUPS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows, stateText } from '../patch';
 import type { Col, PatchLine, PatchRow } from '../patch';
 import { fmtDay } from './agenda';
@@ -14,6 +14,8 @@ import { describe } from '../ref';
 import { rankStock, similarNames } from '../patchSuggest';
 import { clampW, colCss, loadWidths, saveWidths } from '../patchCols';
 import type { Widths } from '../patchCols';
+import { batchActions, batchTargets, lignes, rangeKeys } from '../patchBatch';
+import type { BatchAction } from '../patchBatch';
 import type { Suggestion } from '../patchSuggest';
 
 /** Feuille de patch / focus d'un spectacle : une ligne par projecteur affecté, saisie directe, tri par colonne. */
@@ -23,6 +25,8 @@ export const patchView: ViewFactory = ([showId]) => {
   let order: string[] = [];                    // ordre d'affichage : ne bouge pas pendant la saisie, seulement au clic sur un en-tête
   let queue: Promise<void> = Promise.resolve();   // enregistrements l'un après l'autre (pas de doublon de ligne)
   let busy = 0, stat = '', statErr = false;
+  let selMode = false, lastSel: string | null = null;   // mode « Sélectionner » : lignes cochées (clés), dernière case touchée (pour Maj + clic)
+  const sel = new Set<string>();
 
   const seed = () => { lines = view().patchLines.filter((l) => l.show_id === showId).map((l) => ({ ...l })); };
   const rowsNow = (): PatchRow[] => buildRows(view(), showId, lines);
@@ -124,6 +128,58 @@ export const patchView: ViewFactory = ([showId]) => {
     setStat(root, okMsg + ' ✓ ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
     resort(); paint(root); return true;
   }
+
+  /** Modification ou suppression en lot (fonction serveur patch_batch : tout ou rien). Renvoie true si ça a marché. */
+  async function batchRun(root: HTMLElement, op: string, value: Record<string, unknown>, okMsg: string): Promise<boolean> {
+    const targets = batchTargets(sel);
+    if (!targets.length) return false;
+    busy++; setStat(root, 'Enregistrement…');
+    await queue.catch(() => {});                       // on attend les saisies en cours
+    const r = await rpcCall('patch_batch', { p_show: showId, p_targets: targets, p_op: op, p_value: value });
+    busy--; seed();
+    if (r.error) { setStat(root, r.error, true); toast(r.error); resort(); paint(root); return false; }   // rien n'a été modifié : la sélection reste
+    selMode = false; sel.clear(); lastSel = null;     // succès : on quitte la sélection
+    setStat(root, `${okMsg} ✓ ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
+    resort(); paint(root); return true;
+  }
+  /** « Modifier… » : on choisit l'action, puis sa valeur ; la fenêtre rappelle le nombre de lignes touchées. */
+  async function batchEdit(root: HTMLElement) {
+    const n = sel.size, n_ = lignes(n);
+    const acts = batchActions(canActShow(showId));
+    const a = await openForm(`Modifier ${n_}`, [{ name: 'a', label: 'Que veux-tu changer ?', type: 'select', required: true, options: acts }], { submit: 'Suivant', focus: 'a' });
+    if (!a) return;
+    const act = a.a as BatchAction;
+    const accs = ACCESSORIES.map((x): [string, string] => [x.k, x.label]);
+    const pos = [['', 'Choisir…'], ...POSITION_GROUPS.flatMap((g) => g.items.map((i): [string, string] => [i, `${g.label} · ${i}`]))] as [string, string][];
+    const title = `${acts.find(([k]) => k === act)![1].replace('…', '')} : ${n_}`;
+    switch (act) {
+      case 'position': { const f = await openForm(title, [{ name: 'v', label: 'Position', type: 'select', required: true, options: pos }], { submit: 'Appliquer' }); if (f && f.v) await batchRun(root, 'field', { field: 'position', value: f.v }, `Position ${f.v} appliquée`); return; }
+      case 'curve': { const f = await openForm(title, [{ name: 'v', label: 'Courbe (remplace l\'ancienne)', type: 'select', required: true, options: CURVES.map((c): [string, string] => [c.k, c.label]) }], { submit: 'Appliquer' }); if (f) await batchRun(root, 'field', { field: 'curve', value: [f.v] }, 'Courbe appliquée'); return; }
+      case 'acc_add': case 'acc_remove': { const f = await openForm(title, [{ name: 'v', label: 'Accessoire', type: 'select', required: true, options: accs }], { submit: 'Appliquer' }); if (f) await batchRun(root, act, { acc: f.v }, act === 'acc_add' ? 'Accessoire ajouté' : 'Accessoire retiré'); return; }
+      case 'gel_add': {
+        const f = await openForm(title, [{ name: 'refs', label: 'Référence(s) du gel', required: true, hint: 'Plusieurs possibles : L201 + R119 ou L200, R114. Ex. L201 (Lee), R80 ou #80 (Rosco).' }], { submit: 'Ajouter', focus: 'refs' });
+        const refs = f ? splitGelRefs(f.refs) : [];
+        if (f && !refs.length) { toast('Indique au moins une référence.'); return; }
+        if (f) await batchRun(root, 'gel_add', { gels: refs.map((ref) => ({ ref, color: gelColorOf(ref) })) }, 'Gélatines ajoutées'); return;
+      }
+      case 'gel_clear': if (window.confirm(`Vider les gélatines de ${n_} ?`)) await batchRun(root, 'gel_clear', {}, 'Gélatines vidées'); return;
+      case 'state': {
+        const f = await openForm(title, [{ name: 'v', label: 'État', type: 'select', required: true, options: [['', 'Pas d\'état'], ['ok', 'Focus fait'], ['todo', 'À faire']] }, { name: 'note', label: 'Note (si « À faire »)', type: 'textarea' }], { submit: 'Appliquer' });
+        if (f) await batchRun(root, 'field', { field: 'state', value: { s: f.v, note: f.v === 'todo' ? f.note.slice(0, 300) : '' } }, 'État appliqué'); return;
+      }
+      case 'notes': { const f = await openForm(title, [{ name: 'v', label: 'Note (remplace l\'ancienne ; vide = effacer)', value: '' }], { submit: 'Appliquer' }); if (f) await batchRun(root, 'field', { field: 'notes', value: f.v.slice(0, 500) }, 'Note appliquée'); return; }
+      default: {   // vider circuit / grada / DMX
+        const fld = act === 'clear_circuit' ? 'circuit' : act === 'clear_dimmer' ? 'dimmer' : 'dmx';
+        if (window.confirm(`Vider ${act === 'clear_circuit' ? 'le circuit' : act === 'clear_dimmer' ? 'la grada' : 'le DMX'} de ${n_} ?`)) await batchRun(root, 'field', { field: fld, value: '' }, 'Champ vidé');
+      }
+    }
+  }
+  /** « Supprimer… » : vider les lignes (projecteurs gardés) ou les retirer aussi du spectacle. */
+  async function batchDelete(root: HTMLElement) {
+    const n_ = lignes(sel.size);
+    const c = await ask(`Supprimer ${n_} ?`, 'Les lignes seront vidées (circuit, gélatines, notes…). Tu peux garder les projecteurs affectés au spectacle ou les en retirer. Impossible d\'annuler.', [['keep', 'Vider les lignes, garder les projecteurs affectés', true], ['remove', 'Vider les lignes et retirer les projecteurs du spectacle']], true);
+    if (c) await batchRun(root, 'delete', { remove: c === 'remove' }, c === 'remove' ? 'Lignes supprimées, projecteurs retirés' : 'Lignes vidées');
+  }
   /** Gestes de la cellule ID et des boutons de ligne. */
   async function act(root: HTMLElement, key: string, what: string, v?: string) {
     const r = rowsNow().find((x) => x.key === key); if (!r) return;
@@ -182,8 +238,8 @@ export const patchView: ViewFactory = ([showId]) => {
     if (what === 'line-del') {
       if (r.itemId === null) { if (window.confirm('Supprimer cette ligne ?')) await structural(root, 'patch_delete_line', { p_item: null, p_line: r.lineId, p_remove: false }, 'Ligne supprimée'); return; }
       const buttons: [string, string, boolean?][] = [['keep', 'Garder le projecteur affecté (vider la ligne)', true]];
-      buttons.push(['remove', 'Retirer aussi le projecteur du spectacle (la demande de matériel baisse de 1)']);
-      const c = await ask(`Supprimer la ligne du projecteur ${r.itemId} ?`, 'Il peut rester affecté au spectacle, ou être retiré : dans ce cas le matériel demandé baisse de 1.', buttons);
+      buttons.push(['remove', 'Retirer aussi le projecteur du spectacle']);
+      const c = await ask(`Supprimer la ligne du projecteur ${r.itemId} ?`, 'Il peut rester affecté au spectacle, ou être retiré du spectacle (le matériel demandé ne change pas : c\'est un objectif).', buttons);
       if (c) await structural(root, 'patch_delete_line', { p_item: r.itemId, p_line: null, p_remove: c === 'remove' }, c === 'remove' ? 'Projecteur retiré' : 'Ligne vidée');
       return;
     }
@@ -259,7 +315,7 @@ export const patchView: ViewFactory = ([showId]) => {
       case 'notes': return can_ ? `<input class="pin" data-k="notes" value="${esc(r.notes)}" maxlength="500" autocomplete="off" aria-label="Notes">` : `<span>${esc(r.notes) || '<i class="muted">—</i>'}</span>`;
     }
   };
-  const rowHtml = (r: PatchRow, ed: Set<Col>): string => `<tr data-key="${esc(r.key)}" class="${r.state === 'ok' ? 'done' : r.state === 'todo' ? 'todo' : ''}" ${r.updatedAt ? `title="Modifié ${esc(fmtDateTime(r.updatedAt))}${r.updatedBy ? ' par ' + esc(r.updatedBy) : ''}"` : ''}>${COLS.map((c) => `<td data-label="${c.label}" data-c="${c.k}">${cell(r, c.k, ed)}</td>`).join('')}<td class="rowact" data-c="act">${ed.has('id') ? `<button class="btn mini" data-act="line-del" aria-label="Supprimer la ligne">Suppr.</button>` : ''}</td></tr>`;
+  const rowHtml = (r: PatchRow, ed: Set<Col>): string => `<tr data-key="${esc(r.key)}" class="${r.state === 'ok' ? 'done' : r.state === 'todo' ? 'todo' : ''}${selMode && sel.has(r.key) ? ' picked' : ''}" ${r.updatedAt ? `title="Modifié ${esc(fmtDateTime(r.updatedAt))}${r.updatedBy ? ' par ' + esc(r.updatedBy) : ''}"` : ''}>${selMode ? `<td class="selc" data-c="sel"><input type="checkbox" class="selbox" data-key="${esc(r.key)}" ${sel.has(r.key) ? 'checked' : ''} aria-label="Sélectionner ${esc(rowLabel(r))}"></td>` : ''}${COLS.map((c) => `<td data-label="${c.label}" data-c="${c.k}">${cell(r, c.k, ed)}</td>`).join('')}<td class="rowact" data-c="act">${ed.has('id') ? `<button class="btn mini" data-act="line-del" aria-label="Supprimer la ligne">Suppr.</button>` : ''}</td></tr>`;
 
   /** Choix du modèle d'une ligne sans projecteur : catalogue, texte libre, ou nouveau modèle ajouté au catalogue. */
   /** « + À louer / à emprunter… » : on choisit le modèle (et la lampe d'un PAR) ; la demande de matériel monte de 1 et l'alarme « manque » joue si le stock ne suffit pas. */
@@ -312,6 +368,8 @@ export const patchView: ViewFactory = ([showId]) => {
     const ed = edSet(), rows = ordered(), exts = externalStatus(view(), showId, lines);
     const pt = host.querySelector<HTMLElement>('.ptable'), keepTop = pt?.scrollTop ?? 0, keepLeft = pt?.scrollLeft ?? 0;   // on garde la position de défilement au redessin
     const last = rows.filter((r) => r.updatedAt).sort((a, b) => b.updatedAt!.localeCompare(a.updatedAt!))[0];
+    for (const k of [...sel]) if (!rows.some((r) => r.key === k)) sel.delete(k);   // une ligne disparue n'est plus cochée
+    if (selMode && !ed.size) { selMode = false; sel.clear(); }   // plus de droit (hors ligne…) : on quitte la sélection
     const arrow = (c: Col) => (sortCol === c ? (dir === 1 ? ' ▲' : ' ▼') : '');
     host.innerHTML = `<div class="phead"><a href="#/show/${esc(showId)}" class="sub">‹ ${esc(show.name)}</a>
       <div class="row wrap"><h1 class="grow">Patch / Focus</h1><span id="pstat" class="sub ${statErr ? 'warn' : ''}" role="status">${esc(stat)}</span></div>
@@ -319,11 +377,12 @@ export const patchView: ViewFactory = ([showId]) => {
       ${exts.length ? `<div class="sub extinfo">Locations / prêts : ${exts.map((x) => `<span class="${x.placed === x.qty ? '' : 'extwarn'}">${esc(x.short)} <b>${esc(extCount(x))}</b></span>`).join(' · ')}</div>` : ''}
       ${!navigator.onLine ? '<div class="banner">Hors ligne : la feuille est en lecture seule.</div>' : ed.size === 0 ? '<div class="sub">Consultation seulement : tu n\'es pas assigné à ce spectacle.</div>'
         : !canActShow(showId) ? '<div class="sub">Tu peux modifier la grada, la courbe et les gélatines.</div>' : ''}
-      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button>${ed.has('id') ? '<details class="multi eraser"><summary class="btn">Effacer…</summary><div class="opts"><button class="btn" data-act="clear-circuits">Effacer les circuits</button><button class="btn" data-act="clear-gels">Effacer les gels et accessoires</button></div></details>' : ''}</div></div>
+      <div class="row wrap noprint">${ed.has('id') ? '<button class="btn primary" data-act="line-add">+ Ajouter une ligne</button>' : ''}<button class="btn" data-act="pdf">PDF</button>${ed.size && rows.length ? `<button class="btn${selMode ? ' on' : ''}" data-act="sel-toggle" aria-pressed="${selMode}">Sélectionner</button>` : ''}${ed.has('id') ? '<details class="multi eraser"><summary class="btn">Effacer…</summary><div class="opts"><button class="btn" data-act="clear-circuits">Effacer les circuits</button><button class="btn" data-act="clear-gels">Effacer les gels et accessoires</button><button class="btn" data-act="clear-all">Effacer la feuille, garder les projecteurs affectés</button></div></details>' : ''}</div>
+      ${selMode ? `<div class="selbar noprint" role="toolbar" aria-label="Actions sur la sélection"><b role="status">${lignes(sel.size)} sélectionnée${sel.size > 1 ? 's' : ''}</b><button class="btn mini" data-act="sel-all">Tout</button><button class="btn mini primary" data-act="sel-edit" ${sel.size ? '' : 'disabled'}>Modifier…</button>${ed.has('id') ? `<button class="btn mini danger" data-act="sel-del" ${sel.size ? '' : 'disabled'}>Supprimer…</button>` : ''}<button class="btn mini" data-act="sel-off" aria-label="Quitter la sélection">✕</button></div>` : ''}</div>
       <div class="row patch-sortbar"><label class="f grow">Trier par<select id="psort">${COLS.map((c) => `<option value="${c.k}" ${c.k === sortCol ? 'selected' : ''}>${c.label}</option>`).join('')}</select></label>
         <button class="btn" data-act="pdir" aria-label="Inverser le tri">${dir === 1 ? '▲' : '▼'}</button></div>
-      <div class="ptable"><table class="patch"><thead><tr>${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}" aria-label="${c.label}" title="${c.label}">${c.short ?? c.label}${arrow(c.k)}</button><span class="rz" data-rz="${c.k}" title="Tire pour changer la largeur (double-clic : largeur automatique)" aria-hidden="true"></span></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
-        <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="12" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
+      <div class="ptable"><table class="patch${selMode ? ' sel' : ''}"><thead><tr>${selMode ? '<th scope="col" class="selc" data-c="sel"><span class="sr">Sélection</span></th>' : ''}${COLS.map((c) => `<th scope="col" data-c="${c.k}" aria-sort="${sortCol === c.k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}"><button data-sort="${c.k}" aria-label="${c.label}" title="${c.label}">${c.short ?? c.label}${arrow(c.k)}</button><span class="rz" data-rz="${c.k}" title="Tire pour changer la largeur (double-clic : largeur automatique)" aria-hidden="true"></span></th>`).join('')}<th scope="col" class="rowact"><span class="sr">Actions</span></th></tr></thead>
+        <tbody>${rows.map((r) => rowHtml(r, ed)).join('') || '<tr><td colspan="14" class="empty">Aucun projecteur affecté à ce spectacle.</td></tr>'}</tbody></table></div>`;
     fitTable(root);
     const nt = host.querySelector<HTMLElement>('.ptable'); if (nt) { nt.scrollTop = keepTop; nt.scrollLeft = keepLeft; }
   }
@@ -442,6 +501,18 @@ export const patchView: ViewFactory = ([showId]) => {
         }
         const sb = t.closest<HTMLElement>('[data-act="state"]');
         if (sb) { const k = sb.closest<HTMLElement>('tr[data-key]')?.dataset.key; if (k) stateClick(root, k, sb, (e as MouseEvent).detail === 0 && (e as MouseEvent).shiftKey); return; }   // détail 0 = clavier : Maj + Entrée = « à faire »
+        if (t.closest('[data-act="sel-toggle"]')) { selMode = !selMode; sel.clear(); lastSel = null; paint(root); return; }   // entrer / sortir du mode sélection
+        if (t.closest('[data-act="sel-off"]')) { selMode = false; sel.clear(); lastSel = null; paint(root); return; }
+        if (t.closest('[data-act="sel-all"]')) { const all = ordered().map((r) => r.key); if (sel.size === all.length) sel.clear(); else all.forEach((k) => sel.add(k)); paint(root); return; }   // « Tout » : les lignes affichées ; un 2e appui décoche
+        if (t.closest('[data-act="sel-edit"]')) { if (sel.size) void batchEdit(root); return; }
+        if (t.closest('[data-act="sel-del"]')) { if (sel.size) void batchDelete(root); return; }
+        const sbx = t.closest<HTMLInputElement>('input.selbox');
+        if (sbx) {   // case d'une ligne ; Maj + clic = toutes les lignes entre la dernière case touchée et celle-ci
+          const k = sbx.dataset.key!, on = sbx.checked;
+          const ks = (e as MouseEvent).shiftKey && lastSel ? rangeKeys(ordered().map((r) => r.key), lastSel, k) : [k];
+          for (const x of ks) { if (on) sel.add(x); else sel.delete(x); }
+          lastSel = k; paint(root); return;
+        }
         const clr = t.closest<HTMLElement>('[data-act="clear-circuits"], [data-act="clear-gels"]');
         if (clr) {   // vider les circuits (gradas gardées) ou les gélatines + accessoires, pour repartir d'un montage déjà patché
           clr.closest('details')?.removeAttribute('open');   // le menu se referme
@@ -452,6 +523,17 @@ export const patchView: ViewFactory = ([showId]) => {
             const r = await rpcCall(circ ? 'patch_clear_circuits' : 'patch_clear_gels_acc', { p_show: showId }); busy--; seed();
             if (r.error) { setStat(root, r.error, true); toast(r.error); return; }
             setStat(root, circ ? 'Circuits effacés ✓' : 'Gélatines et accessoires effacés ✓'); paint(root);
+          })();
+          return;
+        }
+        if (t.closest('[data-act="clear-all"]')) {   // effacer toute la feuille ; les projecteurs restent affectés
+          t.closest('details')?.removeAttribute('open');
+          if (!window.confirm('Effacer toute la feuille de patch ? Circuits, gradas, courbes, DMX, positions, accessoires, gélatines, états et notes disparaissent, ainsi que les lignes sans projecteur. Les projecteurs restent affectés au spectacle. Impossible d\'annuler.')) return;
+          void (async () => {
+            busy++; setStat(root, 'Effacement…');
+            const r = await rpcCall('patch_clear_all', { p_show: showId }); busy--; seed();
+            if (r.error) { setStat(root, r.error, true); toast(r.error); return; }
+            selMode = false; sel.clear(); resort(); setStat(root, 'Feuille effacée ✓'); paint(root);
           })();
           return;
         }

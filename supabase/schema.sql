@@ -2099,10 +2099,120 @@ begin
   return n1 + n2;
 end $$;
 
+-- v1.49.0 : efface toute la feuille de patch en gardant les projecteurs affectés (lignes, circuits, gradas, courbes, DMX, positions, accessoires,
+-- gélatines, états, notes ; lignes sans projecteur comprises). Gardés : projecteurs affectés, demandes (et leurs gélatines), prêts / locations.
+create or replace function patch_clear_all(p_show uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare n1 int; n2 int; nm text; nd uuid;
+begin
+  if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  for nd in select need_demand_id from patch_lines where show_id = p_show and need_demand_id is not null loop perform demand_dec(nd); end loop;   -- les besoins « à louer » disparaissent avec leurs lignes
+  delete from patch_lines where show_id = p_show;
+  get diagnostics n1 = row_count;
+  delete from show_gels where show_id = p_show;
+  get diagnostics n2 = row_count;
+  select name into nm from shows where id = p_show;
+  perform log_event('SPECTACLE', format('« %s » : feuille de patch effacée, projecteurs affectés conservés (%s ligne(s), %s gélatine(s))', nm, n1, n2));
+  perform reallocate_all();
+  return n1;
+end $$;
+
+-- v1.49.0 : actions par lots sur la feuille de patch. p_targets = [{"item": n} ou {"line": uuid}, ...] (1 à 500) ; tout ou rien (une erreur annule le lot).
+--   p_op 'field'     : p_value {field, value} : position, courbe, état {s, note}, note ; circuit / grada / DMX : seulement vider (value "")
+--        'acc_add' / 'acc_remove' : p_value {acc} ; 'gel_add' : p_value {gels:[{ref,color}]} ; 'gel_clear' ;
+--        'delete'    : p_value {remove: bool} ; vide les lignes (le projecteur reste affecté) et, si remove, retire aussi les projecteurs du spectacle.
+-- Droits comme ligne par ligne : technicien = grada, courbe, gélatines ; le reste et la suppression = régisseur assigné, RG, admin.
+create or replace function patch_batch(p_show uuid, p_targets jsonb, p_op text, p_value jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare t jsonb; it int; ln uuid; items int[] := '{}'; lines uuid[] := '{}'; n int; nm text; f text; v jsonb; a text; arr text[]; g jsonb; rf text; col text; lbl text; what text; nd uuid; rm boolean;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if jsonb_typeof(p_targets) is distinct from 'array' or jsonb_array_length(p_targets) not between 1 and 500 then raise exception 'Sélectionne de 1 à 500 lignes' using errcode = '22023'; end if;
+  if p_op not in ('field', 'acc_add', 'acc_remove', 'gel_add', 'gel_clear', 'delete') then raise exception 'Action inconnue' using errcode = '22023'; end if;
+  f := p_value ->> 'field';
+  if p_op = 'field' and f not in ('circuit', 'dimmer', 'dmx', 'curve', 'position', 'state', 'notes') then raise exception 'Champ inconnu' using errcode = '22023'; end if;
+  if p_op in ('acc_add', 'acc_remove', 'delete') or (p_op = 'field' and f not in ('dimmer', 'curve')) then
+    if not can_act_show(p_show) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
+  end if;
+  for t in select * from jsonb_array_elements(p_targets) loop
+    it := nullif(t ->> 'item', '')::int; ln := nullif(t ->> 'line', '')::uuid;
+    if it is not null then
+      if not exists (select 1 from show_items where show_id = p_show and item_id = it) then raise exception 'Le projecteur % n''est pas affecté à ce spectacle', it using errcode = '22023'; end if;
+      if not (it = any (items)) then items := items || it; end if;
+    else
+      if not exists (select 1 from patch_lines where id = ln and show_id = p_show and item_id is null) then raise exception 'Ligne introuvable' using errcode = '22023'; end if;
+      if not (ln = any (lines)) then lines := lines || ln; end if;
+    end if;
+  end loop;
+  n := cardinality(items) + cardinality(lines);
+  select name into nm from shows where id = p_show;
+  lbl := patch_label();
+
+  if p_op = 'field' then
+    v := p_value -> 'value';
+    if f in ('circuit', 'dimmer', 'dmx') and coalesce(v #>> '{}', '') <> '' then raise exception 'En lot, circuit, grada et DMX ne peuvent qu''être vidés' using errcode = '22023'; end if;
+    foreach it in array items loop perform set_patch_field(p_show, it, null, f, v); end loop;
+    foreach ln in array lines loop perform set_patch_field(p_show, null, ln, f, v); end loop;
+    what := format('champ « %s » modifié', f);
+
+  elsif p_op in ('acc_add', 'acc_remove') then
+    a := p_value ->> 'acc';
+    if a is null or not (a = any (array['iris', 'gobo', 'volets', 'autre'])) then raise exception 'Accessoire inconnu' using errcode = '22023'; end if;
+    foreach it in array items loop
+      select coalesce((select accessories from patch_lines where show_id = p_show and item_id = it), '{}') into arr;
+      arr := case when p_op = 'acc_add' then (select coalesce(array_agg(distinct x), '{}') from unnest(arr || a) x) else array_remove(arr, a) end;
+      perform set_patch_field(p_show, it, null, 'accessories', to_jsonb(arr));
+    end loop;
+    foreach ln in array lines loop
+      select coalesce((select accessories from patch_lines where id = ln), '{}') into arr;
+      arr := case when p_op = 'acc_add' then (select coalesce(array_agg(distinct x), '{}') from unnest(arr || a) x) else array_remove(arr, a) end;
+      perform set_patch_field(p_show, null, ln, 'accessories', to_jsonb(arr));
+    end loop;
+    what := format('accessoire « %s » %s', a, case when p_op = 'acc_add' then 'ajouté' else 'retiré' end);
+
+  elsif p_op = 'gel_add' then
+    if jsonb_typeof(p_value -> 'gels') is distinct from 'array' or jsonb_array_length(p_value -> 'gels') not between 1 and 10 then raise exception 'Indique de 1 à 10 références de gel' using errcode = '22023'; end if;
+    for g in select * from jsonb_array_elements(p_value -> 'gels') loop
+      rf := trim(coalesce(g ->> 'ref', '')); col := g ->> 'color';
+      if rf = '' or length(rf) > 60 then raise exception 'Référence du gel obligatoire (60 caractères maximum)' using errcode = '22023'; end if;
+      if not (col = any (gel_colors())) then raise exception 'Couleur de gel inconnue' using errcode = '22023'; end if;
+      insert into show_gels (show_id, item_id, ref, color, added_by_label)
+        select p_show, x, rf, col, lbl from unnest(items) x
+         where not exists (select 1 from show_gels sg where sg.show_id = p_show and sg.item_id = x and lower(trim(sg.ref)) = lower(rf));   -- pas de doublon sur un même projecteur
+      foreach ln in array lines loop
+        update patch_lines set gels = gels || jsonb_build_array(jsonb_build_object('ref', rf, 'color', col)), updated_at = now(), updated_by_label = lbl
+         where id = ln and not exists (select 1 from jsonb_array_elements(gels) e where lower(e ->> 'ref') = lower(rf));
+        if (select jsonb_array_length(gels) from patch_lines where id = ln) > 20 then raise exception 'Trop de gélatines sur une ligne (20 maximum)' using errcode = '22023'; end if;
+      end loop;
+    end loop;
+    what := 'gélatine(s) ajoutée(s)';
+
+  elsif p_op = 'gel_clear' then
+    delete from show_gels where show_id = p_show and item_id = any (items);
+    update patch_lines set gels = '[]'::jsonb, updated_at = now(), updated_by_label = lbl where id = any (lines);
+    what := 'gélatines vidées';
+
+  else   -- delete
+    rm := coalesce((p_value ->> 'remove')::boolean, false);
+    for nd in select need_demand_id from patch_lines where id = any (lines) and need_demand_id is not null loop perform demand_dec(nd); end loop;
+    delete from patch_lines where show_id = p_show and (item_id = any (items) or id = any (lines));
+    if rm and cardinality(items) > 0 then perform unassign_items(p_show, items); end if;
+    what := case when rm then 'supprimée(s) avec retrait du spectacle' else 'vidée(s), projecteurs conservés' end;
+  end if;
+
+  perform log_event('SPECTACLE', format('« %s » : feuille de patch, %s ligne(s) %s (lot)', nm, n, what));
+  if p_op = 'delete' then perform reallocate_all(); end if;
+  return n;
+end $$;
+
 revoke all on function show_copy_from(uuid,uuid,text,boolean,boolean) from public;
 revoke all on function patch_clear_circuits(uuid) from public;
 revoke all on function patch_clear_gels_acc(uuid) from public;
+revoke all on function patch_clear_all(uuid) from public;
+revoke all on function patch_batch(uuid,jsonb,text,jsonb) from public;
 grant execute on function show_copy_from(uuid,uuid,text,boolean,boolean) to authenticated;
 grant execute on function patch_clear_circuits(uuid) to authenticated;
 grant execute on function patch_clear_gels_acc(uuid) to authenticated;
+grant execute on function patch_clear_all(uuid) to authenticated;
+grant execute on function patch_batch(uuid,jsonb,text,jsonb) to authenticated;
 

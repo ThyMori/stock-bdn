@@ -137,6 +137,15 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Effacer toute la feuille et sélection par lots (v1.49.0)
+- Menu **Effacer…** de la feuille de patch : « Effacer la feuille, garder les projecteurs affectés » (`patch_clear_all`). Supprime toutes les lignes (y compris sans projecteur / « à louer », dont le +1 de demande est retiré), circuits, gradas, courbes, DMX, positions, accessoires, gélatines, états, notes. Gardés : projecteurs affectés, demandes et leurs gels, prêts / locations. Droits : régisseur assigné, régisseur général, admin ; confirmation ; une ligne au journal.
+- Bouton **Sélectionner** : case par ligne (colonne fixe à gauche), Maj + clic = plage, « Tout » = lignes affichées (2e appui : décoche), barre fixe dans l'en-tête (nombre, Modifier…, Supprimer…, ✕). Le mode se ferme après un succès ; en cas d'erreur la sélection reste.
+- **Modifier…** (`patch_batch`, op `field` / `acc_add` / `acc_remove` / `gel_add` / `gel_clear`) : position, courbe (remplace), accessoire ajouter / retirer, gélatines ajouter (références multiples `L201 + R119`, sans doublon) ou vider, état (+ note), note, vider circuit / grada / DMX. Pas d'ID ni de modèle. Circuit, grada et DMX ne peuvent qu'être vidés en lot (le serveur refuse une valeur).
+- **Supprimer…** (op `delete`) : vider les lignes en gardant les projecteurs, ou les retirer aussi du spectacle. Confirmation en cadre rouge.
+- Droits (appliqués par la base) : technicien = grada (vider), courbe, gélatines ; régisseur assigné, régisseur général, admin = tout, dont la suppression. Tout ou rien (une erreur annule le lot). Une ligne de journal par lot, pas de notification, connexion requise, pas d'annulation. Plafond 500 lignes.
+- Logique pure testable : `src/patchBatch.ts` (cibles, plage, actions par droit), `tests/patch-batch.test.ts`. Test SQL : pglite `test35` (rights, rollback, journal).
+- **Supabase : oui** — rejouer `schema.sql`.
+
 ### Gélatines demandées et porte-filtres (v1.48.0)
 - Sous chaque demande : bouton **Gel** → une ou plusieurs références (séparateurs `+ , ; &` : `L201 + R119`, `L200, R114`, `L281+#132`) et le **nombre de projecteurs** concernés (1 à la quantité demandée). Chaque référence devient une ligne `show_demand_gels` (couleur déduite de la référence, comme pour les gels de projecteur). Pastille « L201 × 12 » avec croix pour retirer.
 - Une référence déjà demandée sur la demande est **additionnée** (insensible à la casse) ; le total ne peut pas dépasser la quantité demandée (message d'erreur sinon). Baisser la demande plafonne l'affichage et le calcul ; supprimer la demande supprime ses gels.
@@ -302,6 +311,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.46.0) | `reallocate_all` réécrit (calcul du manque jour par jour, stock partagé), colonne `show_demands.available`, projecteurs « auto » repris comme affectés à la main, `swap_show_item` / `release_show_item` supprimées | v1.46.0 |
 | `schema.sql` (v1.47.0) | table `show_substitutions`, fonctions `add_substitution` / `delete_substitution`, `reallocate_all` tient compte des substitutions | v1.47.0 |
 | `schema.sql` (v1.48.0) | table `show_demand_gels`, fonctions `add_demand_gels` / `delete_demand_gel` | v1.48.0 |
+| `schema.sql` (v1.49.0) | fonctions `patch_clear_all`, `patch_batch` | v1.49.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |
 | `schema.sql` fin de fichier (v1.37.0) | `patch_lines.need_demand_id`, `patch_need_set`, `demand_dec`, `set_patch_field` / `patch_set_item` / `patch_delete_line` adaptées | v1.37.0 |

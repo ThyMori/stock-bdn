@@ -558,3 +558,13 @@ details.eraser .opts .btn { width: 100%; text-align: left; }
 
 /* bouton « Utiliser le matériel d'un autre spectacle » : texte long, il passe à la ligne au lieu de déborder de la carte (écran 360 px) */
 .btn[data-act="copy-from"] { max-width: 100%; white-space: normal; text-align: center; }
+
+/* sélection par lots (feuille de patch) */
+.selbar { order: 7; flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 6px; border: 2px solid var(--ink); background: color-mix(in srgb, var(--ink) 8%, var(--paper)); }
+.selbar b { margin-right: auto; }
+.btn.on { background: var(--ink); color: var(--paper); }
+table.patch th.selc, table.patch td.selc { position: sticky; left: 0; width: 44px; min-width: 44px; max-width: 44px; box-sizing: border-box; text-align: center; z-index: 4; background: var(--paper); }
+table.patch.sel th[data-c="circuit"], table.patch.sel td[data-c="circuit"] { left: 44px; }
+table.patch.sel th[data-c="model"], table.patch.sel td[data-c="model"] { left: calc(var(--cw) + 44px); }
+.selbox { width: 28px; height: 28px; accent-color: var(--ink); }
+table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--paper)); }
