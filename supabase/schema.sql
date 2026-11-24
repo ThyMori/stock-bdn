@@ -1038,6 +1038,41 @@ revoke all on function activate_scheduled_sav() from public;
 grant execute on function report_fault_keep(uuid,int,text,timestamptz,uuid,date) to authenticated;
 grant execute on function activate_scheduled_sav() to authenticated;
 
+-- v1.52.0 : panne bloquante = SAV immédiat, déclenché par une déclaration de panne (technicien et plus).
+-- Le technicien ne peut toujours pas changer l'état à la main (apply_status reste réservé aux régisseurs généraux) : seule cette fonction, liée à une panne, ouvre un SAV.
+-- Projecteur « disponible » : passe en SAV (immobilisation sans date de fin, commence aujourd'hui). Déjà en SAV ou en prêt : seule la panne est enregistrée.
+create or replace function report_fault_sav(p_id uuid, p_item int, p_description text, p_at timestamptz)
+returns void language plpgsql security definer set search_path = public as $$
+declare lbl text; n int; d date; prev item_status; cur_at timestamptz;
+begin
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  select status, status_at into prev, cur_at from items where id = p_item;
+  if not found then raise exception 'Projecteur % introuvable', p_item using errcode = 'P0002'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  d := (p_at at time zone 'Europe/Paris')::date;
+  insert into faults (id, item_id, description, reported_by, reported_by_label, reported_at)
+  values (p_id, p_item, nullif(trim(p_description), ''), auth.uid(), lbl, p_at)
+  on conflict (id) do nothing;
+  get diagnostics n = row_count;
+  if n > 0 then
+    insert into item_events (id, item_id, kind, note, created_by, created_by_label, at)
+    values (gen_random_uuid(), p_item, 'fault', p_description, auth.uid(), lbl, p_at);
+    perform log_event('PANNE', format('#%s : panne déclarée%s', p_item, coalesce(' — ' || nullif(trim(p_description), ''), '')));
+    if prev = 'dispo' and p_at >= cur_at then
+      update items set status = 'sav', status_at = p_at, updated_at = now() where id = p_item;
+      update immos set closed_date = greatest(d, start_date) where item_id = p_item and closed_date is null and start_date <= d;
+      insert into immos (item_id, kind, note, start_date, end_date, created_by, created_by_label)
+      values (p_item, 'sav', coalesce(nullif(trim(p_description), ''), 'Panne signalée'), d, null, auth.uid(), lbl);
+      insert into item_events (id, item_id, kind, status, note, created_by, created_by_label, at)
+      values (gen_random_uuid(), p_item, 'status', 'sav', 'SAV après la panne signalée' || coalesce(' : ' || nullif(trim(p_description), ''), ''), auth.uid(), lbl, p_at);
+      perform log_event('STATUT', format('#%s : dispo → SAV (panne signalée par %s)', p_item, lbl));
+    end if;
+    perform reallocate_all();
+  end if;
+end $$;
+revoke all on function report_fault_sav(uuid,int,text,timestamptz) from public;
+grant execute on function report_fault_sav(uuid,int,text,timestamptz) to authenticated;
+
 -- ======================= Assignation automatique (v1.9) =======================
 -- Un spectacle exprime des DEMANDES (modèle + lampe pour les PAR + quantité) ; l'appli choisit les projecteurs.
 -- Elle préfère les PAR déjà montés avec la bonne lampe, évite les projecteurs indisponibles (SAV, prêt, panne ouverte,

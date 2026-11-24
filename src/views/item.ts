@@ -1,7 +1,7 @@
 import { positionNow, posLabel } from '../position';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
-import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, resolveFault, setStatus, view, pull, state } from '../store';
+import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, reportFaultSav, resolveFault, setStatus, view, pull, state } from '../store';
 import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, sortShows, todayStr, uuid } from '../logic';
 import { agendaHtml, fmtDay } from './agenda';
 import { openForm } from '../ui/dialog';
@@ -10,7 +10,6 @@ import { mentionedItems, personColor, renderBody } from '../wall';
 import { STATUS_LABEL, STATUSES, showColor } from '../types';
 import type { ItemEvent } from '../types';
 import { supabase } from '../supabase';
-import { toast } from '../ui/toast';
 import { keepShowFor, keepText } from '../keepFault';
 
 export const itemView: ViewFactory = ([idStr], query) => {
@@ -24,32 +23,13 @@ export const itemView: ViewFactory = ([idStr], query) => {
         <div id="dyn" class="stack"></div>
         <div id="agenda" class="card stack"></div>
         <div id="shows" class="card stack"></div>
-        <details class="card" id="faultForm"><summary>Signaler une panne</summary>
-          <form class="stack" style="margin-top:12px">
-            <textarea name="d" placeholder="Que se passe-t-il ? (ex. condenseur explosé, presse-étoupe…)"></textarea>
-            <div id="keepbox" hidden><label class="f">Le projecteur peut-il rester en service ?<select name="keep"></select></label>
-              <label class="f" id="keepdate" hidden>Dernier jour d'usage<input type="date" name="until"></label>
-              <div class="sub">Un SAV sans date de fin sera créé tout seul le lendemain.</div></div>
-            <button class="btn primary">Envoyer le signalement</button>
-          </form></details>
+        <button class="btn danger" data-act="fault" ${can('technicien') ? '' : 'disabled'}>⚠ Signaler une panne</button>
         <div id="adm"></div>
         <div id="hist" class="card"><h3>Historique</h3><div class="sub" style="margin-top:6px">Chargement…</div></div>
       </div>`;
       paint(root);
       renderAdmin(root);
 
-      root.querySelector('#faultForm form')!.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const form = e.target as HTMLFormElement;
-        const d = (form.elements.namedItem('d') as HTMLTextAreaElement).value;
-        const kv = (form.elements.namedItem('keep') as HTMLSelectElement | null)?.value ?? '';
-        const until = (form.elements.namedItem('until') as HTMLInputElement | null)?.value ?? '';
-        if (kv === 'date' && !until) { toast('Choisis le dernier jour d\'usage.'); return; }
-        await reportFault(id, d, kv === '' ? undefined : kv === 'date' ? { show: null, until } : { show: kv, until: null });   // « reste en service » : panne non bloquante + SAV planifié
-        form.reset();
-        (root.querySelector('#faultForm') as HTMLDetailsElement).open = false;
-      });
-      root.addEventListener('change', (e) => { const t = e.target as HTMLSelectElement; if (t.name === 'keep') root.querySelector<HTMLElement>('#keepdate')!.hidden = t.value !== 'date'; });   // date libre seulement pour « une autre date »
       root.addEventListener('click', async (e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
         if (!el) return;
@@ -61,6 +41,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
           const b = root.querySelector('#berr'); if (b) b.textContent = '';
           void rpcCall('set_blue_dot', { p_item: id, p_value: el.dataset.v === '1' }).then((r) => { if (r.error && b) b.textContent = r.error; });
         }
+        if (act === 'fault') void declareFault(false);
         if (act === 'show-assign') void assignToShow(root);
         if (act === 'show-remove') { const sid = el.dataset.v!; if (window.confirm('Retirer ce projecteur du spectacle ?')) void rpcCall('unassign_items', { p_show: sid, p_items: [id] }); }
         if (act === 'immo-add') void immoForm(root);
@@ -90,22 +71,36 @@ export const itemView: ViewFactory = ([idStr], query) => {
         { name: 'note', label: 'Remarque' }], { submit: 'Valider le prêt', validate: dates });
       if (v) void setStatus(id, s, { who: v.who, from: v.from, until: v.until, note: v.note });
     } else if (s === 'sav') {
-      const v = await openForm(`Passer le n° ${id} en SAV`, [
-        { name: 'note', label: 'Motif', value: 'Réparation' },   // motif proposé par défaut
-        { name: 'from', label: 'Début du SAV', type: 'date', required: true, value: today, max: today },
-        { name: 'until', label: 'Fin prévue', type: 'date', min: today, hint: 'Laisse vide si la date de retour n\'est pas connue.' },
-        // proposition de déclarer aussi une panne (même mécanisme que le remplacement dans la feuille de patch)
-        { name: 'fault', label: 'Déclarer aussi une panne ?', type: 'select', options: [['oui', 'Oui, en même temps'], ['', 'Non']], value: 'oui' },   // « Oui » proposé par défaut
-        { name: 'desc', label: 'Description de la panne (si oui)', type: 'textarea', hint: 'Laisse vide pour reprendre le motif du SAV.' }], { submit: 'Passer en SAV', focus: 'desc', validate: dates });
-      if (v) {
-        void setStatus(id, s, { note: v.note, from: v.from, until: v.until });   // passe le projecteur en SAV
-        if (v.fault === 'oui') {                                               // l'utilisateur a choisi de déclarer une panne
-          void reportFault(id, v.desc || v.note || 'Passé en SAV');            // description : saisie, sinon motif, sinon texte par défaut
-        }
+      // motif : panne (par défaut) ou maintenance sans panne (régisseurs généraux et admins seulement)
+      let kind = 'panne';
+      if (can('regisseur_general')) {
+        const k = await openForm(`Passer le n° ${id} en SAV`, [{ name: 'k', label: 'Pourquoi ?', type: 'select', options: [['panne', 'Panne'], ['maintenance', 'Maintenance, sans panne']], value: 'panne', required: true }], { submit: 'Suivant', focus: 'k' });
+        if (!k) return; kind = k.k;
       }
+      if (kind === 'maintenance') {
+        const v = await openForm(`Maintenance du n° ${id}`, [
+          { name: 'note', label: 'Motif', value: 'Maintenance', required: true },
+          { name: 'from', label: 'Début du SAV', type: 'date', required: true, value: today, max: today },
+          { name: 'until', label: 'Fin prévue', type: 'date', min: today, hint: 'Laisse vide si la date de retour n\'est pas connue.' }], { submit: 'Passer en SAV', validate: dates });
+        if (v) void setStatus(id, s, { note: v.note, from: v.from, until: v.until });   // SAV sans panne
+        return;
+      }
+      await declareFault(true);
     } else {
       void setStatus(id, s);
     }
+  }
+
+  /** Fenêtre « panne » : description obligatoire ; si le projecteur est dans un spectacle en cours ou à venir, on demande s'il peut rester en service jusqu'à la fin du spectacle. */
+  async function declareFault(fromSav: boolean) {
+    const sh = keepShowFor(view(), id, todayStr());
+    const fields = [{ name: 'desc', label: 'Description de la panne', type: 'textarea' as const, required: true, hint: 'Ex. molette cassée, condenseur explosé…' },
+      ...(sh ? [{ name: 'keep', label: 'Le projecteur peut-il rester en service ?', type: 'select' as const, value: '', required: true,
+        options: [['', 'Non : à traiter tout de suite (SAV immédiat)'], [sh.id, `Oui, jusqu'à la fin de « ${sh.name} » (${fmtDay(sh.end_date)}), puis SAV`]] as [string, string][] }] : [])];
+    const v = await openForm(fromSav ? `Panne du n° ${id} : passage en SAV` : `Panne du n° ${id}`, fields, { submit: 'Déclarer la panne', focus: 'desc' });
+    if (!v) return;
+    if (v.keep) void reportFault(id, v.desc, { show: v.keep, until: null });   // panne non bloquante : en service, SAV planifié le lendemain de la fin
+    else void reportFaultSav(id, v.desc);                                    // panne bloquante : SAV tout de suite
   }
 
   async function immoDelete(root: HTMLElement, immoId: string) {
@@ -202,10 +197,10 @@ export const itemView: ViewFactory = ([idStr], query) => {
       <div class="card stack">
         <div class="row"><div class="big">${id}</div>
           <div class="grow"><h1>${esc(d.model?.name)}${item.blue_dot ? ' <span class="bluedot" title="Stocké au 3e quand il ne joue pas" role="img" aria-label="Pastille bleue : stocké au 3e"></span>' : ''}</h1><div class="sub">${esc([d.type?.name, d.family?.name].filter(Boolean).join(' · '))}</div></div></div>
-        <div class="seg">${STATUSES.map((s) => `<button class="${s}" data-act="status" data-v="${s}" aria-pressed="${item.status === s}" ${canStatus ? '' : 'disabled'}>${STATUS_LABEL[s]}</button>`).join('')}</div>
+        <div class="seg">${STATUSES.map((s) => `<button class="${s}" data-act="status" data-v="${s}" aria-pressed="${item.status === s}" ${canStatus || (s === 'sav' && can('technicien')) ? '' : 'disabled'}>${STATUS_LABEL[s]}</button>`).join('')}</div>
         ${curInfo}
         ${item.pending ? '<div><span class="pending">En attente de synchronisation</span></div>' : ''}
-        ${canStatus ? '' : '<div class="sub">Seuls les régisseurs généraux et les administrateurs peuvent changer l\'état.</div>'}
+        ${canStatus ? '' : '<div class="sub">Tu peux passer un projecteur en SAV en déclarant une panne ; les autres changements d\'état sont réservés aux régisseurs généraux et aux administrateurs.</div>'}
         ${isPar(data, item) && can('technicien') ? `<div class="lampquick"><div class="sub">Lampe du PAR</div><div class="seg" role="group" aria-label="Changer la lampe">${parLamps(data).map((l) => `<button data-act="lamp" data-v="${esc(l.id)}" aria-pressed="${item.lamp_id === l.id}">${esc(l.name)}</button>`).join('')}</div></div>` : ''}
         <dl class="kv">
           <dt>Lampe</dt><dd>${d.lamp ? esc(d.lamp.name) + (d.lamp.power_w ? ` · ${d.lamp.power_w} W` : '') : '—'}</dd>
@@ -224,16 +219,6 @@ export const itemView: ViewFactory = ([idStr], query) => {
             ${canResolve ? `<button class="btn small" data-act="resolve" data-v="${x.id}">Résolue</button>` : ''}</div>`).join('') || '<div class="sub">Aucune panne en cours.</div>'}
         ${closed.length ? `<h3 class="muted">Résolues</h3>` + closed.map((x) => `<div class="sub">✓ <a href="#/fault/${x.id}">${esc(x.description || 'Sans description')}</a>${x.resolution ? ' → ' + esc(x.resolution) : ''} (${fmtDate(x.resolved_at)}${x.resolved_by_label ? ' par ' + esc(x.resolved_by_label) : ''})</div>`).join('') : ''}
       </div>`;
-    syncKeepBox(root);
-  }
-
-  /** Case « le projecteur peut rester en service » : proposée seulement si le projecteur est dans un spectacle en cours ou à venir (liste mise à jour sans effacer le choix en cours). */
-  function syncKeepBox(root: HTMLElement) {
-    const box = root.querySelector<HTMLElement>('#keepbox'), sel = root.querySelector<HTMLSelectElement>('select[name=keep]'); if (!box || !sel) return;
-    const sh = keepShowFor(view(), id, todayStr());
-    box.hidden = !sh;
-    const html = sh ? `<option value="">Non : à traiter tout de suite</option><option value="${esc(sh.id)}">Oui, jusqu'à la fin de « ${esc(sh.name)} » (${esc(fmtDay(sh.end_date))}), puis SAV</option><option value="date">Oui, jusqu'à une autre date, puis SAV…</option>` : '';
-    if (sel.dataset.sig !== html) { const keep = sel.value; sel.innerHTML = html; sel.dataset.sig = html; if ([...sel.options].some((o) => o.value === keep)) sel.value = keep; }
   }
 
   function renderAdmin(root: HTMLElement) {

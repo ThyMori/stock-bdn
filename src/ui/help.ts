@@ -38,7 +38,7 @@ const SECTIONS: Section[] = [
   ] },
   { title: 'Pannes', items: [
     'Depuis la fiche d\'un projecteur : <b>Signaler une panne</b> (tous les rôles). Tu peux ajouter des infos ensuite ; le régisseur et plus déclarent la panne <b>résolue</b>.',
-    '<b>Panne qui ne bloque pas</b> (ex. molette cassée mais le projecteur joue encore) : dans « Signaler une panne », choisis « Oui, jusqu\'à la fin du spectacle, puis SAV ». Le projecteur reste affecté sans alerte (pastille jaune) ; le lendemain un SAV sans date de fin démarre tout seul et le projecteur n\'est plus proposé aux spectacles suivants. Le rapport de démontage liste « À envoyer en SAV ».',
+    '<b>Déclarer une panne = passer en SAV</b> : le bouton « SAV » de la fiche demande « Panne » ou « Maintenance » (maintenance : régisseur général et admin). Pour une panne, décris-la puis dis si le projecteur peut rester en service. « Non » : SAV tout de suite. « Oui, jusqu\'à la fin du spectacle » : il reste affecté sans alerte (pastille jaune) ; le lendemain un SAV sans date de fin démarre tout seul et il n\'est plus proposé aux spectacles suivants. Le rapport de démontage liste « À envoyer en SAV ». Tous les rôles (technicien et plus) peuvent déclarer une panne.',
     'Onglet <b>Pannes</b> : toutes les pannes ouvertes. Un projecteur en panne n\'est plus proposé aux spectacles.',
     'Quand tu remplaces un projecteur dans la feuille de patch (⇄), l\'appli te propose de déclarer la panne en même temps.'
   ] },

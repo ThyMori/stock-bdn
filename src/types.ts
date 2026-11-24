@@ -88,7 +88,7 @@ export const EMPTY_DATA: Data = {
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */
 export type Op =
   | { id: string; kind: 'status'; item: number; status: Status; note?: string; who?: string; from?: string; until?: string; at: string }
-  | { id: string; kind: 'fault'; item: number; description: string; at: string; keep?: { show: string | null; until: string | null } }
+  | { id: string; kind: 'fault'; item: number; description: string; at: string; keep?: { show: string | null; until: string | null }; sav?: boolean }
   | { id: string; kind: 'resolve'; fault: string; resolution?: string; at: string }
   | { id: string; kind: 'fault_note'; fault: string; text: string; at: string }
   | { id: string; kind: 'fault_edit'; fault: string; description: string; at: string }

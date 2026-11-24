@@ -73,6 +73,11 @@ function overlay(data: Data, pending: Op[]): Data {
           reported_at: op.at, resolved_at: null, resolution: null, pending: true,
           ...(op.keep ? { keep_until: op.keep.until ?? (op.keep.show ? data.shows.find((s) => s.id === op.keep!.show)?.end_date ?? null : null), keep_show: op.keep.show } : {}) };
         faults.unshift(f); fById.set(f.id, f);
+        const it0 = op.sav ? byId.get(op.item) : undefined;
+        if (it0 && it0.status === 'dispo') {   // panne bloquante : SAV immédiat, affiché tout de suite
+          it0.status = 'sav'; it0.status_at = op.at; it0.pending = true;
+          immos = [...immos, { id: 'p-sav-' + op.id, item_id: op.item, kind: 'sav', who: null, note: op.description || 'Panne signalée', start_date: dayOf(op.at), end_date: null, closed_date: null, pending: true }];
+        }
         if (f.keep_until) {   // panne non bloquante : le SAV sans date de fin est planifié tout de suite (le lendemain de la fin d'usage), même hors ligne
           const next = new Date(f.keep_until + 'T12:00:00Z'); next.setUTCDate(next.getUTCDate() + 1);
           immos = [...immos, { id: 'p-keep-' + op.id, item_id: op.item, kind: 'sav', who: null, note: op.description || 'Panne signalée', start_date: next.toISOString().slice(0, 10), end_date: null, closed_date: null, pending: true }];

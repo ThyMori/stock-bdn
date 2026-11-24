@@ -137,6 +137,12 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### SAV = panne (v1.52.0)
+- Le bouton **SAV** de la fiche d'un projecteur ouvre d'abord « Pourquoi ? » : **Panne** (par défaut) ou **Maintenance, sans panne** (régisseur général et admin seulement). Panne : description obligatoire + question « Le projecteur peut-il rester en service ? » (si le projecteur est dans un spectacle en cours ou à venir) : « Non » = **panne bloquante, SAV immédiat** ; « Oui, jusqu'à la fin de « X » » = panne non bloquante (v1.51.0). L'option « une autre date » est supprimée de l'interface.
+- **Technicien et régisseur** : le bouton SAV leur est ouvert, uniquement pour déclarer une panne (fonction `report_fault_sav`, qui passe un projecteur « disponible » en SAV sans date de fin ; en prêt ou déjà en SAV : seule la panne est enregistrée). Ils ne changent toujours pas l'état à la main (`apply_status` réservé au régisseur général). Le journal indique la panne et qui l'a signalée.
+- La carte « Signaler une panne » devient un bouton qui ouvre la même fenêtre ; le remplacement ⇄ de la feuille de patch utilise aussi la panne bloquante (SAV immédiat). Fonctionne hors ligne (file d'attente).
+- **Supabase : oui** — rejouer `schema.sql` (fonction `report_fault_sav`). Test pglite `test37`.
+
 ### Panne non bloquante : le projecteur reste en service, SAV ensuite (v1.51.0)
 - Fiche du projecteur → « Signaler une panne » : si le projecteur est dans un spectacle en cours ou à venir, une liste propose « Non : à traiter tout de suite » (comportement d'avant), « Oui, jusqu'à la fin de « X », puis SAV » ou « Oui, jusqu'à une autre date ». Mêmes droits que la panne normale (technicien et plus) ; fonctionne hors ligne (file d'attente).
 - Fonction `report_fault_keep` : crée la panne (`faults.keep_until` = dernier jour d'usage inclus, `keep_show` = spectacle suivi, `keep_immo` = SAV planifié) **et un SAV sans date de fin** (`immos`, kind `sav`) qui démarre le lendemain. Aucune tâche planifiée : c'est le calcul sur les dates qui fait le travail.
@@ -333,6 +339,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.47.0) | table `show_substitutions`, fonctions `add_substitution` / `delete_substitution`, `reallocate_all` tient compte des substitutions | v1.47.0 |
 | `schema.sql` (v1.48.0) | table `show_demand_gels`, fonctions `add_demand_gels` / `delete_demand_gel` | v1.48.0 |
 | `schema.sql` (v1.49.0) | fonctions `patch_clear_all`, `patch_batch` | v1.49.0 |
+| `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
 | `schema.sql` (v1.51.0) | colonnes `faults.keep_until / keep_show / keep_immo`, fonctions `report_fault_keep`, `activate_scheduled_sav`, `item_blocked` / `reallocate_all` / `edit_show` / `resolve_fault` mis à jour | v1.51.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |

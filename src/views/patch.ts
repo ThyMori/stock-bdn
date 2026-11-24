@@ -1,5 +1,5 @@
 import type { ViewFactory } from '../router';
-import { can, canActShow, reportFault, rpcCall, view } from '../store';
+import { can, canActShow, reportFaultSav, rpcCall, view } from '../store';
 import { supabase } from '../supabase';
 import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
@@ -230,7 +230,7 @@ export const patchView: ViewFactory = ([showId]) => {
       if (await refuseBlocked(n) || !(await warnModel(r, n))) { paintRow(root, key); return; }
       const ok = await structural(root, 'patch_set_item', { ...who, p_mode: 'replace', p_target: n, p_lamp: lampFor(n, r) }, `Projecteur ${old} remplacé par ${n}`);
       if (ok && f.fault === 'oui') {
-        await reportFault(old, f.desc || `Remplacé dans la feuille de patch (${view().shows.find((s) => s.id === showId)?.name ?? ''})`);
+        await reportFaultSav(old, f.desc || `Remplacé dans la feuille de patch (${view().shows.find((s) => s.id === showId)?.name ?? ''})`);
         toast(`Panne déclarée sur le projecteur ${old}.`, 'ok');
       }
       return;

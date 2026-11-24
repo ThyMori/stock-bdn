@@ -118,7 +118,9 @@ async function runOp(op: Op) {
       return supabase.rpc('apply_status', { p_event: op.id, p_item: op.item, p_status: op.status, p_note: op.note ?? null, p_at: op.at,
         p_who: op.who ?? null, p_from: op.from ?? null, p_until: op.until ?? null });
     case 'fault':
-      return op.keep
+      return op.sav
+        ? supabase.rpc('report_fault_sav', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at })   // panne bloquante : SAV immédiat
+        : op.keep
         ? supabase.rpc('report_fault_keep', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at, p_show: op.keep.show, p_until: op.keep.until })   // panne non bloquante + SAV planifié
         : supabase.rpc('report_fault', { p_id: op.id, p_item: op.item, p_description: op.description, p_at: op.at });
     case 'resolve':
@@ -188,6 +190,9 @@ export async function rpcCall(fn: string, params: Record<string, unknown>): Prom
 }
 export const reportFault = (item: number, description: string, keep?: { show: string | null; until: string | null }) =>
   enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now(), ...(keep ? { keep } : {}) });
+/** Panne bloquante : le projecteur passe en SAV tout de suite (technicien et plus ; file d'attente, fonctionne hors ligne). */
+export const reportFaultSav = (item: number, description: string) =>
+  enqueue({ id: uuid(), kind: 'fault', item, description: description.trim(), at: now(), sav: true });
 export const resolveFault = (fault: string, resolution?: string) =>
   enqueue({ id: uuid(), kind: 'resolve', fault, resolution: resolution?.trim() || undefined, at: now() });
 
