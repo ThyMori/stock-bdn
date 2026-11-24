@@ -582,3 +582,18 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .picker .viewport { aspect-ratio: 4 / 3; max-height: 34dvh; width: 100%; }   /* caméra moins haute : le lot reste visible pendant le scan */
 .lamprow select { min-width: 0; }
 .tag.keep { background: #f2c230; color: #111; border-color: #111; }   /* panne connue, projecteur encore en service */
+
+/* Pré-affectation automatique (v1.53.0) : bouton « IA » et étincelles */
+.ai-btn { --ai-a: #5b3fd6; --ai-b: #0a6fb8; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 8px; padding: 8px 12px; border: 1px solid var(--ai-b); border-radius: 10px; color: #fff; text-align: left; cursor: pointer;
+  background: linear-gradient(110deg, var(--ai-a), var(--ai-b), var(--ai-a)); background-size: 250% 100%; animation: ai-flow 6s linear infinite; font: inherit; }
+.ai-btn .ico { width: 24px; height: 24px; flex: none; fill: currentColor; stroke: none; }
+.ai-btn b { display: block; } .ai-btn small { display: block; opacity: .85; }
+.ai-btn .grow { min-width: 0; }
+.ai-chip { font: 700 11px/1 ui-monospace, monospace; letter-spacing: .08em; padding: 4px 6px; border: 1px solid currentColor; border-radius: 4px; flex: none; }
+.ai-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+@keyframes ai-flow { to { background-position: -250% 0; } }
+.sparkle-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; }
+.sparkle-dot { position: fixed; width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle, #fff, #7ee8ff 55%, #9b7cff); box-shadow: 0 0 8px #7ee8ff; }
+.pre-grp { padding: 8px 0; border-top: 1px solid var(--line, #8884); } .pre-grp .t { font-weight: 700; }
+.dlg.preview { max-height: 85dvh; overflow: auto; }
+@media (prefers-reduced-motion: reduce) { .ai-btn { animation: none; } }

@@ -137,6 +137,13 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Pré-affecter du spectacle précédent (v1.53.0)
+- Bouton « ✦ Pré-affecter du spectacle précédent » (AUTO) dans la carte « Projecteurs affectés », visible même repliée, pour ceux qui peuvent affecter au spectacle. Petite animation d'étincelles (coupée si l'appareil réduit les animations, interrompue par un toucher).
+- On choisit le spectacle précédent (liste chronologique, le plus proche / en cours présélectionné), puis un **aperçu** (modèle, n°, PAR à relamper, projecteurs pris en stock, manques) demande confirmation avant d'affecter.
+- Règles (fichier `src/preAssign.ts`, testé dans `tests/pre-assign.test.ts`) : quantités = « Matériel demandé » moins prêts/locations, substitutions, manque déclaré et projecteurs déjà affectés. Écartés : projecteurs déjà dans ce spectacle, bloqués (autre spectacle aux mêmes dates, prêt, SAV, SAV planifié), avec une panne ouverte (même non bloquante). Non-PAR : seulement ceux du spectacle précédent. PAR : 1) précédent, bonne lampe ; 2) stock, bonne lampe ; 3) stock à relamper (prépa en amont) ; 4) précédent à relamper en dernier.
+- Positions et circuits ne sont pas copiés ; la fiche du PAR n'est pas modifiée (le tag « passer en CPxx » signale le relampage).
+- **Supabase : non** (utilise `assign_items`).
+
 ### SAV = panne (v1.52.0)
 - Le bouton **SAV** de la fiche d'un projecteur ouvre d'abord « Pourquoi ? » : **Panne** (par défaut) ou **Maintenance, sans panne** (régisseur général et admin seulement). Panne : description obligatoire + question « Le projecteur peut-il rester en service ? » (si le projecteur est dans un spectacle en cours ou à venir) : « Non » = **panne bloquante, SAV immédiat** ; « Oui, jusqu'à la fin de « X » » = panne non bloquante (v1.51.0). L'option « une autre date » est supprimée de l'interface.
 - **Technicien et régisseur** : le bouton SAV leur est ouvert, uniquement pour déclarer une panne (fonction `report_fault_sav`, qui passe un projecteur « disponible » en SAV sans date de fin ; en prêt ou déjà en SAV : seule la panne est enregistrée). Ils ne changent toujours pas l'état à la main (`apply_status` réservé au régisseur général). Le journal indique la panne et qui l'a signalée.

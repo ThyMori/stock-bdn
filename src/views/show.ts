@@ -20,6 +20,9 @@ import { ALL_OPT, notifyPost } from '../push';
 import { fmtDay } from './agenda';
 import { cashBeep } from '../ui/beep';
 import { showMounted } from '../position';
+import { defaultPrevious, preAssignPlan, previousShows } from '../preAssign';
+import { sparkle } from '../ui/sparkle';
+import { previewPlan } from '../ui/preAssignDialog';
 
 const PAR_LAMPS = ['CP60', 'CP61', 'CP62', 'CP95'];
 type Mode = 'view' | 'pick' | 'scan';
@@ -188,6 +191,7 @@ export const showView: ViewFactory = ([id]) => {
       ${alertCard}
       ${wall}
       <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="start">+ Affecter manuellement</button>' : ''}</div>
+        ${canAssign && mode === 'view' ? `<button class="ai-btn" data-act="preassign" aria-label="Pré-affecter depuis le spectacle précédent"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg><span class="grow"><b>Pré-affecter du spectacle précédent</b><small>Propose les projecteurs déjà montés</small></span><span class="ai-chip">AUTO</span></button>` : ''}
         ${itemsFolded ? '' : `${picker}
         <div class="mlist">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
       ${demandCard}
@@ -427,6 +431,35 @@ export const showView: ViewFactory = ([id]) => {
           const all = dd.showItems.filter((r) => r.show_id === id && (!modelFilter || dd.items.find((i) => i.id === r.item_id)?.model_id === modelFilter)).map((r) => r.item_id);
           if (all.length && all.every((n) => rsel.has(n))) all.forEach((n) => rsel.delete(n)); else all.forEach((n) => rsel.add(n));
           paint(root);
+        }
+        else if (act === 'preassign') {   // pré-affectation automatique depuis un spectacle précédent
+          const cur = view().shows.find((x) => x.id === id); if (!cur) return;
+          await sparkle(el);
+          const list = previousShows(view(), cur);
+          if (!list.length) { err('Aucun spectacle précédent.'); return; }
+          const day = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+          const def = defaultPrevious(list, todayStr());
+          const f = await openForm('Pré-affecter du spectacle précédent', [
+            { name: 'prev', label: 'Spectacle précédent', type: 'select', required: true, value: def?.id, options: list.map((x): [string, string] => [x.id, `${x.name} (${day(x.start_date)} au ${day(x.end_date)})`]), hint: 'On pioche d\'abord dans ses projecteurs montés, selon le « Matériel demandé ».' }
+          ], { submit: 'Calculer' });
+          if (!f) return;
+          const prevShow = list.find((x) => x.id === f.prev); if (!prevShow) return;
+          const plan = preAssignPlan(view(), cur, prevShow);
+          if (!(await previewPlan(view(), plan, cur.name, prevShow.name))) return;
+          // un appel par lampe (assign_items prend une seule lampe)
+          const groups = new Map<string, number[]>();
+          for (const p of plan.proposals) { const k = p.lamp ?? ''; groups.set(k, [...(groups.get(k) ?? []), p.item]); }
+          let n = 0; const skipped: { item: number; reason: string }[] = [];
+          for (const [k, itemsList] of groups) {
+            const r = await rpcCall('assign_items', { p_show: id, p_items: itemsList, p_lamp: k || null });
+            if (r.error) { err((n ? `${n} affecté(s). ` : '') + r.error); if (n) paint(root); return; }
+            const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
+            n += res?.added.length ?? 0; skipped.push(...(res?.skipped ?? []));
+          }
+          paint(root);
+          const m = `${n} projecteur${n > 1 ? 's' : ''} pré-affecté${n > 1 ? 's' : ''}.` + (skipped.length ? ` Non affectés : ${skipped.map((x) => `${x.item} (${x.reason})`).join(', ')}.` : '');
+          err(skipped.length ? m : ''); if (!skipped.length) toast(m);
+          void sparkle(root.querySelector<HTMLElement>('.ai-btn') ?? el, 700);
         }
         else if (act === 'items-fold') { itemsFolded = !itemsFolded; rsel.clear(); paint(root); }   // replie / déplie les projecteurs affectés
         else if (act === 'wall-fold') { wallFolded = !wallFolded; paint(root); }   // replie / déplie le mur
