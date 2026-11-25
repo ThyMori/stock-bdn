@@ -462,12 +462,13 @@ export const showView: ViewFactory = ([id]) => {
           const prevShow = list.find((x) => x.id === f.prev); if (!prevShow) return;
           const plan = preAssignPlan(view(), cur, prevShow);
           if (!(await previewPlan(view(), plan, cur.name, prevShow.name))) return;
-          // un appel par lampe (assign_items prend une seule lampe)
+          // un appel par lampe ET par zone (assign_items prend une seule lampe et une seule zone)
           const groups = new Map<string, number[]>();
-          for (const p of plan.proposals) { const k = p.lamp ?? ''; groups.set(k, [...(groups.get(k) ?? []), p.item]); }
+          for (const p of plan.proposals) { const k = `${p.lamp ?? ''}|${p.zone}`; groups.set(k, [...(groups.get(k) ?? []), p.item]); }
           let n = 0; const skipped: { item: number; reason: string }[] = [];
           for (const [k, itemsList] of groups) {
-            const r = await rpcCall('assign_items', { p_show: id, p_items: itemsList, p_lamp: k || null });
+            const [lampId, zone] = k.split('|');
+            const r = await rpcCall('assign_items', { p_show: id, p_items: itemsList, p_lamp: lampId || null, ...(zone ? { p_zone: zone } : {}) });   // p_zone seulement s'il est précisé
             if (r.error) { err((n ? `${n} affecté(s). ` : '') + r.error); if (n) paint(root); return; }
             const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
             n += res?.added.length ?? 0; skipped.push(...(res?.skipped ?? []));

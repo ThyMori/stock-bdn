@@ -43,7 +43,7 @@ export const GEL_COLORS: [string, string][] = [['Rouge', '#d62828'], ['Orange', 
   ['Violet', '#7e22ce'], ['Rose', '#e75a9b'], ['Correction (CTO/CTB)', '#9aa5b1'], ['Diffusion', '#d8d8d8'], ['Neutre (ND)', '#6b6b6b'], ['Autre', '#8d6e63']];
 export const gelCss = (c: string): string => GEL_COLORS.find(([n]) => n === c)?.[1] ?? '#8d6e63';
 export interface ShowGel { id: string; show_id: string; item_id: number; ref: string; color: string }
-export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null; demand_id?: string | null; pinned?: boolean; problem?: string | null }
+export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null; demand_id?: string | null; pinned?: boolean; problem?: string | null; zone?: string }
 /** Matériel prêté / loué pour combler un manque (une fiche par prêt ou location). */
 export interface ShowExternal { id: string; show_id: string; demand_id: string; kind: 'pret' | 'location'; provider: string; qty: number; delivery_date: string; return_date: string; note?: string | null }
 /** Demande de matériel d'un spectacle (modèle + lampe pour les PAR + quantité) ; `missing` = projecteurs que l'on n'arrive pas à fournir. */

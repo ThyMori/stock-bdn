@@ -41,4 +41,63 @@ assert.equal(p.alreadyOk, 1);
 assert.equal(p.shortages[0].n, 2);                                       // 4 demandés − 1 déjà affecté − 1 proposé
 d = { ...d, showDemands: [dem("d1", "M", 4, null, 2)] };
 assert.equal(preAssignPlan(d, cur, prev).shortages.length, 0);
+
+// ---- v1.58.0 : zones, positions, pastille bleue, repli ----
+const itb = (id: number, model: string, blue: boolean, lamp: string | null = null) => ({ ...it(id, model, lamp), blue_dot: blue }) as unknown as Data['items'][number];
+const pl = (item_id: number, position: string) => ({ show_id: 'prev', item_id, position }) as unknown as Data['patchLines'][number];
+const sl = (demand_id: string, zone: string, position: string | null, qty: number) => ({ id: demand_id + zone + position, show_id: 'cur', demand_id, zone, position, qty }) as unknown as Data['showDemandSlots'][number];
+const zd = (o: Partial<Data>) => base({ showDemands: [dem('d1', 'M', 2)], ...o });
+const ids = (pp: ReturnType<typeof preAssignPlan>) => pp.proposals.map((x) => x.item);
+
+// plateau 2 : même zone d'abord ; autre zone sans pastille ok ; autre zone AVEC pastille écartée
+d = zd({ items: [itb(1, 'M', false), itb(2, 'M', false), itb(3, 'M', true)], showItems: [si('prev', 1), si('prev', 2), si('prev', 3)],
+  patchLines: [pl(1, 'P3'), pl(2, '3e balcon'), pl(3, '3e balcon')], showDemandSlots: [sl('d1', 'plateau', null, 2)] });
+p = preAssignPlan(d, cur, prev);
+assert.deepEqual(ids(p), [1, 2]); assert.deepEqual(p.proposals.map((x) => x.how), ['same', 'cross']); assert.equal(p.proposals[0].zone, 'plateau');
+// le n°3 (pastille bleue, au 3e balcon) n'est pas repris : il sera rangé au 3e ; aucun stock → il manque (sauf repêchage ci-dessous)
+assert.equal(p.prepNeeds.length, 0);
+
+// face 1 : l'autre zone n'est acceptée qu'avec pastille bleue
+d = zd({ showDemands: [dem('d1', 'M', 1)], items: [itb(1, 'M', false), itb(2, 'M', true)], showItems: [si('prev', 1), si('prev', 2)],
+  patchLines: [pl(1, 'P3'), pl(2, 'P4')], showDemandSlots: [sl('d1', 'face', null, 1)] });
+assert.deepEqual(ids(preAssignPlan(d, cur, prev)), [2]);
+
+// position précise : P5 d'abord
+d = zd({ showDemands: [dem('d1', 'M', 1)], items: [itb(1, 'M', false), itb(2, 'M', false)], showItems: [si('prev', 1), si('prev', 2)],
+  patchLines: [pl(1, 'P3'), pl(2, 'P5')], showDemandSlots: [sl('d1', 'plateau', null, 1), sl('d1', 'plateau', 'P5', 1)] });
+assert.deepEqual(ids(preAssignPlan(d, cur, prev)), [2]);
+
+// position inconnue = « autre zone » : plateau sans pastille ok, face seulement avec pastille
+d = zd({ showDemands: [dem('d1', 'M', 1)], items: [itb(1, 'M', false)], showItems: [si('prev', 1)], showDemandSlots: [sl('d1', 'plateau', null, 1)] });
+assert.deepEqual(ids(preAssignPlan(d, cur, prev)), [1]);
+d = { ...d, showDemandSlots: [sl('d1', 'face', null, 1)] };
+assert.deepEqual(ids(preAssignPlan(d, cur, prev)), [1]);                  // écarté mais aucun stock : repêché
+assert.equal(preAssignPlan(d, cur, prev).proposals[0].how, 'repeche');
+
+// à préparer : plateau → dessous, face → 3e ; le stock existant évite le repêchage
+d = zd({ showDemands: [dem('d1', 'M', 3)], items: [itb(1, 'M', true), itb(2, 'M', false), itb(3, 'M', true), itb(4, 'M', false)], showItems: [si('prev', 1)],
+  patchLines: [pl(1, '3e balcon')], showDemandSlots: [sl('d1', 'plateau', null, 2), sl('d1', 'face', null, 1)] });
+p = preAssignPlan(d, cur, prev);
+assert.deepEqual(ids(p), [1]);                                           // le n°1 va en face (même zone)
+assert.deepEqual(p.prepNeeds.map((x) => [x.zone, x.from, x.n, x.fallback]), [['plateau', 'dessous', 2, false]]);   // n°2 et n°4 : 2 dessous
+assert.equal(p.shortages[0].n, 2);
+
+// repli : face demandée, plus rien au 3e mais un dessous → préparé depuis les dessous (repli)
+d = zd({ showDemands: [dem('d1', 'M', 1)], items: [itb(2, 'M', false)], showDemandSlots: [sl('d1', 'face', null, 1)] });
+p = preAssignPlan(d, cur, prev);
+assert.deepEqual(p.prepNeeds.map((x) => [x.zone, x.from, x.fallback]), [['face', 'dessous', true]]);
+// rien du tout : introuvable
+d = zd({ showDemands: [dem('d1', 'M', 1)], items: [], showDemandSlots: [sl('d1', 'face', null, 1)] });
+p = preAssignPlan(d, cur, prev); assert.equal(p.unavailable[0].n, 1); assert.equal(p.prepNeeds.length, 0);
+
+// déjà affecté avec sa zone : réduit le besoin de cette zone
+d = zd({ showDemands: [dem('d1', 'M', 2)], items: [itb(1, 'M', false), itb(2, 'M', false), itb(3, 'M', false)],
+  showItems: [{ ...si('cur', 1), zone: 'face' } as never, si('prev', 2), si('prev', 3)], patchLines: [pl(2, 'P3'), pl(3, '2e balcon')],
+  showDemandSlots: [sl('d1', 'face', null, 1), sl('d1', 'plateau', null, 1)] });
+p = preAssignPlan(d, cur, prev);
+assert.deepEqual(ids(p), [2]); assert.equal(p.proposals[0].zone, 'plateau');       // la face est déjà couverte par le n°1
+
+// sans répartition : comportement d'avant (tout « sans zone »)
+d = zd({ showDemands: [dem('d1', 'M', 2)], items: [itb(1, 'M', true), itb(2, 'M', false)], showItems: [si('prev', 1), si('prev', 2)] });
+p = preAssignPlan(d, cur, prev); assert.deepEqual(ids(p), [1, 2]); assert.equal(p.proposals[0].zone, '');
 console.log('pre-assign OK');

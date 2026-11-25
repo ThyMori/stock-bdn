@@ -219,6 +219,8 @@ create table if not exists show_items (
   primary key (show_id, item_id)
 );
 create index if not exists show_items_item_idx on show_items(item_id);
+-- v1.58.0 : zone pour laquelle le projecteur a été affecté (sert à la feuille de prépa : face = depuis le 3e, plateau = depuis les dessous). '' = non précisée.
+alter table show_items add column if not exists zone text not null default '' check (zone in ('','plateau','face','corbeille'));
 -- Régisseurs assignés à un spectacle : seuls eux (et les régisseurs généraux / admins) peuvent y assigner des projecteurs.
 create table if not exists show_regisseurs (
   show_id        uuid not null references shows(id) on delete cascade,
@@ -757,7 +759,8 @@ begin
 end $$;
 
 -- Assigne des projecteurs (ceux qui posent problème sont ignorés et renvoyés avec la raison).
-create or replace function assign_items(p_show uuid, p_items int[], p_lamp text) returns jsonb
+drop function if exists assign_items(uuid, int[], text);   -- v1.58.0 : remplacée par la version à 4 paramètres (zone)
+create or replace function assign_items(p_show uuid, p_items int[], p_lamp text, p_zone text default '') returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare s shows; it int; c text; added int[] := '{}'; skipped jsonb := '[]'::jsonb; ispar boolean; lbl text;
 begin
@@ -765,6 +768,7 @@ begin
   select * into s from shows where id = p_show;
   if not found then raise exception 'Spectacle introuvable' using errcode = '22023'; end if;
   if p_lamp is not null and not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe inconnue' using errcode = '22023'; end if;
+  if coalesce(p_zone, '') not in ('', 'plateau', 'face', 'corbeille') then raise exception 'Zone inconnue' using errcode = '22023'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
   foreach it in array (select coalesce(array_agg(distinct x), '{}') from unnest(p_items) x) loop
     if not exists (select 1 from items where id = it) then skipped := skipped || jsonb_build_object('item', it, 'reason', 'introuvable'); continue; end if;
@@ -773,9 +777,10 @@ begin
       skipped := skipped || jsonb_build_object('item', it, 'reason', 'lampe requise (PAR)'); continue; end if;
     c := item_conflict(it, p_show, s.start_date, s.end_date);
     if c is not null then skipped := skipped || jsonb_build_object('item', it, 'reason', c); continue; end if;
-    insert into show_items (show_id, item_id, lamp_id, added_by_label)
-    values (p_show, it, case when ispar then p_lamp end, lbl)
-    on conflict (show_id, item_id) do update set lamp_id = coalesce(case when ispar then excluded.lamp_id end, show_items.lamp_id), pinned = (show_items.demand_id is not null);
+    insert into show_items (show_id, item_id, lamp_id, added_by_label, zone)
+    values (p_show, it, case when ispar then p_lamp end, lbl, coalesce(p_zone, ''))
+    on conflict (show_id, item_id) do update set lamp_id = coalesce(case when ispar then excluded.lamp_id end, show_items.lamp_id), pinned = (show_items.demand_id is not null),
+      zone = case when excluded.zone <> '' then excluded.zone else show_items.zone end;   -- une zone non précisée ne remplace pas une zone déjà retenue
     added := added || it;
   end loop;
   if cardinality(added) > 0 then
@@ -955,7 +960,7 @@ revoke all on function edit_show(uuid,text,date,date,text,text) from public;
 revoke all on function show_color_clash(uuid,date,date,text) from public;
 revoke all on function pick_show_color(uuid,date,date) from public;
 revoke all on function delete_show(uuid) from public;
-revoke all on function assign_items(uuid,int[],text) from public;
+revoke all on function assign_items(uuid,int[],text,text) from public;
 revoke all on function unassign_items(uuid,int[]) from public;
 revoke all on function can_act_show(uuid) from public;
 revoke all on function add_gels(uuid,int[],text,text) from public;
@@ -978,7 +983,7 @@ grant execute on function delete_immo(uuid) to authenticated;
 grant execute on function create_show(uuid,text,date,date,text,text) to authenticated;
 grant execute on function edit_show(uuid,text,date,date,text,text) to authenticated;
 grant execute on function delete_show(uuid) to authenticated;
-grant execute on function assign_items(uuid,int[],text) to authenticated;
+grant execute on function assign_items(uuid,int[],text,text) to authenticated;
 grant execute on function unassign_items(uuid,int[]) to authenticated;
 grant execute on function can_act_show(uuid) to authenticated;
 grant execute on function add_gels(uuid,int[],text,text) to authenticated;

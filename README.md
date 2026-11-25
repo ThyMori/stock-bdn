@@ -137,6 +137,15 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Assistant de pré-affectation par zone (v1.58.0)
+Le bouton ✦ AUTO tient maintenant compte de la **répartition** (zone / position) de chaque ligne de « Matériel demandé ». Fichier `src/preAssign.ts`, testé dans `tests/pre-assign.test.ts` et en base (`assign_items` avec zone).
+- Il ne prend **que** des projecteurs du spectacle précédent (déjà montés), jamais le stock. Un PAR à la bonne lampe passe avant un PAR à relamper.
+- **Même zone** (zone de la position sur la feuille de patch du précédent) : on garde. Position précise demandée : celui qui y est passe en premier. Position inconnue ou « autre » = autre zone.
+- **Autre zone** : pour le **plateau** et la **corbeille**, on ne prend que ceux **sans pastille bleue** ; pour la **face**, que ceux **avec pastille bleue**. Les autres seront rangés au démontage (dessous si pas de pastille, 3e si pastille).
+- Ce qui manque est **à préparer** : face → depuis le **stock du 3e**, plateau / corbeille / sans zone → depuis les **dessous**. Si ce stock est vide : on **repêche** un projecteur écarté du précédent, sinon **repli** sur l'autre stock (signalé), sinon il manque vraiment.
+- La zone choisie est enregistrée sur le projecteur affecté (`show_items.zone`) : elle servira à la feuille de prépa et au rapport de démontage (étapes suivantes).
+- Les projecteurs déjà affectés (avec leur zone) réduisent le besoin de leur zone. Sans répartition : tout est « sans zone précise », comme avant.
+
 ### En-tête de la fiche spectacle repliable (v1.57.3)
 L'en-tête (note, interrupteur monté/démonté, boutons Patch, Prépa, Démontage, Modifier…) est **replié au départ** : seuls le nom et les dates restent visibles. Toucher le nom (▸ / ▾) le déplie. Pas mémorisé : il se replie à chaque ouverture.
 
@@ -380,6 +389,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.49.0) | fonctions `patch_clear_all`, `patch_batch` | v1.49.0 |
 | `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
 | `schema.sql` (v1.57.1) | fonction `immo_last_day`, règles de disponibilité (`item_conflict`, `item_blocked`, `reallocate_all`), `resolve_fault` referme le SAV | v1.57.1 |
+| `schema.sql` (v1.58.0) | colonne `show_items.zone`, `assign_items` à 4 paramètres (zone ; l'ancienne version à 3 paramètres est supprimée) | v1.58.0 |
 | `schema.sql` (v1.55.0) | table `show_demand_slots`, fonctions `zone_of_position`, `set_demand_slots` (remplace la v1.54.0) | v1.55.0 |
 | `schema.sql` (v1.51.0) | colonnes `faults.keep_until / keep_show / keep_immo`, fonctions `report_fault_keep`, `activate_scheduled_sav`, `item_blocked` / `reallocate_all` / `edit_show` / `resolve_fault` mis à jour | v1.51.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
