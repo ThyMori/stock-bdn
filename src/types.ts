@@ -51,7 +51,9 @@ export interface ShowExternal { id: string; show_id: string; demand_id: string; 
 export interface ShowSubstitution { id: string; show_id: string; demand_id: string; model_id: string; qty: number }
 /** Gélatine demandée sur une demande : `qty` projecteurs de la demande la reçoivent (sans n° de projecteur). */
 export interface ShowDemandGel { id: string; show_id: string; demand_id: string; ref: string; color: string; qty: number }
-export interface ShowDemand { id: string; show_id: string; model_id: string; lamp_id: string | null; qty: number; missing: number; available?: number | null }
+export interface ShowDemand { id: string; show_id: string; model_id: string; lamp_id: string | null; qty: number; missing: number; available?: number | null;
+  /** Zone du théâtre : '' (indifférent), 'plateau', 'face' ou 'corbeille'. */
+  zone?: string }
 export interface Fault {
   id: string; item_id: number; description: string | null; reported_by?: string | null; reported_by_label: string | null;
   reported_at: string; resolved_at: string | null; resolved_by_label?: string | null; resolution: string | null; pending?: boolean;

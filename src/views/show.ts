@@ -20,6 +20,7 @@ import { ALL_OPT, notifyPost } from '../push';
 import { fmtDay } from './agenda';
 import { cashBeep } from '../ui/beep';
 import { showMounted } from '../position';
+import { ZONES, zoneLabel } from '../zones';
 import { defaultPrevious, preAssignPlan, previousShows } from '../preAssign';
 import { sparkle } from '../ui/sparkle';
 import { previewPlan } from '../ui/preAssignDialog';
@@ -126,9 +127,20 @@ export const showView: ViewFactory = ([id]) => {
     }).join('');
 
     const demands = d.showDemands.filter((x) => x.show_id === id).map((x) => ({ x, m: d.models.find((m) => m.id === x.model_id), l: lampName(x.lamp_id) }))
-      .sort((a, b) => (a.m?.name ?? '').localeCompare(b.m?.name ?? '', 'fr', { numeric: true }) || (a.l ?? '').localeCompare(b.l ?? ''));
+      .sort((a, b) => (a.m?.name ?? '').localeCompare(b.m?.name ?? '', 'fr', { numeric: true }) || (a.l ?? '').localeCompare(b.l ?? '') || ZONES.findIndex(([k]) => k === (a.x.zone ?? '')) - ZONES.findIndex(([k]) => k === (b.x.zone ?? '')));
     // projecteurs affectés (utilisables) qui comptent pour cette demande : même modèle, et même lampe pour un PAR
-    const own = (x: (typeof demands)[number]['x']) => d.showItems.filter((r) => r.show_id === id && !r.problem && d.items.find((i) => i.id === r.item_id)?.model_id === x.model_id && (!x.lamp_id || r.lamp_id === x.lamp_id)).length;
+    const ownRaw = (x: (typeof demands)[number]['x']) => d.showItems.filter((r) => r.show_id === id && !r.problem && d.items.find((i) => i.id === r.item_id)?.model_id === x.model_id && (!x.lamp_id || r.lamp_id === x.lamp_id)).length;
+    // plusieurs lignes (zones) pour un même modèle + lampe : les projecteurs affectés se répartissent dans l'ordre des lignes, le surplus va à la dernière
+    const ownMap = new Map<string, number>();
+    {
+      const left = new Map<string, number>(), lastOf = new Map<string, string>();
+      for (const { x } of demands) { const k = x.model_id + '|' + (x.lamp_id ?? ''); if (!left.has(k)) left.set(k, ownRaw(x)); lastOf.set(k, x.id); }
+      for (const { x } of demands) {
+        const k = x.model_id + '|' + (x.lamp_id ?? ''), rest = left.get(k) ?? 0, v = lastOf.get(k) === x.id ? rest : Math.min(x.qty, rest);
+        ownMap.set(x.id, v); left.set(k, rest - v);
+      }
+    }
+    const own = (x: (typeof demands)[number]['x']) => ownMap.get(x.id) ?? 0;
     const extQty = (demId: string) => d.showExternals.filter((e) => e.demand_id === demId).reduce((n, e) => n + e.qty, 0);
     const subQty = (demId: string) => d.showSubstitutions.filter((b) => b.demand_id === demId).reduce((n, b) => n + b.qty, 0);   // part couverte par d'autres modèles
     const myAlert = showAlerts(d, '0000-00-00').find((a) => a.show.id === id);
@@ -136,10 +148,10 @@ export const showView: ViewFactory = ([id]) => {
       <ul>${myAlert.missing.map((m) => `<li>manque ${m.n} × ${esc(m.label)}</li>`).join('')}${myAlert.problems.map((p) => `<li>n° ${p.item} : ${esc(p.why)}</li>`).join('')}</ul></div>` : '';
     const missingTotal = demands.reduce((n, r) => n + r.x.missing, 0);
     const demandCard = `<div class="card sec sec-dem"><div class="row wrap"><button class="fold grow" data-act="dem-fold" aria-expanded="${!demFolded}" aria-label="${demFolded ? 'Déplier' : 'Replier'} le matériel demandé"><span aria-hidden="true">${demFolded ? '▸' : '▾'}</span> <h2>Matériel demandé (${demands.reduce((n, r) => n + r.x.qty, 0)})</h2></button><span class="tag auto">objectif</span>${demFolded && missingTotal ? `<span class="tag late">manque ${missingTotal}</span>` : ''}${canAssign && !demFolded ? '<button class="btn primary" data-act="dem-add">+ Demande</button>' : ''}</div>
-      ${demFolded ? '' : `<div class="sub">Objectifs de quantité (fiche technique, plan de feu) : l'appli les compare aux projecteurs disponibles aux dates du spectacle, en partageant le stock avec les autres spectacles. Les n° précis se choisissent dans « Projecteurs affectés ».</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}</div><div class="s">Demandé ${x.qty} · Affectés ${own(x)}${extQty(x.id) ? ` · ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''}${subQty(x.id) ? ` · ${subQty(x.id)} en substitution` : ''}${x.available != null ? ` · Disponibles ${Math.max(0, x.available)}` : ''}</div></div>
+      ${demFolded ? '' : `<div class="sub">Objectifs de quantité (fiche technique, plan de feu) : l'appli les compare aux projecteurs disponibles aux dates du spectacle, en partageant le stock avec les autres spectacles. Les n° précis se choisissent dans « Projecteurs affectés ».</div>      ${demands.map(({ x, m, l }) => `<div class="dem"><div class="grow"><div class="t">${esc(m?.name ?? '?')}${l ? ` · ${esc(l)}` : ''}${x.zone ? ` <span class="tag zone z-${x.zone}">${esc(zoneLabel(x.zone))}</span>` : ''}</div><div class="s">Demandé ${x.qty} · Affectés ${own(x)}${extQty(x.id) ? ` · ${extQty(x.id)} prêté${extQty(x.id) > 1 ? 's' : ''} / loué${extQty(x.id) > 1 ? 's' : ''}` : ''}${subQty(x.id) ? ` · ${subQty(x.id)} en substitution` : ''}${x.available != null ? ` · Disponibles ${Math.max(0, x.available)}` : ''}</div></div>
         ${x.missing > 0 ? `<span class="tag late">manque ${x.missing}</span>` : '<span class="tag ok">complet</span>'}
         ${canAssign && x.missing > 0 ? `<button class="btn primary" data-act="ext-add" data-v="${x.id}">Gérer</button>` : ''}
-        ${canAssign ? `<button class="btn" data-act="dgel-add" data-v="${x.id}" aria-label="Demander des gélatines pour cette demande">Gel</button><button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
+        ${canAssign ? `<button class="btn" data-act="dgel-add" data-v="${x.id}" aria-label="Demander des gélatines pour cette demande">Gel</button><button class="btn" data-act="dem-edit" data-v="${x.id}">Quantité</button><button class="btn" data-act="dem-zone" data-v="${x.id}">Zone</button><button class="btn" data-act="dem-del" data-v="${x.id}" aria-label="Supprimer la demande">Suppr.</button>` : ''}</div>
         ${(() => { const gs = d.showDemandGels.filter((g) => g.demand_id === x.id).sort((a, b) => a.ref.localeCompare(b.ref, 'fr', { numeric: true }));
           return gs.length ? `<div class="gels">${gs.map((g) => `<span class="gel"><i style="background:${gelCss(g.color)}"></i>${esc(g.ref)} × ${Math.min(g.qty, x.qty)}${canAssign ? `<button class="gx" data-act="dgel-del" data-v="${g.id}" aria-label="Retirer le gel ${esc(g.ref)} de la demande">×</button>` : ''}</span>`).join('')}</div>` : ''; })()}
         ${d.showSubstitutions.filter((b) => b.demand_id === x.id).map((b) => `<div class="extline"><span class="tag ext">substitution</span><div class="grow">${b.qty} × ${esc(d.models.find((mm) => mm.id === b.model_id)?.name ?? '?')} à la place de ${esc(m?.name ?? '?')}</div>${canAssign ? `<button class="btn" data-act="sub-del" data-v="${b.id}" aria-label="Retirer cette substitution">Suppr.</button>` : ''}</div>`).join('')}
@@ -276,8 +288,8 @@ export const showView: ViewFactory = ([id]) => {
           ta.value = ta.value.slice(0, a) + t + ta.value.slice(b); ta.focus(); ta.setSelectionRange(a + t.length, a + t.length);
         };
         const err = (m: string) => { const x = root.querySelector('#serr'); if (x) x.textContent = m; toast(m); };
-        const sendDemand = async (model: string, lampId: string, qty: number) => {
-          const r = await rpcCall('set_demand', { p_show: id, p_model: model, p_lamp: lampId || null, p_qty: qty });
+        const sendDemand = async (model: string, lampId: string, qty: number, zone = '') => {
+          const r = await rpcCall('set_demand', { p_show: id, p_model: model, p_lamp: lampId || null, p_qty: qty, p_zone: zone });
           if (r.error) { err(r.error); return; }
           const miss = (r.data as { missing?: number } | null)?.missing ?? 0;
           err(miss > 0 ? `⚠ Impossible de tout fournir : il manque ${miss} projecteur${miss > 1 ? 's' : ''} (à réparer, louer ou emprunter).` : '');
@@ -342,17 +354,25 @@ export const showView: ViewFactory = ([id]) => {
           const f = await openForm('Demander du matériel', [
             { name: 'model', label: 'Modèle', type: 'select', search: true, required: true, options: models.map((m): [string, string] => [m.id, `${tname(m) ? tname(m) + ' · ' : ''}${m.name}${stock(m.id) ? '' : ' (0 en stock : à louer / emprunter)'}`]) },
             { name: 'lamp', label: 'Lampe (obligatoire pour un PAR)', type: 'select', options: [['', '—'], ...lampOptions().map((l): [string, string] => [l.id, l.name])] },
+            { name: 'zone', label: 'Zone', type: 'select', options: ZONES, value: '', hint: 'Plateau, face ou corbeille. Tu peux aussi la fixer plus tard. Pour répartir un modèle entre deux zones, fais une ligne par zone.' },
             { name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: '1' }
           ], { submit: 'Demander', validate: (v) => !/^\d+$/.test(v.qty.trim()) || Number(v.qty) < 1 || Number(v.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : parModel(v.model) && !v.lamp ? 'Choisis la lampe pour un PAR.' : null });
           if (!f) return;
-          await sendDemand(f.model, parModel(f.model) ? f.lamp : '', Number(f.qty));
+          await sendDemand(f.model, parModel(f.model) ? f.lamp : '', Number(f.qty), f.zone);
         }
         else if (act === 'dem-edit') {
           const x = view().showDemands.find((r) => r.id === v); if (!x) return;
           const f = await openForm('Quantité demandée', [{ name: 'qty', label: 'Quantité', type: 'number', min: '1', max: '500', required: true, value: String(x.qty) }],
             { submit: 'Enregistrer', validate: (w) => !/^\d+$/.test(w.qty.trim()) || Number(w.qty) < 1 || Number(w.qty) > 500 ? 'Quantité : un nombre entre 1 et 500.' : null });
           if (!f) return;
-          await sendDemand(x.model_id, x.lamp_id ?? '', Number(f.qty));
+          await sendDemand(x.model_id, x.lamp_id ?? '', Number(f.qty), x.zone ?? '');
+        }
+        else if (act === 'dem-zone') {   // change la zone d'une demande existante
+          const x = view().showDemands.find((r) => r.id === v); if (!x) return;
+          const f = await openForm('Zone de la demande', [{ name: 'zone', label: 'Zone', type: 'select', options: ZONES, value: x.zone ?? '' }], { submit: 'Enregistrer' });
+          if (!f) return;
+          const r = await rpcCall('set_demand_zone', { p_demand: x.id, p_zone: f.zone });
+          if (r.error) { err(r.error); return; }
         }
         else if (act === 'ext-add') {
           const dd = view(); const x = dd.showDemands.find((r) => r.id === v); const cs = dd.shows.find((r) => r.id === id); if (!x || !cs) return;
@@ -419,7 +439,7 @@ export const showView: ViewFactory = ([id]) => {
         else if (act === 'dem-del') {
           const x = view().showDemands.find((r) => r.id === v); if (!x) return;
           if (!window.confirm('Supprimer cette demande ? Les projecteurs assignés automatiquement seront libérés (ceux que tu as choisis restent).')) return;
-          await sendDemand(x.model_id, x.lamp_id ?? '', 0);
+          await sendDemand(x.model_id, x.lamp_id ?? '', 0, x.zone ?? '');
         }
         else if (act === 'gel-del') {
           const r = await rpcCall('delete_gel', { p_id: v });

@@ -597,3 +597,6 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .pre-grp { padding: 8px 0; border-top: 1px solid var(--line, #8884); } .pre-grp .t { font-weight: 700; }
 .dlg.preview { max-height: 85dvh; overflow: auto; }
 @media (prefers-reduced-motion: reduce) { .ai-btn { animation: none; } }
+
+/* Zones des demandes (v1.54.0) */
+.tag.zone { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
