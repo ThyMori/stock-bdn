@@ -137,6 +137,12 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Préparation : reste à sortir du stock et scan « Préparer » (v1.59.0)
+Aucun changement de base : pas d'action Supabase. Fichier `src/prepNeeds.ts`, testé dans `tests/prep-needs.test.ts`.
+- **Liste de prépa (PDF)** : nouvelle section « Reste à sortir du stock » : pour chaque ligne de demande et chaque zone, combien sortir **depuis le 3e** (face) ou **depuis les dessous** (plateau, corbeille, sans zone). Repli sur l'autre stock signalé ; « introuvable » en rouge s'il n'y en a plus. Les projecteurs encore montés sur le spectacle précédent ne comptent pas comme stock.
+- **Scanner → Préparer** : chaque projecteur scanné est **affecté tout de suite** à la ligne de demande encore incomplète (bonne lampe d'abord ; sinon « à relamper »). **Zone** d'après son stock d'origine : pastille bleue (3e) → face ; sinon (dessous) → plateau, corbeille ou sans zone. S'il ne reste de besoin que dans l'autre zone, l'appli **demande** confirmation. Modèle déjà complet, projecteur déjà affecté, bloqué, en panne ou inconnu : refusé avec la raison.
+- Le reste à préparer s'affiche en haut de l'écran et se met à jour à chaque scan. Les positions restent pour le montage (« Affecter des positions »).
+
 ### Assistant de pré-affectation par zone (v1.58.0)
 Le bouton ✦ AUTO tient maintenant compte de la **répartition** (zone / position) de chaque ligne de « Matériel demandé ». Fichier `src/preAssign.ts`, testé dans `tests/pre-assign.test.ts` et en base (`assign_items` avec zone).
 - Il ne prend **que** des projecteurs du spectacle précédent (déjà montés), jamais le stock. Un PAR à la bonne lampe passe avant un PAR à relamper.

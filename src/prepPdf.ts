@@ -6,6 +6,8 @@ import { patchPosition, positionBefore } from './position';
 import type { Show } from './types';
 import { ACCESSORIES, buildRows, labelsOf } from './patch';
 import { accessoryList } from './patchLists';
+import { remainingNeeds } from './prepNeeds';
+import { zoneLabel } from './zones';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
@@ -280,6 +282,22 @@ export async function buildPrepPdf(data: Data, showId: string, now = new Date())
     y += 5 * Math.ceil(doc.getTextWidth(types.map((t) => `${t} : ${rows.filter((r) => r.type === t).length}`).join('   ')) / (W - 2 * M)) + 2;
   }
   if (!rows.length) { y += 8; doc.text('Aucun projecteur assigné à ce spectacle.', M, y); }
+
+  // reste à sortir du stock, par ligne de demande et par zone : face = depuis le 3e, plateau / corbeille / sans zone = depuis les dessous
+  const rem = remainingNeeds(data, show);
+  if (rem.prep.length || rem.unavailable.length) {
+    ensure(24); y += 5; doc.setFillColor(20, 20, 20); doc.rect(M, y - 4.5, W - 2 * M, 7, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`Reste à sortir du stock  (${rem.prep.reduce((n, x) => n + x.n, 0)})`, M + 2, y); doc.setTextColor(0); y += 7;
+    const nm = (modelId: string, lampId: string | null) => `${data.models.find((m) => m.id === modelId)?.name ?? '?'}${lampId ? ' ' + (data.lamps.find((l) => l.id === lampId)?.name ?? '') : ''}`;
+    for (const x of rem.prep) {
+      ensure(8); doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(M + 2, y - 3.4, 4, 4);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(0); doc.text(`${x.n} x ${nm(x.modelId, x.lamp)}`, M + 9, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      doc.text(`${x.zone ? zoneLabel(x.zone) + ' : ' : ''}depuis ${x.from === 'stock3' ? 'le stock du 3e (pastille bleue)' : 'les dessous'}${x.fallback ? ' - repli, l\'autre stock est vide' : ''}`, M + 80, y, { maxWidth: W - M - 80 });
+      y += 7;
+    }
+    for (const x of rem.unavailable) { ensure(8); doc.setTextColor(200, 0, 0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`Introuvable en stock : ${x.n} x ${nm(x.modelId, x.lamp)}`, M + 2, y); doc.setTextColor(0); y += 6; }
+  }
 
   // sections par provenance (dessous, 3e, déjà monté), puis par type dans chaque section
   const bar = (title: string, n: number, blue = false) => {

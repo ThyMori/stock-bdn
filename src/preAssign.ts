@@ -37,23 +37,13 @@ export function defaultPrevious(list: Show[], today: string): Show | null {
 }
 
 /** Besoin d'une zone sur une demande : combien de projecteurs, dont certains à une position précise. */
-interface Need { demandId: string; zone: Zone; n: number; pos: Map<string, number> }
-const ZONES_NEED: Exclude<Zone, ''>[] = ['plateau', 'face', 'corbeille'];
+export interface Need { demandId: string; zone: Zone; n: number; pos: Map<string, number> }
+export const ZONES_NEED: Exclude<Zone, ''>[] = ['plateau', 'face', 'corbeille'];
 
-/** Calcule les projecteurs à pré-affecter à `target` depuis `prev`, selon « Matériel demandé » et sa répartition par zone / position.
- *  Règles : on ne prend que des projecteurs du spectacle précédent (jamais le stock). Même zone = on garde ; autre zone : pour le plateau et la
- *  corbeille on garde ceux SANS pastille bleue, pour la face ceux AVEC pastille bleue (les autres seront rangés au démontage : dessous / 3e).
- *  Ce qui manque est à préparer depuis les dessous (plateau, corbeille, sans zone) ou le 3e (face), avec repli sur l'autre stock. */
-export function preAssignPlan(data: Data, target: Show, prev: Show): Plan {
-  const inPrev = new Set(data.showItems.filter((r) => r.show_id === prev.id).map((r) => r.item_id));
-  const inTarget = new Set(data.showItems.filter((r) => r.show_id === target.id).map((r) => r.item_id));
-  const taken = new Set<number>();                                       // projecteurs déjà proposés dans ce calcul
+/** Besoins restants d'un spectacle, par demande et par zone : quantité demandée − prêts − substitutions − manque − projecteurs déjà affectés (avec leur zone). */
+export function computeNeeds(data: Data, target: Show): { demands: Data['showDemands']; needs: Need[]; alreadyOk: number } {
   const item = (id: number) => data.items.find((i) => i.id === id);
-  // un projecteur est utilisable s'il n'est pas déjà dans le spectacle, pas bloqué, et sans panne non bloquante ouverte
-  const usable = (id: number): boolean => !inTarget.has(id) && !taken.has(id) && !blockedReason(data, id, target)
-    && !data.faults.some((f) => f.item_id === id && !f.resolved_at);
   const demands = data.showDemands.filter((d) => d.show_id === target.id);
-  const dById = new Map(demands.map((d) => [d.id, d]));
   let alreadyOk = 0;
   const needs: Need[] = [];
   for (const d of demands) {
@@ -85,6 +75,23 @@ export function preAssignPlan(data: Data, target: Show, prev: Show): Plan {
     for (const k of [...ZONES_NEED, '' as Zone]) { const nd = byZone.get(k)!; if (nd.n > 0) needs.push(nd); }
   }
 
+  return { demands, needs, alreadyOk };
+}
+
+/** Calcule les projecteurs à pré-affecter à `target` depuis `prev`, selon « Matériel demandé » et sa répartition par zone / position.
+ *  Règles : on ne prend que des projecteurs du spectacle précédent (jamais le stock). Même zone = on garde ; autre zone : pour le plateau et la
+ *  corbeille on garde ceux SANS pastille bleue, pour la face ceux AVEC pastille bleue (les autres seront rangés au démontage : dessous / 3e).
+ *  Ce qui manque est à préparer depuis les dessous (plateau, corbeille, sans zone) ou le 3e (face), avec repli sur l'autre stock. */
+export function preAssignPlan(data: Data, target: Show, prev: Show): Plan {
+  const inPrev = new Set(data.showItems.filter((r) => r.show_id === prev.id).map((r) => r.item_id));
+  const inTarget = new Set(data.showItems.filter((r) => r.show_id === target.id).map((r) => r.item_id));
+  const taken = new Set<number>();                                       // projecteurs déjà proposés dans ce calcul
+  const item = (id: number) => data.items.find((i) => i.id === id);
+  // un projecteur est utilisable s'il n'est pas déjà dans le spectacle, pas bloqué, et sans panne non bloquante ouverte
+  const usable = (id: number): boolean => !inTarget.has(id) && !taken.has(id) && !blockedReason(data, id, target)
+    && !data.faults.some((f) => f.item_id === id && !f.resolved_at);
+  const { demands, needs, alreadyOk } = computeNeeds(data, target);
+  const dById = new Map(demands.map((d) => [d.id, d]));
   const proposals: Proposal[] = [];
   const posOf = (id: number) => patchPosition(data, prev.id, id);
   const take = (nd: Need, it: ReturnType<typeof item> & object, relamp: boolean, how: Proposal['how']) => {

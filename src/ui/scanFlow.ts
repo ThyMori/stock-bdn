@@ -4,6 +4,8 @@ import { POSITION_GROUPS } from '../patch';
 import { rpcCall, view } from '../store';
 import { parseScan } from '../logic';
 import { classifyScan, isParItem, splitLot } from '../scanPositions';
+import { prepScanTarget, remainingNeeds } from '../prepNeeds';
+import { zoneLabel } from '../zones';
 import { entryOf, entryOps, keypad } from '../patchEntry';
 import type { Entry } from '../patchEntry';
 import { cashBeep } from './beep';
@@ -24,10 +26,12 @@ export function openScanFlow(showId: string, onChange: () => void): void {
     const h = el('h2', '', 'Scanner'); h.tabIndex = -1;
     const a = el('button', 'btn scan-choice', ''); a.type = 'button'; a.append(el('b', '', 'Affecter des positions'), el('small', '', 'Choisir une position, scanner le lot, valider'));
     a.addEventListener('click', positions);
+    const pr = el('button', 'btn scan-choice', ''); pr.type = 'button'; pr.append(el('b', '', 'Préparer'), el('small', '', 'Scanner les projecteurs sortis du stock : affectés à la bonne ligne'));
+    pr.addEventListener('click', prepare);
     const b = el('button', 'btn scan-choice', ''); b.type = 'button'; b.append(el('b', '', 'Patcher'), el('small', '', 'Scanner, taper la grada, DIRECT et DMX'));
     b.addEventListener('click', patcher);
     const q = el('button', 'btn', 'Quitter'); q.type = 'button'; q.addEventListener('click', close);
-    dlg.replaceChildren(h, a, b, q); h.focus();
+    dlg.replaceChildren(h, pr, a, b, q); h.focus();
   }
 
   /** Affecter des positions : position choisie, scan des projecteurs, validation. */
@@ -82,6 +86,56 @@ export function openScanFlow(showId: string, onChange: () => void): void {
     // caméra en haut ; coupée quand on quitte l'écran
     let last = '', lastAt = 0;
     const scanner = new QrScanner(video, (r) => { if (r.data === last && Date.now() - lastAt < 2500) return; last = r.data; lastAt = Date.now(); add(r.data); },
+      { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
+    scanner.start().catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
+    stop = () => { scanner.stop(); scanner.destroy(); };
+    h.focus();
+  }
+
+  /** Préparer : chaque projecteur scanné est affecté tout de suite à la ligne de demande encore incomplète (zone selon son stock d'origine). */
+  function prepare() {
+    stop(); stop = () => {};
+    const h = el('h2', '', 'Préparer'); h.tabIndex = -1;
+    const vp = el('div', 'viewport'); const video = document.createElement('video'); video.setAttribute('playsinline', ''); video.muted = true; vp.appendChild(video);
+    const left = el('div', 'sub'); const msg = el('div', 'sub'); msg.setAttribute('role', 'status');
+    const form = el('form', 'row'); const inp = el('input'); inp.inputMode = 'numeric'; inp.pattern = '[0-9]*'; inp.placeholder = '…ou saisir un n°'; inp.setAttribute('aria-label', 'Saisir un numéro de projecteur');
+    form.append(inp, el('button', 'btn', 'Affecter'));
+    const bk = el('button', 'btn', 'Retour au menu'); bk.type = 'button'; bk.addEventListener('click', menu);
+    const row = el('div', 'row wrap'); row.append(bk);
+    dlg.replaceChildren(h, vp, left, form, msg, row);
+    const say = (t: string, bad = false) => { msg.textContent = t; msg.classList.toggle('warn', bad); if (bad) navigator.vibrate?.([250, 100, 250]); };
+    const names = (modelId: string, lamp: string | null) => `${view().models.find((m) => m.id === modelId)?.name ?? '?'}${lamp ? ' ' + (view().lamps.find((l) => l.id === lamp)?.name ?? '') : ''}`;
+    // ce qui reste à préparer, remis à jour après chaque affectation
+    const showLeft = () => {
+      const sh = view().shows.find((x) => x.id === showId); if (!sh) return;
+      const r = remainingNeeds(view(), sh);
+      const parts = r.prep.map((x) => `${x.n} × ${names(x.modelId, x.lamp)}${x.zone ? ' (' + zoneLabel(x.zone) + ')' : ''} ← ${x.from === 'stock3' ? '3e' : 'dessous'}`);
+      left.textContent = parts.length || r.unavailable.length ? 'Reste à préparer : ' + [...parts, ...r.unavailable.map((x) => `${x.n} × ${names(x.modelId, x.lamp)} introuvable`)].join(' · ') : 'Rien d\'autre à préparer : la demande est complète.';
+    };
+    let busy = false;
+    const go = async (text: string) => {
+      if (busy) return;
+      const sh = view().shows.find((x) => x.id === showId), n = parseScan(text);
+      if (!sh) return;
+      if (n === null) { say('QR non reconnu.', true); return; }
+      const t = prepScanTarget(view(), sh, n);
+      if (!t.ok) { say(t.msg, true); return; }
+      busy = true;
+      try {
+        if (t.ask && !window.confirm(t.ask)) { say(`N° ${n} non affecté.`); return; }
+        const r = await rpcCall('assign_items', { p_show: showId, p_items: [n], p_lamp: t.lamp, ...(t.zone ? { p_zone: t.zone } : {}) });   // p_zone seulement s'il est précisé
+        if (r.error) { say(r.error, true); return; }
+        const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
+        if (res?.skipped.length) { say(`N° ${n} refusé : ${res.skipped[0].reason}`, true); return; }
+        navigator.vibrate?.(40); cashBeep();
+        say(`N° ${n} → ${names(view().items.find((i) => i.id === n)?.model_id ?? '', t.lamp)}${t.zone ? ' · ' + zoneLabel(t.zone) : ''}${t.relamp ? ' · à relamper' : ''}.`);
+        showLeft(); onChange();
+      } finally { busy = false; }
+    };
+    form.addEventListener('submit', (e) => { e.preventDefault(); const v = inp.value; inp.value = ''; void go(v); });
+    showLeft(); say('Scanne chaque projecteur sorti du stock.');
+    let last = '', lastAt = 0;
+    const scanner = new QrScanner(video, (r) => { if (r.data === last && Date.now() - lastAt < 2500) return; last = r.data; lastAt = Date.now(); void go(r.data); },
       { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
     scanner.start().catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
     stop = () => { scanner.stop(); scanner.destroy(); };
