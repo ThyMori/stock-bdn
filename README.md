@@ -137,6 +137,9 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Compteur « affectés / demandés » (v1.61.0)
+Quand « Matériel demandé » est replié, un compteur **affectés / demandés** s'affiche à côté du titre (le « manque » reste signalé en rouge). Tout couvert = **✓ n / n en vert**, un peu plus gros, avec une courte pulsation. Sont comptés pour chaque demande : les projecteurs affectés utilisables (même modèle, même lampe pour un PAR), plus les prêts / locations et les substitutions, sans dépasser la quantité demandée.
+
 ### Menu du Scanner (v1.60.1)
 Trois gros boutons colorés avec icône, dans cet ordre : **Patcher** (bleu), **Affecter des positions** (vert), **Préparer** (ambre). Animation lente, coupée si l'appareil réduit les animations.
 

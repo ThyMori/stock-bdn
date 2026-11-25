@@ -654,3 +654,9 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .scan-choice.c-prep { --cc-a: #f2a900; --cc-b: #b86a00; color: #1a1200; }   /* ambre : prépa */
 @keyframes choice-shine { from { background-position: 0% 0; } to { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .scan-choice.fancy { animation: none; } }
+
+/* compteur « affectés / demandés » du matériel demandé replié ; tout affecté = vert, plus gros, petite pulsation (coupée si animations réduites) */
+.tag.cnt { background: transparent; font-size: .8rem; }
+.tag.full { font-size: .9rem; padding: 2px 8px; box-shadow: 0 0 0 2px var(--green); animation: full-pulse 1s ease-out 1; }
+@keyframes full-pulse { from { box-shadow: 0 0 0 0 var(--green); } to { box-shadow: 0 0 0 2px var(--green); } }
+@media (prefers-reduced-motion: reduce) { .tag.full { animation: none; } }
