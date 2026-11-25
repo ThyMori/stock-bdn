@@ -608,3 +608,6 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .slot-pos { padding-top: 6px; } .slot-prow { padding: 2px 0 2px 12px; min-height: 44px; }
 .slot-sum { font-weight: 700; padding-top: 6px; }
 .slot-foot { position: sticky; bottom: -16px; background: var(--paper); padding: 8px 0 4px; border-top: 2px solid var(--ink); }
+.slot-step { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.slot-pm { min-width: 44px; min-height: 44px; padding: 0; font-size: 20px; line-height: 1; }
+.slot-n { width: 52px; }

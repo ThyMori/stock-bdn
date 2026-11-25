@@ -18,11 +18,20 @@ export function openSlots(title: string, qty: number, start: Slot[]): Promise<Sl
     const sum = document.createElement('div'); sum.className = 'slot-sum'; sum.setAttribute('role', 'status');
     const err = document.createElement('div'); err.className = 'sub warn'; err.setAttribute('role', 'alert');
     const ok = document.createElement('button'); ok.className = 'btn primary grow'; ok.value = 'ok'; ok.textContent = 'Enregistrer';
+    // champ numérique avec boutons − et + (zones tactiles de 44 px) ; renvoie l'ensemble à poser dans la ligne
     const numInput = (val: number, aria: string, on: (n: number) => void) => {
+      const wrap = document.createElement('span'); wrap.className = 'slot-step';
       const i = document.createElement('input'); i.inputMode = 'numeric'; i.pattern = '[0-9]*'; i.value = val ? String(val) : ''; i.placeholder = '0'; i.setAttribute('aria-label', aria); i.className = 'slot-n';
-      i.addEventListener('input', () => { const n = parseInt(i.value, 10); on(Number.isFinite(n) && n > 0 ? Math.min(n, 500) : 0); refresh(); });
+      const read = () => { const n = parseInt(i.value, 10); return Number.isFinite(n) && n > 0 ? Math.min(n, 500) : 0; };
+      i.addEventListener('input', () => { on(read()); refresh(); });
       i.addEventListener('focus', () => i.select());
-      return i;
+      const btn = (txt: string, delta: number, label: string) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'btn slot-pm'; b.textContent = txt; b.setAttribute('aria-label', `${label} : ${aria}`);
+        b.addEventListener('click', () => { const n = Math.max(0, Math.min(500, read() + delta)); i.value = n ? String(n) : ''; on(n); refresh(); });   // met à jour le champ, l'état et le total
+        return b;
+      };
+      wrap.append(btn('−', -1, 'Moins'), i, btn('+', 1, 'Plus'));
+      return wrap;
     };
     for (const z of ZONE_ORDER) {
       const box = document.createElement('div'); box.className = 'slot-zone';
