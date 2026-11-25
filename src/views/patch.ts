@@ -7,7 +7,7 @@ import { gelColorOf, splitGelRefs } from '../gels';
 import { ACCESSORIES, COLS, CURVES, POSITION_GROUPS, buildRows, editableCols, extCount, externalStatus, labelsOf, sortRows, stateText } from '../patch';
 import type { Col, PatchLine, PatchRow } from '../patch';
 import { fmtDay } from './agenda';
-import { openForm } from '../ui/dialog';
+import { openForm, confirmBox } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { blockedReason } from '../alerts';
 import { describe } from '../ref';
@@ -162,7 +162,7 @@ export const patchView: ViewFactory = ([showId]) => {
         if (f && !refs.length) { toast('Indique au moins une référence.'); return; }
         if (f) await batchRun(root, 'gel_add', { gels: refs.map((ref) => ({ ref, color: gelColorOf(ref) })) }, 'Gélatines ajoutées'); return;
       }
-      case 'gel_clear': if (window.confirm(`Vider les gélatines de ${n_} ?`)) await batchRun(root, 'gel_clear', {}, 'Gélatines vidées'); return;
+      case 'gel_clear': if (await confirmBox(`Vider les gélatines de ${n_} ?`)) await batchRun(root, 'gel_clear', {}, 'Gélatines vidées'); return;
       case 'state': {
         const f = await openForm(title, [{ name: 'v', label: 'État', type: 'select', required: true, options: [['', 'Pas d\'état'], ['ok', 'Focus fait'], ['todo', 'À faire']] }, { name: 'note', label: 'Note (si « À faire »)', type: 'textarea' }], { submit: 'Appliquer' });
         if (f) await batchRun(root, 'field', { field: 'state', value: { s: f.v, note: f.v === 'todo' ? f.note.slice(0, 300) : '' } }, 'État appliqué'); return;
@@ -170,7 +170,7 @@ export const patchView: ViewFactory = ([showId]) => {
       case 'notes': { const f = await openForm(title, [{ name: 'v', label: 'Note (remplace l\'ancienne ; vide = effacer)', value: '' }], { submit: 'Appliquer' }); if (f) await batchRun(root, 'field', { field: 'notes', value: f.v.slice(0, 500) }, 'Note appliquée'); return; }
       default: {   // vider circuit / grada / DMX
         const fld = act === 'clear_circuit' ? 'circuit' : act === 'clear_dimmer' ? 'dimmer' : 'dmx';
-        if (window.confirm(`Vider ${act === 'clear_circuit' ? 'le circuit' : act === 'clear_dimmer' ? 'la grada' : 'le DMX'} de ${n_} ?`)) await batchRun(root, 'field', { field: fld, value: '' }, 'Champ vidé');
+        if (await confirmBox(`Vider ${act === 'clear_circuit' ? 'le circuit' : act === 'clear_dimmer' ? 'la grada' : 'le DMX'} de ${n_} ?`)) await batchRun(root, 'field', { field: fld, value: '' }, 'Champ vidé');
       }
     }
   }
@@ -236,7 +236,7 @@ export const patchView: ViewFactory = ([showId]) => {
       return;
     }
     if (what === 'line-del') {
-      if (r.itemId === null) { if (window.confirm('Supprimer cette ligne ?')) await structural(root, 'patch_delete_line', { p_item: null, p_line: r.lineId, p_remove: false }, 'Ligne supprimée'); return; }
+      if (r.itemId === null) { if (await confirmBox('Supprimer cette ligne ?')) await structural(root, 'patch_delete_line', { p_item: null, p_line: r.lineId, p_remove: false }, 'Ligne supprimée'); return; }
       const buttons: [string, string, boolean?][] = [['keep', 'Garder le projecteur affecté (vider la ligne)', true]];
       buttons.push(['remove', 'Retirer aussi le projecteur du spectacle']);
       const c = await ask(`Supprimer la ligne du projecteur ${r.itemId} ?`, 'Il peut rester affecté au spectacle, ou être retiré du spectacle (le matériel demandé ne change pas : c\'est un objectif).', buttons);
@@ -482,7 +482,7 @@ export const patchView: ViewFactory = ([showId]) => {
       seed();
       root.innerHTML = '<div class="page patch-page"><div id="phost"></div></div>';
       resort(); paint(root);
-      root.addEventListener('click', (e) => {
+      root.addEventListener('click', async (e) => {
         const t = e.target as HTMLElement;
         const b = t.closest<HTMLElement>('[data-sort]');
         if (b) { const c = b.dataset.sort as Col; if (sortCol === c) dir = dir === 1 ? -1 : 1; else { sortCol = c; dir = 1; } resort(); paint(root); return; }
@@ -517,7 +517,7 @@ export const patchView: ViewFactory = ([showId]) => {
         if (clr) {   // vider les circuits (gradas gardées) ou les gélatines + accessoires, pour repartir d'un montage déjà patché
           clr.closest('details')?.removeAttribute('open');   // le menu se referme
           const circ = clr.dataset.act === 'clear-circuits';
-          if (!window.confirm(circ ? 'Effacer tous les circuits de cette feuille ? Les gradas sont conservées.' : 'Effacer toutes les gélatines et tous les accessoires de cette feuille ?')) return;
+          if (!await confirmBox(circ ? 'Effacer tous les circuits de cette feuille ? Les gradas sont conservées.' : 'Effacer toutes les gélatines et tous les accessoires de cette feuille ?')) return;
           void (async () => {
             busy++; setStat(root, 'Effacement…');
             const r = await rpcCall(circ ? 'patch_clear_circuits' : 'patch_clear_gels_acc', { p_show: showId }); busy--; seed();
@@ -528,7 +528,7 @@ export const patchView: ViewFactory = ([showId]) => {
         }
         if (t.closest('[data-act="clear-all"]')) {   // effacer toute la feuille ; les projecteurs restent affectés
           t.closest('details')?.removeAttribute('open');
-          if (!window.confirm('Effacer toute la feuille de patch ? Circuits, gradas, courbes, DMX, positions, accessoires, gélatines, états et notes disparaissent, ainsi que les lignes sans projecteur. Les projecteurs restent affectés au spectacle. Impossible d\'annuler.')) return;
+          if (!await confirmBox('Effacer toute la feuille de patch ? Circuits, gradas, courbes, DMX, positions, accessoires, gélatines, états et notes disparaissent, ainsi que les lignes sans projecteur. Les projecteurs restent affectés au spectacle. Impossible d\'annuler.')) return;
           void (async () => {
             busy++; setStat(root, 'Effacement…');
             const r = await rpcCall('patch_clear_all', { p_show: showId }); busy--; seed();

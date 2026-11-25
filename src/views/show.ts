@@ -14,7 +14,7 @@ import { esc, fmtDateTime, parseScan, sortShows, todayStr, uuid } from '../logic
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
 import { describe, norm } from '../ref';
-import { openForm } from '../ui/dialog';
+import { openForm, confirmBox } from '../ui/dialog';
 import { deliverPdf } from '../ui/deliverPdf';
 import { ALL_OPT, notifyPost } from '../push';
 import { fmtDay } from './agenda';
@@ -423,18 +423,18 @@ export const showView: ViewFactory = ([id]) => {
           if (r.error) err(r.error);
         }
         else if (act === 'sub-del') {
-          if (!window.confirm('Retirer cette substitution ? Le manque réapparaîtra.')) return;
+          if (!await confirmBox('Retirer cette substitution ? Le manque réapparaîtra.')) return;
           const r = await rpcCall('delete_substitution', { p_id: v });
           if (r.error) err(r.error);
         }
         else if (act === 'ext-del') {
-          if (!window.confirm('Retirer ce prêt / cette location ? Le manque réapparaîtra.')) return;
+          if (!await confirmBox('Retirer ce prêt / cette location ? Le manque réapparaîtra.')) return;
           const r = await rpcCall('delete_external', { p_id: v });
           if (r.error) err(r.error);
         }
         else if (act === 'dem-del') {
           const x = view().showDemands.find((r) => r.id === v); if (!x) return;
-          if (!window.confirm('Supprimer cette demande ? Les projecteurs assignés automatiquement seront libérés (ceux que tu as choisis restent).')) return;
+          if (!await confirmBox('Supprimer cette demande ? Les projecteurs assignés automatiquement seront libérés (ceux que tu as choisis restent).')) return;
           await sendDemand(x.model_id, x.lamp_id ?? '', 0);
         }
         else if (act === 'gel-del') {
@@ -499,12 +499,12 @@ export const showView: ViewFactory = ([id]) => {
           const rows = view().showItems.filter((r) => r.show_id === id && rsel.has(r.item_id));
           const list = rows.map((r) => r.item_id).sort((a, b) => a - b);
           if (!list.length) return;
-          if (!window.confirm(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?`)) return;
+          if (!await confirmBox(`Retirer ${list.length} projecteur${list.length > 1 ? 's' : ''} de ce spectacle (${list.join(', ')}) ?`)) return;
           const r = await rpcCall('unassign_items', { p_show: id, p_items: list });
           if (r.error) err(r.error); else { rsel.clear(); toast(`${list.length} projecteur${list.length > 1 ? 's' : ''} retiré${list.length > 1 ? 's' : ''}.`, 'ok'); }
         }
         else if (act === 'remove') {
-          if (!window.confirm(`Retirer le projecteur n° ${v} de ce spectacle ?`)) return;
+          if (!await confirmBox(`Retirer le projecteur n° ${v} de ce spectacle ?`)) return;
           const r = await rpcCall('unassign_items', { p_show: id, p_items: [Number(v)] });
           if (r.error) err(r.error);
         }
@@ -518,11 +518,11 @@ export const showView: ViewFactory = ([id]) => {
           if (!f) return;
           const r = await rpcCall('assign_regisseur', { p_show: id, p_user: f.user });
           if (r.error) { err(r.error); return; }
-          if (window.confirm('Régisseur assigné. Lui envoyer une invitation par mail ?')) await mailInvite(f.user, err);
+          if (await confirmBox('Régisseur assigné. Lui envoyer une invitation par mail ?')) await mailInvite(f.user, err);
         }
         else if (act === 'reg-mail') await mailInvite(v!, err);
         else if (act === 'reg-del') {
-          if (!window.confirm('Retirer ce régisseur du spectacle ?')) return;
+          if (!await confirmBox('Retirer ce régisseur du spectacle ?')) return;
           const r = await rpcCall('unassign_regisseur', { p_show: id, p_user: v });
           if (r.error) err(r.error);
         }
@@ -577,7 +577,7 @@ export const showView: ViewFactory = ([id]) => {
           if (r.error) wallErr(r.error);
         }
         else if (act === 'post-del') {
-          if (!window.confirm('Effacer ce message ?')) return;
+          if (!await confirmBox('Effacer ce message ?')) return;
           const r = await rpcCall('delete_show_message', { p_id: v });
           if (r.error) wallErr(r.error);
         }
@@ -597,7 +597,7 @@ export const showView: ViewFactory = ([id]) => {
           ], { submit: 'Recopier', validate: (v) => (has && !v.mode ? 'Choisis : compléter ou remplacer.' : null) });
           if (!f) return;
           const mode = has ? f.mode : 'add';
-          if (mode === 'replace' && !window.confirm(`Retirer les ${nItems} projecteur${nItems > 1 ? 's' : ''} de ce spectacle avant de recopier ?`)) return;
+          if (mode === 'replace' && !await confirmBox(`Retirer les ${nItems} projecteur${nItems > 1 ? 's' : ''} de ce spectacle avant de recopier ?`)) return;
           const r = await rpcCall('show_copy_from', { p_target: id, p_source: f.src, p_mode: mode, p_circuits: f.circ !== 'non', p_gels: f.gels !== 'non' });
           if (r.error) { err(r.error); return; }
           const res = r.data as { added: number[]; skipped: { item: number; reason: string }[]; lines: number } | null;
@@ -619,7 +619,7 @@ export const showView: ViewFactory = ([id]) => {
           if (r.error) err(r.error);
         }
         else if (act === 'delete') {
-          if (!window.confirm('Supprimer ce spectacle et ses assignations ?')) return;
+          if (!await confirmBox('Supprimer ce spectacle et ses assignations ?')) return;
           const r = await rpcCall('delete_show', { p_id: id });
           if (r.error) err(r.error); else go('#/shows');
         }

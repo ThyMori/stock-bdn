@@ -4,22 +4,23 @@ import { esc, fmtDateTime, todayStr } from '../logic';
 import { describe } from '../ref';
 import { keepText } from '../keepFault';
 import { fmtDay } from './agenda';
+import { promptBox } from '../ui/dialog';
 
 /** Fiche d'une panne : déclaration, infos ajoutées, modifications, résolution — chacune datée et signée. */
 export const faultView: ViewFactory = ([id]) => ({
   mount(root) {
-    root.addEventListener('click', (e) => {
+    root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       const f = view().faults.find((x) => x.id === id);
       if (!el || !f) return;
       if (el.dataset.act === 'note') {
-        const t = window.prompt('Information à ajouter');
+        const t = await promptBox('Information à ajouter', '', { long: true });
         if (t && t.trim()) void addFaultNote(id, t);
       } else if (el.dataset.act === 'edit') {
-        const t = window.prompt('Modifier la description', f.description ?? '');
+        const t = await promptBox('Modifier la description', f.description ?? '', { long: true });
         if (t !== null && t.trim() && t.trim() !== (f.description ?? '')) void editFault(id, t);
       } else if (el.dataset.act === 'resolve') {
-        const r = window.prompt('Résolution (facultatif)', '');
+        const r = await promptBox('Résolution (facultatif)', '', { long: true });
         if (r !== null) void resolveFault(id, r);
       }
     });

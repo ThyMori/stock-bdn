@@ -10,6 +10,7 @@ import { entryOf, entryOps, keypad } from '../patchEntry';
 import type { Entry } from '../patchEntry';
 import { cashBeep } from './beep';
 import { toast } from './toast';
+import { confirmBox } from './dialog';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
 
@@ -69,7 +70,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
       const { inShow, out, noLamp } = splitLot(view(), showId, lot);
       const outAll = [...out.values()].flat();
       if (noLamp.length) { say(`PAR sans lampe sur la fiche (n° ${noLamp.join(', ')}) : retire-les ou renseigne leur lampe.`, true); return; }
-      if (outAll.length && !window.confirm(`${outAll.length} projecteur${outAll.length > 1 ? 's ne sont pas encore affectés' : ' n\'est pas encore affecté'} à ce spectacle (n° ${outAll.join(', ')}). Les affecter et leur donner la position ${pos} ?`)) return;
+      if (outAll.length && !await confirmBox(`${outAll.length} projecteur${outAll.length > 1 ? 's ne sont pas encore affectés' : ' n\'est pas encore affecté'} à ce spectacle (n° ${outAll.join(', ')}). Les affecter et leur donner la position ${pos} ?`)) return;
       ok.disabled = true; const done = [...inShow], refused: string[] = [];
       for (const [lamp, list] of out) {   // affectation d'abord (un appel par lampe), puis position pour tous
         const r = await rpcCall('assign_items', { p_show: showId, p_items: list, p_lamp: lamp || null });
@@ -122,7 +123,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
       if (!t.ok) { say(t.msg, true); return; }
       busy = true;
       try {
-        if (t.ask && !window.confirm(t.ask)) { say(`N° ${n} non affecté.`); return; }
+        if (t.ask && !await confirmBox(t.ask)) { say(`N° ${n} non affecté.`); return; }
         const r = await rpcCall('assign_items', { p_show: showId, p_items: [n], p_lamp: t.lamp, ...(t.zone ? { p_zone: t.zone } : {}) });   // p_zone seulement s'il est précisé
         if (r.error) { say(r.error, true); return; }
         const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;
@@ -165,7 +166,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
         if (!v.inShow) {   // pas encore affecté : confirmation puis affectation (PAR : lampe de sa fiche)
           const { out, noLamp } = splitLot(view(), showId, [num]);
           if (noLamp.length) { say(`Le PAR n° ${num} n'a pas de lampe sur sa fiche : renseigne-la d'abord.`, true); return; }
-          if (!window.confirm(`Le n° ${num} n'est pas encore affecté à ce spectacle. L'affecter ?`)) return;
+          if (!await confirmBox(`Le n° ${num} n'est pas encore affecté à ce spectacle. L'affecter ?`)) return;
           const [[lamp, list]] = [...out.entries()];
           const r = await rpcCall('assign_items', { p_show: showId, p_items: list, p_lamp: lamp || null });
           const res = r.data as { added: number[]; skipped: { item: number; reason: string }[] } | null;

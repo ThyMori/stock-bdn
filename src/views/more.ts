@@ -1,6 +1,6 @@
 import type { ViewFactory } from '../router';
 import { can, clearLocal, dismissRejected, loadProfile, rpcCall, state, sync } from '../store';
-import { openForm } from '../ui/dialog';
+import { openForm, confirmBox } from '../ui/dialog';
 import { esc, fmtDateTime } from '../logic';
 import { ROLE_LABEL, fullName } from '../types';
 import { supabase } from '../supabase';
@@ -88,7 +88,7 @@ export const moreView: ViewFactory = () => ({
       }
       if (el.dataset.act === 'dismiss') void dismissRejected(Number(el.dataset.v));
       if (el.dataset.act === 'logout') {
-        if (state.pending.length && !window.confirm(`${state.pending.length} action(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return;
+        if (state.pending.length && !await confirmBox(`${state.pending.length} action(s) ne sont pas encore synchronisées et seront perdues. Se déconnecter quand même ?`)) return;
         try { sessionStorage.setItem('logging-out', '1'); } catch { /* ignore */ }   // évite un 2e rechargement par l'écouteur SIGNED_OUT
         await Promise.race([Promise.all([forgetPushOnLogout().catch(() => {}), leavePresence()]), new Promise((r) => setTimeout(r, 3000))]);   // jamais bloqué par le réseau
         await supabase.auth.signOut({ scope: 'local' }).catch(() => {});   // déconnecte cet appareil

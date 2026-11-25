@@ -4,6 +4,7 @@ import { esc, fmtDate, fmtDateTime, todayStr } from '../logic';
 import { describe } from '../ref';
 import { keepText } from '../keepFault';
 import { fmtDay } from './agenda';
+import { promptBox } from '../ui/dialog';
 
 let showClosed = false;
 
@@ -12,13 +13,13 @@ export const faultsView: ViewFactory = () => ({
     root.innerHTML = `<div class="page"><h1>Pannes</h1>
       <div class="chips"><button class="chip" data-act="open">En cours</button><button class="chip" data-act="closed">Résolues</button></div>
       <div id="list" class="list"></div></div>`;
-    root.addEventListener('click', (e) => {
+    root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
       if (el.dataset.act === 'open') showClosed = false;
       else if (el.dataset.act === 'closed') showClosed = true;
       else if (el.dataset.act === 'resolve') {
-        const r = window.prompt('Résolution (facultatif)', '');
+        const r = await promptBox('Résolution (facultatif)', '', { long: true });
         if (r !== null) void resolveFault(el.dataset.v!, r);
         return;
       }

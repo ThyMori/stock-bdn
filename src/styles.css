@@ -640,3 +640,5 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .dlg.scanflow[open] { display: flex; flex-direction: column; gap: 12px; }   /* espacement entre les blocs de l'écran de scan */
 .pe-direct { width: 100%; }
 .dlg.scanflow h2:focus { outline: none; }   /* le titre reçoit le focus à l'ouverture, sans cadre */
+.confirm-msg { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }   /* message d'une confirmation : retours à la ligne conservés */
+.dlg.confirm h2:focus { outline: none; }

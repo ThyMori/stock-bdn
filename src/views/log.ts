@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { esc } from '../logic';
 import type { AppLog } from '../types';
 import { personColor } from '../wall';
+import { confirmBox, alertBox } from '../ui/dialog';
 
 const MAX = 1000, POLL_MS = 10_000;
 const DAY = (iso: string) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
@@ -63,9 +64,9 @@ export const logView: ViewFactory = () => ({
       if (act === 'all') { for (const l of visible()) picked.add(l.id); follow = false; setFollow(); paint(); }
       if (act === 'none') { picked.clear(); paint(); }
       if (act === 'del' && picked.size) {
-        if (!window.confirm(`Supprimer ${picked.size} ligne(s) du journal ? Une ligne « JOURNAL » gardera la trace de cette suppression.`)) return;
+        if (!await confirmBox(`Supprimer ${picked.size} ligne(s) du journal ? Une ligne « JOURNAL » gardera la trace de cette suppression.`)) return;
         const { error: e2 } = await supabase.rpc('delete_log_lines', { p_ids: [...picked] });
-        if (e2) { window.alert('Suppression impossible : ' + e2.message); return; }
+        if (e2) { void alertBox('Suppression impossible : ' + e2.message); return; }
         picked.clear(); await load();
       }
     });

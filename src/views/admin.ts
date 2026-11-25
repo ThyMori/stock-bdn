@@ -4,7 +4,7 @@ import { supabase } from '../supabase';
 import { esc, fmtDate } from '../logic';
 import { ROLE_LABEL, ROLE_RANK, ROLES, fullName } from '../types';
 import type { AccountRow, Role } from '../types';
-import { openForm } from '../ui/dialog';
+import { openForm, confirmBox, promptBox } from '../ui/dialog';
 
 const opts = (list: { id: string; name?: string; label?: string }[], sel?: string | null, empty = '—') =>
   `<option value="">${empty}</option>` + list.map((o) => `<option value="${o.id}" ${o.id === sel ? 'selected' : ''}>${esc(o.name ?? o.label)}</option>`).join('');
@@ -91,8 +91,8 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
               filter_size_id: str(fd.get('filter_size_id')), socket_id: str(fd.get('socket_id')), notice_url: str(fd.get('notice_url')) };
             void run(id ? supabase.from('models').update(rec).eq('id', id) : supabase.from('models').insert(rec), 'Modèle enregistré.');
           });
-          f.querySelector('[data-del]')?.addEventListener('click', () => {
-            if (window.confirm('Supprimer ce modèle ? (impossible s\'il reste des projecteurs de ce modèle)')) void run(supabase.from('models').delete().eq('id', f.dataset.id!), 'Modèle supprimé.');
+          f.querySelector('[data-del]')?.addEventListener('click', async () => {
+            if (await confirmBox('Supprimer ce modèle ? (impossible s\'il reste des projecteurs de ce modèle)')) void run(supabase.from('models').delete().eq('id', f.dataset.id!), 'Modèle supprimé.');
           });
         });
       }
@@ -113,8 +113,8 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
             const rec = { name: str(fd.get('name')), power_w: num(fd.get('power_w')), temp_k: num(fd.get('temp_k')), socket_id: str(fd.get('socket_id')) };
             void run(id ? supabase.from('lamps').update(rec).eq('id', id) : supabase.from('lamps').insert(rec), 'Lampe enregistrée.');
           });
-          f.querySelector('[data-del]')?.addEventListener('click', () => {
-            if (window.confirm('Supprimer cette lampe ?')) void run(supabase.from('lamps').delete().eq('id', f.dataset.id!), 'Lampe supprimée.');
+          f.querySelector('[data-del]')?.addEventListener('click', async () => {
+            if (await confirmBox('Supprimer cette lampe ?')) void run(supabase.from('lamps').delete().eq('id', f.dataset.id!), 'Lampe supprimée.');
           });
         });
       }
@@ -160,8 +160,8 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           const f = await openForm('Modifier le nom', [{ name: 'name', label: 'Nom', required: true, value: x.name }], { submit: 'Enregistrer' });
           if (f && f.name.trim() !== x.name) await run2(supabase.from(table).update({ name: f.name.trim() }).eq('id', id));
         })()));
-        body.querySelectorAll<HTMLElement>('[data-del]').forEach((b) => b.addEventListener('click', () => {
-          if (window.confirm('Supprimer cet élément ?')) void run(supabase.from(b.dataset.t!).delete().eq('id', b.dataset.del!), 'Supprimé.');
+        body.querySelectorAll<HTMLElement>('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+          if (await confirmBox('Supprimer cet élément ?')) void run(supabase.from(b.dataset.t!).delete().eq('id', b.dataset.del!), 'Supprimé.');
         }));
       }
 
@@ -222,7 +222,7 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
               if (error) throw new Error(error.message);
               say(`Invitation envoyée à ${q.email}.`);
             } else {
-              if (!window.confirm(`Refuser la demande de ${q.first_name} ${q.last_name} ? Aucun e-mail n'est envoyé.`)) return;
+              if (!await confirmBox(`Refuser la demande de ${q.first_name} ${q.last_name} ? Aucun e-mail n'est envoyé.`)) return;
               const { error } = await supabase.rpc('resolve_signup_request', { p_id: q.id, p_status: 'refused' });
               if (error) throw new Error(error.message);
               say('Demande refusée.');
@@ -254,11 +254,11 @@ export const adminView: ViewFactory = ([want = 'items']) => ({
           const u0 = users.find((x) => x.id === id)!;
           try {
             if (act === 'rename') {
-              const first = window.prompt('Prénom', u0.first_name); if (first === null) return;
-              const last = window.prompt('Nom', u0.last_name); if (last === null) return;
+              const first = await promptBox('Prénom', u0.first_name); if (first === null) return;
+              const last = await promptBox('Nom', u0.last_name); if (last === null) return;
               await callAdmin({ action: 'set_name', id, first_name: first, last_name: last }); say('Nom mis à jour.');
             } else if (act === 'revoke') {
-              if (!window.confirm(`Révoquer l'accès de ${email} ? Elle ne pourra plus se connecter ni voir les données. Son compte et l'historique sont conservés.`)) return;
+              if (!await confirmBox(`Révoquer l'accès de ${email} ? Elle ne pourra plus se connecter ni voir les données. Son compte et l'historique sont conservés.`)) return;
               await callAdmin({ action: 'set_access', id, active: false }); say(`Accès de ${email} révoqué.`);
             } else if (act === 'restore') {
               await callAdmin({ action: 'set_access', id, active: true }); say(`Accès de ${email} rétabli.`);

@@ -4,7 +4,7 @@ import { go } from '../router';
 import { can, canActShow, immoCall, rpcCall, setLamp, reportFault, reportFaultSav, resolveFault, setStatus, view, pull, state } from '../store';
 import { currentImmo, esc, fmtDate, fmtDateTime, immoState, dayNum, sortShows, todayStr, uuid } from '../logic';
 import { agendaHtml, fmtDay } from './agenda';
-import { openForm } from '../ui/dialog';
+import { openForm, confirmBox, promptBox, alertBox } from '../ui/dialog';
 import { describe, isPar, parLamps } from '../ref';
 import { mentionedItems, personColor, renderBody } from '../wall';
 import { STATUS_LABEL, STATUSES, showColor } from '../types';
@@ -43,12 +43,12 @@ export const itemView: ViewFactory = ([idStr], query) => {
         }
         if (act === 'fault') void declareFault(false);
         if (act === 'show-assign') void assignToShow(root);
-        if (act === 'show-remove') { const sid = el.dataset.v!; if (window.confirm('Retirer ce projecteur du spectacle ?')) void rpcCall('unassign_items', { p_show: sid, p_items: [id] }); }
+        if (act === 'show-remove') { const sid = el.dataset.v!; if (await confirmBox('Retirer ce projecteur du spectacle ?')) void rpcCall('unassign_items', { p_show: sid, p_items: [id] }); }
         if (act === 'immo-add') void immoForm(root);
         if (act === 'immo-edit') void immoForm(root, el.dataset.v);
         if (act === 'immo-del') void immoDelete(root, el.dataset.v!);
         if (el.dataset.act === 'resolve') {
-          const r = window.prompt('Résolution (facultatif)', '');
+          const r = await promptBox('Résolution (facultatif)', '', { long: true });
           if (r !== null) void resolveFault(el.dataset.v!, r);
         }
       });
@@ -108,9 +108,9 @@ export const itemView: ViewFactory = ([idStr], query) => {
     if (!m) return;
     const running = !m.closed_date && m.start_date <= todayStr();
     const what = `${m.kind === 'pret' ? 'prêt' : 'SAV'}${m.who ? ' (' + m.who + ')' : ''} du ${fmtDay(m.start_date)}`;
-    if (!window.confirm(`Supprimer cette période : ${what} ?${running ? '\n\nElle est en cours : le projecteur redeviendra « Disponible ».' : ''}`)) return;
+    if (!await confirmBox(`Supprimer cette période : ${what} ?${running ? '\n\nElle est en cours : le projecteur redeviendra « Disponible ».' : ''}`)) return;
     const err = await immoCall('delete_immo', { p_id: immoId });
-    if (err) window.alert('Impossible : ' + err);
+    if (err) void alertBox('Impossible : ' + err);
     paint(root);
   }
 
@@ -129,7 +129,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
     const err = cur
       ? await immoCall('edit_immo', { p_id: cur.id, p_who: v.who || null, p_note: v.note || null, p_start: v.start, p_end: v.end || null, p_closed: v.closed || null })
       : await immoCall('add_immo', { p_id: uuid(), p_item: id, p_kind: v.kind, p_who: v.who || null, p_note: v.note || null, p_start: v.start, p_end: v.end || null, p_closed: v.closed || null });
-    if (err) window.alert('Impossible : ' + err);
+    if (err) void alertBox('Impossible : ' + err);
     paint(root);
   }
 
@@ -152,7 +152,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
     const item = data.items.find((i) => i.id === id); if (!item) return;
     const taken = new Set(data.showItems.filter((x) => x.item_id === id).map((x) => x.show_id));
     const open = sortShows(data.shows.filter((s) => s.end_date >= today && !taken.has(s.id) && canActShow(s.id)), today);
-    if (!open.length) { window.alert('Aucun spectacle disponible : il faut être assigné à un spectacle à venir ou en cours.'); return; }
+    if (!open.length) { void alertBox('Aucun spectacle disponible : il faut être assigné à un spectacle à venir ou en cours.'); return; }
     const par = /^PAR/i.test(describe(data, item).type?.name ?? '');
     const lamps = data.lamps.filter((l) => /^CP\d+/i.test(l.name));
     const v = await openForm('Assigner à un spectacle', [
@@ -163,7 +163,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
     const r = await rpcCall('assign_items', { p_show: v.show, p_items: [id], p_lamp: par ? v.lamp : null });
     const sk = (r.data as { skipped?: { reason: string }[] } | null)?.skipped ?? [];
     const msg = r.error ?? sk[0]?.reason;
-    if (msg) window.alert(msg);
+    if (msg) void alertBox(msg);
     void root;
   }
 
@@ -241,7 +241,7 @@ export const itemView: ViewFactory = ([idStr], query) => {
       if (!error) { await pull(); paint(root); }
     });
     root.querySelector('#del')!.addEventListener('click', async () => {
-      if (!window.confirm(`Supprimer définitivement le projecteur n° ${id} et son historique ?`)) return;
+      if (!await confirmBox(`Supprimer définitivement le projecteur n° ${id} et son historique ?`)) return;
       const { error } = await supabase.from('items').delete().eq('id', id);
       if (error) { msg.textContent = 'Erreur : ' + error.message; return; }
       await pull(); go('#/');

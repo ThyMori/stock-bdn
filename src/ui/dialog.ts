@@ -102,3 +102,53 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
     if (opts.focus) dlg.querySelector<HTMLElement>(`[name="${opts.focus}"]`)?.focus();   // champ demandé par l'appelant : il prend le focus (curseur dedans)
   });
 }
+
+/** Verbe du bouton de validation d'après le début du message (« Supprimer… » → bouton « Supprimer »). */
+const verbOf = (msg: string): { label: string; danger: boolean } => {
+  const m = msg.match(/^(Supprimer|Effacer|Retirer|Vider|Révoquer|Refuser|Se déconnecter)/i);
+  return m ? { label: m[1][0].toUpperCase() + m[1].slice(1).toLowerCase(), danger: !/^refuser/i.test(m[1]) } : { label: 'Confirmer', danger: /perdu|définitiv|impossible/i.test(msg) };
+};
+
+/** Fenêtre de confirmation (remplace window.confirm) : message posé par textContent, renvoie true si on valide. Échap / Retour = annuler. */
+export function confirmBox(message: string, opts: { ok?: string; cancel?: string; danger?: boolean } = {}): Promise<boolean> {
+  return new Promise((resolve) => {
+    const v = verbOf(message), danger = opts.danger ?? v.danger;
+    const dlg = document.createElement('dialog'); dlg.className = 'dlg confirm' + (danger ? ' danger' : '');
+    const form = document.createElement('form'); form.method = 'dialog'; form.className = 'stack';
+    const h = document.createElement('h2'); h.textContent = danger ? 'Attention' : 'Confirmer'; h.tabIndex = -1;
+    const p = document.createElement('p'); p.className = 'confirm-msg'; p.textContent = message;     // jamais innerHTML : le texte peut contenir des noms saisis par des utilisateurs
+    const row = document.createElement('div'); row.className = 'row';
+    const ok = document.createElement('button'); ok.className = 'btn primary grow'; ok.value = 'ok'; ok.textContent = opts.ok ?? v.label;
+    const no = document.createElement('button'); no.className = 'btn'; no.value = 'cancel'; no.textContent = opts.cancel ?? 'Annuler'; no.setAttribute('formnovalidate', '');
+    row.append(ok, no); form.append(h, p, row); dlg.appendChild(form); document.body.appendChild(dlg);
+    let done = false;
+    const finish = (r: boolean) => { if (done) return; done = true; dlg.close(); dlg.remove(); resolve(r); };
+    form.addEventListener('submit', (e) => { e.preventDefault(); finish((e as SubmitEvent).submitter === ok); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(false); });
+    dlg.showModal(); h.focus();                                  // focus sur le titre : un Entrée distrait ne valide pas
+  });
+}
+
+/** Fenêtre d'information (remplace window.alert). */
+export function alertBox(message: string): Promise<void> {
+  return new Promise((resolve) => {
+    const dlg = document.createElement('dialog'); dlg.className = 'dlg confirm';
+    const form = document.createElement('form'); form.method = 'dialog'; form.className = 'stack';
+    const h = document.createElement('h2'); h.textContent = 'Information'; h.tabIndex = -1;
+    const p = document.createElement('p'); p.className = 'confirm-msg'; p.textContent = message;
+    const ok = document.createElement('button'); ok.className = 'btn primary'; ok.textContent = 'OK';
+    form.append(h, p, ok); dlg.appendChild(form); document.body.appendChild(dlg);
+    let done = false;
+    const finish = () => { if (done) return; done = true; dlg.close(); dlg.remove(); resolve(); };
+    form.addEventListener('submit', (e) => { e.preventDefault(); finish(); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); finish(); });
+    dlg.showModal(); h.focus();
+  });
+}
+
+/** Fenêtre de saisie d'une ligne (remplace window.prompt). Renvoie le texte (peut être vide si facultatif), ou null si on annule. */
+export async function promptBox(label: string, value = '', opts: { required?: boolean; long?: boolean } = {}): Promise<string | null> {
+  const optional = /\(facultatif\)/i.test(label), title = label.replace(/\s*\(facultatif\)/i, '');   // « (facultatif) » est ajouté par la fenêtre elle-même
+  const f = await openForm(title, [{ name: 'v', label: '', value, type: opts.long ? 'textarea' : 'text', required: opts.required ?? !optional }], { submit: 'Valider', focus: 'v' });
+  return f ? f.v : null;
+}

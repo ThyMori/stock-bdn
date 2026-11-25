@@ -3,7 +3,7 @@ import { can, rpcCall, state, view } from '../store';
 import { esc, fmtDateTime, isShowOver, sortShows, todayStr, uuid } from '../logic';
 import { fromEditable, mentionedIds, personColor, renderBody, toEditable } from '../wall';
 import { knownPeople, loadPeople } from '../people';
-import { openForm } from '../ui/dialog';
+import { openForm, confirmBox } from '../ui/dialog';
 import { ALL_OPT, notifyPost } from '../push';
 import { showColor } from '../types';
 
@@ -50,7 +50,7 @@ export const murView: ViewFactory = () => ({
         const r = await rpcCall('edit_show_message', { p_id: p.id, p_body: fromEditable(f.b, knownPeople().length ? knownPeople() : await loadPeople()) });
         if (r.error) err(r.error);
       } else if (act === 'post-del') {
-        if (!window.confirm('Effacer ce message ?')) return;
+        if (!await confirmBox('Effacer ce message ?')) return;
         const r = await rpcCall('delete_show_message', { p_id: v });
         if (r.error) err(r.error);
       }

@@ -137,6 +137,9 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Fenêtres de l'app à la place des boîtes du navigateur (v1.59.1)
+Plus aucune boîte `confirm` / `prompt` / `alert` du navigateur : tout passe par `confirmBox`, `promptBox` et `alertBox` (`src/ui/dialog.ts`). Confirmation : titre « Confirmer » (cadre rouge « Attention » pour une suppression ou une action irréversible), bouton nommé d'après l'action (« Supprimer », « Retirer »…), Échap / Retour = annuler, focus sur le titre. **Règle pour la suite : ne jamais appeler `window.confirm`, `window.prompt` ni `window.alert`.**
+
 ### Préparation : reste à sortir du stock et scan « Préparer » (v1.59.0)
 Aucun changement de base : pas d'action Supabase. Fichier `src/prepNeeds.ts`, testé dans `tests/prep-needs.test.ts`.
 - **Liste de prépa (PDF)** : nouvelle section « Reste à sortir du stock » : pour chaque ligne de demande et chaque zone, combien sortir **depuis le 3e** (face) ou **depuis les dessous** (plateau, corbeille, sans zone). Repli sur l'autre stock signalé ; « introuvable » en rouge s'il n'y en a plus. Les projecteurs encore montés sur le spectacle précédent ne comptent pas comme stock.
