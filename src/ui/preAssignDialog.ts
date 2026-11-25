@@ -22,8 +22,6 @@ export function previewPlan(data: Data, plan: Plan, targetName: string, prevName
       const s = document.createElement('div'); s.className = 's'; s.textContent = 'n° ' + list.map((p) => p.item).join(', '); box.appendChild(s);
       const relamp = list.filter((p) => p.relamp);
       if (relamp.length) { const w = document.createElement('div'); w.className = 'sub warn'; w.textContent = `À relamper en ${lamp(head.lamp)} : n° ${relamp.map((p) => p.item).join(', ')}`; box.appendChild(w); }
-      const stock = list.filter((p) => p.from === 'stock');
-      if (stock.length) { const w = document.createElement('div'); w.className = 'sub'; w.textContent = `Pris en stock (non montés sur « ${prevName} ») : n° ${stock.map((p) => p.item).join(', ')}`; box.appendChild(w); }
       form.appendChild(box);
     }
     if (!plan.proposals.length) add('div', 'Aucun projecteur à proposer : la demande est déjà couverte, ou rien n\'est disponible.', 'empty');

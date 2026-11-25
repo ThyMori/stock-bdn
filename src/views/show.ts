@@ -289,7 +289,7 @@ export const showView: ViewFactory = ([id]) => {
         };
         const err = (m: string) => { const x = root.querySelector('#serr'); if (x) x.textContent = m; toast(m); };
         const sendDemand = async (model: string, lampId: string, qty: number, zone = '') => {
-          const r = await rpcCall('set_demand', { p_show: id, p_model: model, p_lamp: lampId || null, p_qty: qty, p_zone: zone });
+          const r = await rpcCall('set_demand', { p_show: id, p_model: model, p_lamp: lampId || null, p_qty: qty, ...(zone ? { p_zone: zone } : {}) });   // zone envoyée seulement si renseignée (compatible avec l'ancienne base)
           if (r.error) { err(r.error); return; }
           const miss = (r.data as { missing?: number } | null)?.missing ?? 0;
           err(miss > 0 ? `⚠ Impossible de tout fournir : il manque ${miss} projecteur${miss > 1 ? 's' : ''} (à réparer, louer ou emprunter).` : '');

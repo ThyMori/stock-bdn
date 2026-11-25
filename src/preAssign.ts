@@ -64,13 +64,11 @@ export function preAssignPlan(data: Data, target: Show, prev: Show): Plan {
       }
     }
   };
-  const good = (d: (typeof demands)[number], pool: 'prev' | 'stock') => (pool === 'stock' && !d.lamp_id ? [] : byModel(d.model_id, pool)).filter((i) => !d.lamp_id || i.lamp_id === d.lamp_id);
+  const good = (d: (typeof demands)[number], pool: 'prev' | 'stock') => byModel(d.model_id, pool).filter((i) => !d.lamp_id || i.lamp_id === d.lamp_id);
   const wrong = (d: (typeof demands)[number], pool: 'prev' | 'stock') => byModel(d.model_id, pool).filter((i) => d.lamp_id && i.lamp_id !== d.lamp_id);
-  pass((d) => ({ items: good(d, 'prev'), relamp: false, from: 'prev' }));      // 1. déjà montés, bonne lampe (ou projecteur sans lampe)
-  pass((d) => ({ items: good(d, 'stock'), relamp: false, from: 'stock' }));    // 2. en stock avec la bonne lampe
-  pass((d) => ({ items: wrong(d, 'stock'), relamp: true, from: 'stock' }));    // 3. PAR en stock à relamper (prépa en amont)
-  pass((d) => ({ items: wrong(d, 'prev'), relamp: true, from: 'prev' }));      // 4. en dernier : PAR du spectacle précédent à relamper
-  // modèles sans lampe (non-PAR) : on ne pioche que dans le spectacle précédent, jamais en stock
+  pass((d) => ({ items: good(d, 'prev'), relamp: false, from: 'prev' }));      // 1. déjà montés sur le spectacle précédent, bonne lampe (ou projecteur sans lampe)
+  pass((d) => ({ items: wrong(d, 'prev'), relamp: true, from: 'prev' }));      // 2. en dernier : PAR du spectacle précédent à relamper
+  // on ne pioche JAMAIS en stock : les projecteurs absents du spectacle précédent sont affectés à la prépa (liste de prépa + scan)
   const shortages: Shortage[] = demands.filter((d) => (left.get(d.id) ?? 0) > 0).map((d) => ({ demandId: d.id, modelId: d.model_id, lamp: d.lamp_id, n: left.get(d.id)! }));
   return { proposals, shortages, alreadyOk };
 }

@@ -22,14 +22,13 @@ let p = preAssignPlan(d, cur, prev);
 assert.deepEqual(p.proposals.map((x) => x.item), [1, 2]);
 assert.deepEqual(p.shortages.map((x) => x.n), [1]);                      // le n°3 est en stock : non pioché pour un non-PAR
 
-// PAR : bonne lampe du précédent, puis stock bonne lampe, puis stock à relamper, puis précédent à relamper
+// PAR : bonne lampe du précédent d'abord, puis (en dernier) PAR du précédent à relamper ; jamais le stock
 d = base({ items: [it(1, 'P', 'A'), it(2, 'P', 'B'), it(3, 'P', 'A'), it(4, 'P', 'B')], showItems: [si('prev', 1, 'A'), si('prev', 2, 'B')], showDemands: [dem('d1', 'P', 4, 'A')] });
 p = preAssignPlan(d, cur, prev);
-assert.deepEqual(p.proposals.map((x) => [x.item, x.relamp, x.from]), [[1, false, 'prev'], [3, false, 'stock'], [4, true, 'stock'], [2, true, 'prev']]);
-d = { ...d, showDemands: [dem('d1', 'P', 2, 'A')] };
-assert.deepEqual(preAssignPlan(d, cur, prev).proposals.map((x) => x.item), [1, 3]);
-d = { ...d, showDemands: [dem('d1', 'P', 3, 'A')] };
-assert.deepEqual(preAssignPlan(d, cur, prev).proposals.map((x) => x.item), [1, 3, 4]);   // relampage du stock avant celui du précédent
+assert.deepEqual(p.proposals.map((x) => [x.item, x.relamp, x.from]), [[1, false, 'prev'], [2, true, 'prev']]);   // 3 et 4 sont en stock : ignorés
+assert.deepEqual(p.shortages.map((x) => x.n), [2]);
+d = { ...d, showDemands: [dem('d1', 'P', 1, 'A')] };
+assert.deepEqual(preAssignPlan(d, cur, prev).proposals.map((x) => x.item), [1]);
 
 // exclusions : panne non bloquante, SAV, déjà dans le spectacle ; déjà affectés comptés ; prêts / manque déduits
 d = base({ items: [it(1, 'M'), it(2, 'M'), it(3, 'M'), it(4, 'M')], showItems: [si('prev', 1), si('prev', 2), si('prev', 3), si('cur', 4)],
