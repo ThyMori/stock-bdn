@@ -245,11 +245,13 @@ t('alertes matériel : demandes non satisfaites et projecteurs indisponibles, sp
   assert.equal(alertText(a[1]), '1 projecteur indisponible');
 });
 t('projecteur indisponible pour un spectacle : autre spectacle, SAV / prêt, panne', () => {
-  const show = { id: 'a', name: 'A', start_date: '2026-11-10', end_date: '2026-11-12' } as unknown as Data['shows'][number];
-  const d = { ...EMPTY_DATA, shows: [show, { id: 'b', name: 'B', start_date: '2026-11-11', end_date: '2026-11-15' }, { id: 'c', name: 'C', start_date: '2026-12-01', end_date: '2026-12-02' }],
+  // dates relatives à aujourd'hui : les jours passés ne comptent plus pour les SAV / prêts (v1.57.1)
+  const T = todayStr(), plus = (n: number) => { const x = new Date(T + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+  const show = { id: 'a', name: 'A', start_date: plus(1), end_date: plus(3) } as unknown as Data['shows'][number];
+  const d = { ...EMPTY_DATA, shows: [show, { id: 'b', name: 'B', start_date: plus(2), end_date: plus(6) }, { id: 'c', name: 'C', start_date: plus(20), end_date: plus(21) }],
     showItems: [{ show_id: 'b', item_id: 1 }, { show_id: 'c', item_id: 2 }],
-    immos: [{ item_id: 3, kind: 'sav', start_date: '2026-11-01', end_date: null, closed_date: null }, { item_id: 4, kind: 'pret', start_date: '2026-11-01', end_date: '2026-11-05', closed_date: null }],
-    faults: [{ item_id: 5, resolved_at: null }, { item_id: 6, resolved_at: '2026-11-01' }] } as unknown as Data;
+    immos: [{ item_id: 3, kind: 'sav', start_date: plus(-5), end_date: null, closed_date: null }, { item_id: 4, kind: 'pret', start_date: plus(-5), end_date: plus(-1), closed_date: null }],
+    faults: [{ item_id: 5, resolved_at: null }, { item_id: 6, resolved_at: plus(-5) }] } as unknown as Data;
   assert.equal(blockedReason(d, 1, show), 'déjà dans « B »');
   assert.equal(blockedReason(d, 2, show), null);
   assert.equal(blockedReason(d, 3, show), 'SAV');
