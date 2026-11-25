@@ -6,6 +6,8 @@ import { patchPosition, positionBefore, posLabel } from './position';
 import { drawAccessorySection, drawGelSection, drawHolderSection } from './prepPdf';
 import { sentToSav } from './keepFault';
 import type { PdfCtx } from './prepPdf';
+import { zoneLabel, zoneOfPosition } from './zones';
+import type { Zone } from './zones';
 
 const DAY = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
 
@@ -37,9 +39,9 @@ export function compareShows(data: Data, curId: string, nextId: string): Teardow
 }
 
 /** Une ligne du plan de démontage / remontage : un projecteur et ce qu'on doit en faire. */
-export interface PlanRow extends TdRow { oldPos: string; newPos: string; origin: string }
+export interface PlanRow extends TdRow { oldPos: string; newPos: string; origin: string; originKind: string; zone: Zone }
 /** Plan complet : ce qui part au stock (dessous / 3e), ce qui reste en place, ce qui bouge, ce qui est à monter. */
-export interface Plan { dessous: PlanRow[]; stock3: PlanRow[]; keep: PlanRow[]; move: PlanRow[]; mount: PlanRow[] }
+export interface Plan { dessous: PlanRow[]; stock3: PlanRow[]; keep: PlanRow[]; move: PlanRow[]; mount: PlanRow[]; fromDessous: number; fromStock3: number }
 
 /** Plan de démontage du spectacle en cours (positions de sa feuille de patch) vers le prochain (positions de la sienne).
  *  - dans l'ancien, pas dans le nouveau : à stocker (3e si pastille bleue, sinon dessous) ;
@@ -49,17 +51,21 @@ export interface Plan { dessous: PlanRow[]; stock3: PlanRow[]; keep: PlanRow[]; 
 export function teardownPlan(data: Data, curId: string, nextId: string): Plan {
   const td = compareShows(data, curId, nextId), next = data.shows.find((s) => s.id === nextId);
   const lab = (p: string) => p || 'position non renseignée';
-  const ext = (r: TdRow): PlanRow => ({ ...r, oldPos: patchPosition(data, curId, r.id), newPos: patchPosition(data, nextId, r.id), origin: '' });
+  // zone du projecteur dans le prochain spectacle : celle retenue à l'affectation, sinon celle de sa position sur la feuille de patch
+  const zoneIn = (id: number, pos: string): Zone => ((data.showItems.find((x) => x.show_id === nextId && x.item_id === id)?.zone ?? '') as Zone) || zoneOfPosition(pos);
+  const ext = (r: TdRow): PlanRow => { const newPos = patchPosition(data, nextId, r.id); return { ...r, oldPos: patchPosition(data, curId, r.id), newPos, origin: '', originKind: '', zone: zoneIn(r.id, newPos) }; };
   const blue = (id: number) => !!data.items.find((i) => i.id === id)?.blue_dot;
   const sortPos = (a: PlanRow, b: PlanRow) => lab(a.newPos).localeCompare(lab(b.newPos), 'fr', { numeric: true }) || a.type.localeCompare(b.type, 'fr') || a.model.localeCompare(b.model, 'fr', { numeric: true }) || a.id - b.id;
   const stored = td.store.map(ext);
   const both = td.keep.map(ext);
+  const mount = td.prepare.map(ext).map((r) => { const p = next ? positionBefore(data, r.id, next) : null; return { ...r, originKind: p?.kind ?? '', origin: p ? posLabel(p) : '' }; }).sort(sortPos);
   return {
+    fromDessous: mount.filter((r) => r.originKind === 'dessous').length, fromStock3: mount.filter((r) => r.originKind === 'stock3').length,
     dessous: stored.filter((r) => !blue(r.id)),
     stock3: stored.filter((r) => blue(r.id)),
     keep: both.filter((r) => r.oldPos === r.newPos),
     move: both.filter((r) => r.oldPos !== r.newPos).sort(sortPos),
-    mount: td.prepare.map(ext).map((r) => ({ ...r, origin: next ? posLabel(positionBefore(data, r.id, next)) : '' })).sort(sortPos)
+    mount
   };
 }
 
@@ -86,8 +92,11 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   doc.text(`Prochain spectacle : ${next.name} (du ${DAY(next.start_date)} au ${DAY(next.end_date)})`, M, y, { maxWidth: W - 2 * M }); y += 5;
   doc.setTextColor(110); doc.text(`Générée le ${DAY(now.toISOString())}`, M, y); doc.setTextColor(0); y += 8;
   doc.setFont('helvetica', 'bold'); doc.text('Récapitulatif', M, y); doc.setFont('helvetica', 'normal'); y += 5;
+  const zt = (r: PlanRow) => (r.zone ? zoneLabel(r.zone) + ' · ' : '');   // zone du projecteur dans le prochain spectacle
   const recap = `Stock dessous : ${plan.dessous.length}   Stock 3e : ${plan.stock3.length}   En place : ${plan.keep.length}   À déplacer : ${plan.move.length}   À monter : ${plan.mount.length}`;
   doc.text(recap, M, y, { maxWidth: W - 2 * M }); y += 5 * Math.ceil(doc.getTextWidth(recap) / (W - 2 * M));
+  const prepLine = `À monter, sortis du stock : ${plan.fromDessous} depuis les dessous · ${plan.fromStock3} depuis le 3e`;
+  doc.text(prepLine, M, y); y += 5;
   if (changes.length) { doc.setTextColor(200, 0, 0); doc.setFont('helvetica', 'bold'); doc.text(`Attention : ${changes.length} PAR à vérifier / changer de lampe`, M, y); doc.setTextColor(0); doc.setFont('helvetica', 'normal'); y += 5; }
 
   const section = (title: string, sub: string, rows: PlanRow[], lampCol: string, info: (r: PlanRow) => string, blue = false) => {
@@ -125,9 +134,9 @@ export async function buildTeardownPdf(data: Data, curId: string, nextId: string
   const from = (r: PlanRow) => (r.oldPos ? `était : ${r.oldPos}` : '');
   section('À stocker dessous', 'projecteurs sans pastille, absents du spectacle suivant', plan.dessous, '', from);
   section('À stocker au 3e', 'projecteurs à pastille bleue, absents du spectacle suivant', plan.stock3, '', from, true);
-  section('À garder en place', 'même position dans les deux spectacles (cintres, allemandes, passerelles, sols, pont coupole…)', plan.keep, 'LAMPE', (r) => r.newPos);
-  section('À déplacer', 'dans les deux spectacles, à une autre position', plan.move, 'LAMPE', (r) => `${r.oldPos || '?'} > ${r.newPos || '?'}`);
-  section('À monter', 'nouveaux pour le spectacle suivant, avec leur provenance', plan.mount, 'LAMPE REQUISE', (r) => `${r.newPos || 'position ?'}  (de : ${r.origin})`);
+  section('À garder en place', 'même position dans les deux spectacles (cintres, allemandes, passerelles, sols, pont coupole…)', plan.keep, 'LAMPE', (r) => zt(r) + r.newPos);
+  section('À déplacer', 'dans les deux spectacles, à une autre position', plan.move, 'LAMPE', (r) => `${zt(r)}${r.oldPos || '?'} > ${r.newPos || '?'}`);
+  section('À monter', 'nouveaux pour le spectacle suivant, avec leur provenance', plan.mount, 'LAMPE REQUISE', (r) => `${zt(r)}${r.newPos || 'position ?'}  (de : ${r.origin})`);
   const sav = sentToSav(data, curId);
   if (sav.length) {   // pannes non bloquantes : le projecteur a joué ce spectacle, il part en SAV ensuite (SAV déjà créé sans date de fin)
     ensure(30); y += 8;

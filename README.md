@@ -137,6 +137,12 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Rapport de démontage : zones et provenance (v1.60.0)
+Aucun changement de base : pas d'action Supabase. Fichier `src/teardown.ts`, testé dans `tests/teardown.test.ts`.
+- Chaque ligne « À garder en place », « À déplacer » et « À monter » indique maintenant la **zone** du projecteur dans le prochain spectacle (celle retenue à l'affectation, sinon déduite de sa position sur la feuille de patch).
+- Le récapitulatif ajoute une ligne : « À monter, sortis du stock : n depuis les dessous · n depuis le 3e » (d'après la pastille bleue).
+- Rappel des règles : absent du suivant → **dessous**, ou **3e** si pastille bleue ; « À monter » donne la provenance de chaque projecteur (dessous, 3e, déjà monté, prêt, SAV).
+
 ### Fenêtres de l'app à la place des boîtes du navigateur (v1.59.1)
 Plus aucune boîte `confirm` / `prompt` / `alert` du navigateur : tout passe par `confirmBox`, `promptBox` et `alertBox` (`src/ui/dialog.ts`). Confirmation : titre « Confirmer » (cadre rouge « Attention » pour une suppression ou une action irréversible), bouton nommé d'après l'action (« Supprimer », « Retirer »…), Échap / Retour = annuler, focus sur le titre. **Règle pour la suite : ne jamais appeler `window.confirm`, `window.prompt` ni `window.alert`.**
 
