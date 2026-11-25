@@ -1,3 +1,4 @@
+import { immoLastDay, todayStr } from './logic';
 import type { Data, Show } from './types';
 
 export interface ShowAlert { show: Show; missing: { label: string; n: number }[]; problems: { item: number; why: string }[] }
@@ -23,7 +24,9 @@ export const alertText = (a: ShowAlert): string =>
 export function blockedReason(data: Data, itemId: number, show: Show): string | null {
   const other = data.showItems.find((r) => r.item_id === itemId && r.show_id !== show.id && data.shows.some((s) => s.id === r.show_id && s.start_date <= show.end_date && s.end_date >= show.start_date));
   if (other) return `déjà dans « ${data.shows.find((s) => s.id === other.show_id)?.name ?? '?'} »`;
-  const imm = data.immos.find((m) => m.item_id === itemId && m.start_date <= show.end_date && (m.closed_date ?? m.end_date ?? '9999-12-31') >= show.start_date);
+  // les jours déjà passés ne comptent plus ; un SAV / prêt clôturé libère le projecteur dès le jour de sa clôture
+  const today = todayStr(), from = show.start_date > today ? show.start_date : today;
+  const imm = show.end_date >= today ? data.immos.find((m) => m.item_id === itemId && m.start_date <= show.end_date && immoLastDay(m) >= m.start_date && immoLastDay(m) >= from) : undefined;
   if (imm) return imm.kind === 'pret' ? 'prêt' : 'SAV';
   if (data.faults.some((f) => f.item_id === itemId && !f.resolved_at && !f.keep_until)) return 'en panne';   // panne non bloquante : le SAV planifié (immos) prend le relais le lendemain
   return null;

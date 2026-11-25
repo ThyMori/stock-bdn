@@ -137,6 +137,12 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Disponibilité après un SAV et résolution de la dernière panne (v1.57.1)
+- **Jour de clôture :** un SAV ou un prêt **clôturé** libère le projecteur **dès le jour de la clôture** (il bloque jusqu'à la veille). Une fin prévue (non clôturée) reste incluse ; sans fin connue, le projecteur reste bloqué.
+- **Jours passés :** seules les dates **à partir d'aujourd'hui** comptent pour affecter un projecteur à un spectacle (un SAV terminé pendant les premiers jours d'un spectacle en cours ne le bloque plus ; un spectacle entièrement passé n'est plus bloqué par les immobilisations). Appliqué partout : affectation (`item_conflict`), projecteurs « indisponibles » (`item_blocked`, `blockedReason` côté appli), calcul des disponibles (`reallocate_all`). Fonction `immo_last_day()` en base, `immoLastDay()` côté appli.
+- **Résoudre la dernière panne ouverte** d'un projecteur en SAV referme le SAV ouvert depuis cette panne (clôturé le jour de la résolution) et remet le projecteur **Disponible** (historique + journal). Avec une autre panne encore ouverte, ou un SAV de maintenance commencé avant la panne, l'état ne change pas. Même affichage immédiat hors ligne.
+- **Supabase : oui** — rejouer `schema.sql` (`immo_last_day`, `item_conflict`, `item_blocked`, `reallocate_all`, `resolve_fault`). Test pglite `test39`.
+
 ### « Patcher » par scan (v1.57.0)
 - Bouton **Scanner** → **Patcher** : on scanne (ou saisit) un projecteur, puis un **gros pavé numérique** sert à taper la **grada** ; trois champs (GRADA, UNIVERS, ADRESSE) se choisissent d'un toucher, le 1er chiffre tapé remplace la valeur du champ (souligné), ⌫ efface un chiffre, C tout.
 - Touche **DIRECT** (même bleu que dans la feuille de patch) : met la courbe DIRECT et fait apparaître UNIVERS / ADRESSE (univers 1 proposé). Le DMX s'enregistre au format de la feuille, **univers-adresse** (ex. `1-45` ; univers 1 à 999, adresse 1 à 512). Toucher DIRECT à nouveau le retire (courbe linéaire ; le serveur vide le DMX).
@@ -370,6 +376,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.48.0) | table `show_demand_gels`, fonctions `add_demand_gels` / `delete_demand_gel` | v1.48.0 |
 | `schema.sql` (v1.49.0) | fonctions `patch_clear_all`, `patch_batch` | v1.49.0 |
 | `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
+| `schema.sql` (v1.57.1) | fonction `immo_last_day`, règles de disponibilité (`item_conflict`, `item_blocked`, `reallocate_all`), `resolve_fault` referme le SAV | v1.57.1 |
 | `schema.sql` (v1.55.0) | table `show_demand_slots`, fonctions `zone_of_position`, `set_demand_slots` (remplace la v1.54.0) | v1.55.0 |
 | `schema.sql` (v1.51.0) | colonnes `faults.keep_until / keep_show / keep_immo`, fonctions `report_fault_keep`, `activate_scheduled_sav`, `item_blocked` / `reallocate_all` / `edit_show` / `resolve_fault` mis à jour | v1.51.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |

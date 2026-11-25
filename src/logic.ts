@@ -95,6 +95,14 @@ function overlay(data: Data, pending: Op[]): Data {
     } else {
       const f = fById.get(op.fault);
       if (f && !f.resolved_at) { f.resolved_at = op.at; f.resolution = op.resolution ?? null; f.pending = true; }
+      if (f && f.resolved_at === op.at) {   // dernière panne résolue : le SAV ouvert depuis cette panne se referme (comme le serveur)
+        const it = byId.get(f.item_id), day = dayOf(op.at);
+        const open = immos.find((m) => m.item_id === f.item_id && m.kind === 'sav' && !m.closed_date && m.start_date >= dayOf(f.reported_at) && m.start_date <= day);
+        if (it && it.status === 'sav' && open && !faults.some((x) => x.item_id === f.item_id && !x.resolved_at)) {
+          it.status = 'dispo'; it.status_at = op.at > it.status_at ? op.at : it.status_at; it.pending = true;
+          immos = immos.map((m) => (!m.closed_date && m.item_id === f.item_id && m.start_date <= day ? { ...m, closed_date: m.start_date > day ? m.start_date : day, pending: true } : m));
+        }
+      }
     }
   }
   return { ...data, items, faults, faultLog, immos };
@@ -122,6 +130,10 @@ export const fmtDateTime = (iso: string): string =>
 // ---------- agenda (immobilisations) ----------
 /** Jour local d'un horodatage ISO, au format AAAA-MM-JJ. */
 export const dayOf = (iso: string): string => new Date(iso).toLocaleDateString('sv-SE');
+/** Veille d'un jour (AAAA-MM-JJ). */
+export const prevDay = (iso: string): string => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+/** Dernier jour où une immobilisation bloque le projecteur : clôturée = libre dès le jour de la clôture (bloqué jusqu'à la veille) ; sinon fin prévue incluse ; sans fin connue = sans limite. Identique à immo_last_day() en base. */
+export const immoLastDay = (m: Pick<Immo, 'closed_date' | 'end_date'>): string => (m.closed_date ? prevDay(m.closed_date) : m.end_date ?? '9999-12-31');
 export const todayStr = (): string => new Date().toLocaleDateString('sv-SE');
 export const dayNum = (d: string): number => Math.floor(Date.parse(d + 'T00:00:00Z') / 86400000);
 export const addDays = (d: string, n: number): string => new Date((dayNum(d) + n) * 86400000).toISOString().slice(0, 10);

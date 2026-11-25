@@ -348,6 +348,19 @@ begin
   get diagnostics n = row_count;
   if n > 0 then
     delete from immos where id = (select keep_immo from faults where id = p_fault) and closed_date is null and start_date > current_date;   -- panne résolue avant son SAV prévu : plus de SAV
+    -- v1.57.1 : dernière panne ouverte résolue → le SAV ouvert depuis cette panne se referme et le projecteur redevient disponible
+    -- (un SAV de maintenance commencé avant la panne n'est pas touché)
+    if not exists (select 1 from faults where item_id = it and resolved_at is null)
+       and exists (select 1 from items where id = it and status = 'sav')
+       and exists (select 1 from immos o where o.item_id = it and o.kind = 'sav' and o.closed_date is null
+                      and o.start_date >= ((select reported_at from faults where id = p_fault) at time zone 'Europe/Paris')::date
+                      and o.start_date <= (p_at at time zone 'Europe/Paris')::date) then
+      update items set status = 'dispo', status_at = greatest(p_at, status_at), updated_at = now(), last_service = (p_at at time zone 'Europe/Paris')::date where id = it;
+      update immos set closed_date = greatest((p_at at time zone 'Europe/Paris')::date, start_date) where item_id = it and closed_date is null and start_date <= (p_at at time zone 'Europe/Paris')::date;
+      insert into item_events (id, item_id, kind, status, note, created_by, created_by_label, at)
+      values (gen_random_uuid(), it, 'status', 'dispo', 'Panne résolue : retour disponible', auth.uid(), lbl, p_at);
+      perform log_event('STATUT', format('#%s : SAV → disponible (dernière panne résolue)', it));
+    end if;
     insert into item_events (id, item_id, kind, note, created_by, created_by_label, at)
     values (p_event, it, 'fault_resolved', p_resolution, auth.uid(), lbl, p_at)
     on conflict (id) do nothing;
@@ -445,6 +458,10 @@ grant execute on function delete_log_lines(bigint[]) to authenticated;
 -- Spectacles : conflits, création, modification, assignation.
 -- Un projecteur ne peut pas être dans deux spectacles aux dates qui se recoupent, ni sur une période de prêt / SAV
 -- (un SAV sans date de fin connue le bloque tant qu'on n'a pas indiqué sa fin prévue).
+-- v1.57.1 : dernier jour où une immobilisation (prêt / SAV) bloque le projecteur. Clôturée : libre dès le jour de la clôture (donc bloqué jusqu'à la veille) ;
+-- sinon fin prévue (incluse), ou pas de fin connue = bloqué sans limite.
+create or replace function immo_last_day(m immos) returns date language sql immutable as $$
+  select case when m.closed_date is not null then m.closed_date - 1 else coalesce(m.end_date, 'infinity'::date) end $$;
 create or replace function item_conflict(p_item int, p_show uuid, p_start date, p_end date) returns text
 language plpgsql stable security definer set search_path = public as $$
 declare r text;
@@ -456,7 +473,9 @@ begin
   select (case m.kind when 'pret' then 'prêt' else 'SAV' end) || coalesce(' (' || m.who || ')', '') || ' du ' || to_char(m.start_date, 'DD/MM')
          || coalesce(' au ' || to_char(coalesce(m.closed_date, m.end_date), 'DD/MM'), ' (fin non connue)') into r
     from immos m
-   where m.item_id = p_item and m.start_date <= p_end and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p_start limit 1;
+   where m.item_id = p_item and m.start_date <= p_end and immo_last_day(m) >= m.start_date
+     and p_end >= (now() at time zone 'Europe/Paris')::date                                        -- les jours déjà passés ne comptent plus
+     and immo_last_day(m) >= greatest(p_start, (now() at time zone 'Europe/Paris')::date) limit 1;
   return r;
 end $$;
 
@@ -1176,7 +1195,9 @@ begin
   select (case m.kind when 'pret' then 'prêt' else 'SAV' end) || coalesce(' (' || m.who || ')', '') || ' du ' || to_char(m.start_date, 'DD/MM')
          || coalesce(' au ' || to_char(coalesce(m.closed_date, m.end_date), 'DD/MM'), ' (fin non connue)') into r
     from immos m
-   where m.item_id = p_item and m.start_date <= p_end and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p_start limit 1;
+   where m.item_id = p_item and m.start_date <= p_end and immo_last_day(m) >= m.start_date
+     and p_end >= (now() at time zone 'Europe/Paris')::date
+     and immo_last_day(m) >= greatest(p_start, (now() at time zone 'Europe/Paris')::date) limit 1;
   if r is not null then return r; end if;
   if exists (select 1 from faults f where f.item_id = p_item and f.resolved_at is null and f.keep_until is null) then return 'en panne'; end if;   -- panne « non bloquante » : le SAV planifié (immos) prend le relais le lendemain
   return null;
@@ -1224,7 +1245,7 @@ begin
              where i.model_id = p.model_id
                and not exists (select 1 from faults f where f.item_id = i.id and f.resolved_at is null and f.keep_until is null)
                and not exists (select 1 from immos m where m.item_id = i.id and m.start_date <= p.day
-                               and coalesce(m.closed_date, m.end_date, 'infinity'::date) >= p.day))::int as c
+                               and immo_last_day(m) >= p.day))::int as c
       from pairs p),
   tot as (select n.model_id, dy.day, sum(n.n)::int as t from need n join days dy on dy.show_id = n.show_id group by n.model_id, dy.day),
   av as (
