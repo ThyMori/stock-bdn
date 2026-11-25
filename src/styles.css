@@ -626,3 +626,17 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .scan-choice { display: block; width: 100%; text-align: left; min-height: 64px; padding: 12px; } .scan-choice b { display: block; font-size: 1.05em; } .scan-choice small { display: block; opacity: .8; }
 .scan-lot { min-height: 44px; }
 .dlg.scanflow input, .dlg.scanflow select { font-size: 16px; min-height: 44px; }
+
+/* Patcher par scan (v1.57.0) */
+.pe-fields { display: flex; gap: 8px; }
+.pe-field { flex: 1; min-width: 0; min-height: 64px; padding: 6px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); text-align: center; cursor: pointer; font: inherit; }
+.pe-field small { display: block; font-size: .7rem; letter-spacing: .06em; opacity: .75; } .pe-field .pe-val { display: block; font-size: 1.6rem; }
+.pe-field.on { background: var(--ink); color: var(--paper); }
+.pe-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pe-key { min-height: 56px; font-size: 1.5rem; padding: 0; }
+.pe-direct { min-height: 52px; border: 2px solid #0a63ff; background: transparent; color: #0a63ff; font: inherit; font-weight: 800; cursor: pointer; }   /* même bleu que DIRECT sur la feuille de patch */
+.pe-direct.on { background: #0a63ff; color: #fff; }
+.pe-field.fresh .pe-val { text-decoration: underline; }   /* souligné : le prochain chiffre remplace la valeur */
+.dlg.scanflow[open] { display: flex; flex-direction: column; gap: 12px; }   /* espacement entre les blocs de l'écran de scan */
+.pe-direct { width: 100%; }
+.dlg.scanflow h2:focus { outline: none; }   /* le titre reçoit le focus à l'ouverture, sans cadre */

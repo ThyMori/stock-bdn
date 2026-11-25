@@ -137,8 +137,16 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### « Patcher » par scan (v1.57.0)
+- Bouton **Scanner** → **Patcher** : on scanne (ou saisit) un projecteur, puis un **gros pavé numérique** sert à taper la **grada** ; trois champs (GRADA, UNIVERS, ADRESSE) se choisissent d'un toucher, le 1er chiffre tapé remplace la valeur du champ (souligné), ⌫ efface un chiffre, C tout.
+- Touche **DIRECT** (même bleu que dans la feuille de patch) : met la courbe DIRECT et fait apparaître UNIVERS / ADRESSE (univers 1 proposé). Le DMX s'enregistre au format de la feuille, **univers-adresse** (ex. `1-45` ; univers 1 à 999, adresse 1 à 512). Toucher DIRECT à nouveau le retire (courbe linéaire ; le serveur vide le DMX).
+- **Suivant** enregistre (courbe, puis DMX, puis grada) et revient au scan ; **Quitter** ferme et revient à la fiche du spectacle. Un échec d'enregistrement garde la saisie à l'écran.
+- Un projecteur déjà patché affiche ses valeurs (grada, DIRECT, DMX) et on peut les modifier. Un projecteur pas encore affecté au spectacle est affecté après confirmation (PAR : lampe de sa fiche).
+- Droits : comme la feuille de patch (assigné au spectacle). Logique pure dans `src/patchEntry.ts` (testée).
+- **Supabase : non** (utilise `set_patch_field`). Le pastille « update en cours » est retirée (SQL 1.55.0 déployé).
+
 ### Bouton « Scanner » : affecter des positions (v1.56.0)
-- Carte « Projecteurs affectés » (visible même repliée, pour ceux qui peuvent affecter) : gros bouton **Scanner** au-dessus de « Pré-affecter ». Il ouvre un menu : **Affecter des positions** ou **Patcher** (Patcher arrive en 1.57.0, grisé pour l'instant).
+- Carte « Projecteurs affectés » (visible même repliée, pour ceux qui peuvent affecter) : gros bouton **Scanner** au-dessus de « Pré-affecter ». Il ouvre un menu : **Affecter des positions** ou **Patcher** (v1.57.0).
 - **Affecter des positions** : choisir la position, scanner les projecteurs un par un (caméra en haut, badges du lot dessous, saisie d'un n° en dessous), puis valider : tous reçoivent la position sur la feuille de patch (même fonction `patch_batch` que le lot de la feuille de patch). On peut enchaîner une autre position sans quitter.
 - Un projecteur scanné qui n'est pas encore affecté au spectacle est repéré dans le message ; à la validation, une confirmation propose de l'affecter (PAR : avec la lampe de sa fiche ; un PAR sans lampe est refusé). `assign_items` garde ses contrôles (projecteur déjà pris par un autre spectacle, SAV…).
 - Logique pure dans `src/scanPositions.ts` (testée), écran dans `src/ui/scanFlow.ts`.
