@@ -600,3 +600,11 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 
 /* Zones des demandes (v1.54.0) */
 .tag.zone { background: transparent; color: var(--ink); border: 1px solid var(--ink); }
+.slot-line { margin-top: 4px; }
+.dlg.slots { max-height: 88dvh; overflow: auto; }
+.slot-zone { padding: 8px 0; border-top: 1px solid var(--line, #8884); }
+.slot-zone .row { align-items: center; gap: 8px; }
+.slot-n { width: 64px; min-height: 44px; font-size: 16px; text-align: center; }   /* 16 px : pas de zoom iOS */
+.slot-pos { padding-top: 6px; } .slot-prow { padding: 2px 0 2px 12px; min-height: 44px; }
+.slot-sum { font-weight: 700; padding-top: 6px; }
+.slot-foot { position: sticky; bottom: -16px; background: var(--paper); padding: 8px 0 4px; border-top: 2px solid var(--ink); }

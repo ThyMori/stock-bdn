@@ -34,7 +34,7 @@ const SECTIONS: Section[] = [
     'Onglet <b>Scan</b> : la caméra lit l\'étiquette collée sur le projecteur et ouvre sa fiche. La caméra demande l\'accès : autorise-le dans le navigateur.',
     'Les étiquettes s\'impriment depuis <b>Plus → Étiquettes QR</b> (régisseur général et admin). Le QR code contient l\'adresse de l\'appli : ne change pas l\'adresse après impression.',
     'Chaque QR code lu fait un petit <b>bip « caisse enregistreuse »</b> (si le son de ton téléphone est activé).',
-    '<b>Zones</b> (carte « Matériel demandé ») : chaque demande peut avoir une zone <b>Plateau</b>, <b>Face</b> ou <b>Corbeille</b> (« Indifférent » par défaut), choisie à la création ou plus tard avec le bouton « Zone ». Pour répartir un modèle entre deux zones, fais une ligne par zone.',
+    '<b>Répartir</b> (carte « Matériel demandé ») : combien de projecteurs de la ligne vont au <b>Plateau</b>, en <b>Face</b>, en <b>Corbeille</b> ; « Positions » permet de préciser (P5 : 4, P6 : 2…). Ce qui n\'est pas réparti reste sans zone précise.',
     '<b>Pré-affecter du spectacle précédent</b> (bouton ✦ AUTO de la carte « Projecteurs affectés », même repliée) : choisis le spectacle d\'avant (celui en cours par défaut) ; l\'appli propose les projecteurs déjà montés pour combler le « Matériel demandé », en évitant les pannes et les indisponibles. Pour les PAR : bonne lampe d\'abord, puis relampage des PAR du stock, en dernier ceux du spectacle précédent. Un aperçu s\'affiche avant de valider.',
     'Le scan sert aussi à <b>affecter un lot</b> de projecteurs à un spectacle, à <b>changer</b> un projecteur, et dans la <b>feuille de patch</b> (liste d\'ID → « Scanner un QR code… »).'
   ] },

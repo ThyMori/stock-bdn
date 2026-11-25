@@ -1,3 +1,4 @@
+import { POSITIONS } from './patch';
 // Zones du théâtre pour le matériel demandé : plateau, face, corbeille. Logique pure (ni réseau ni écran), donc testable.
 export type Zone = '' | 'plateau' | 'face' | 'corbeille';   // '' = indifférent
 /** Zones proposées dans les formulaires, avec leur libellé. */
@@ -13,3 +14,5 @@ export function zoneOfPosition(position: string | null | undefined): Zone {
   if (p === 'corbeille') return 'corbeille';
   return '';
 }
+/** Positions de la feuille de patch qui appartiennent à une zone, dans l'ordre habituel. */
+export const positionsOfZone = (z: Zone): string[] => POSITIONS.filter((p) => zoneOfPosition(p) === z);

@@ -1090,7 +1090,7 @@ create table if not exists show_demands (
   added_by_label text,
   added_at       timestamptz not null default now()
 );
--- v1.54.0 : zone d'une demande (« '' » = indifférent, plateau, face, corbeille) ; une ligne par modèle + lampe + zone.
+-- v1.54.0 : colonne `zone` ajoutée puis abandonnée en 1.55.0 (la répartition par zone est dans show_demand_slots) ; elle reste toujours '' et on la garde pour ne rien casser.
 alter table show_demands add column if not exists zone text not null default '';
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'show_demands_zone_ck') then
@@ -1265,8 +1265,8 @@ drop trigger if exists faults_realloc on faults;
 create trigger faults_realloc after insert or update or delete on faults for each statement execute function reallocate_trg();
 
 -- Demande de matériel : crée, modifie la quantité (0 = supprime) ou remplace la demande identique.
-drop function if exists set_demand(uuid, text, text, int);
-create or replace function set_demand(p_show uuid, p_model text, p_lamp text, p_qty int, p_zone text default '') returns jsonb
+drop function if exists set_demand(uuid, text, text, int, text);
+create or replace function set_demand(p_show uuid, p_model text, p_lamp text, p_qty int) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare ispar boolean; lbl text; nm text; mn text; id_ uuid; miss int; lp text;
 begin
@@ -1279,9 +1279,7 @@ begin
     if p_lamp is null or not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe requise pour un PAR' using errcode = '22023'; end if;
   else p_lamp := null; end if;
   if p_qty is null or p_qty < 0 or p_qty > 500 then raise exception 'Quantité invalide' using errcode = '22023'; end if;
-  p_zone := coalesce(p_zone, '');
-  if p_zone not in ('', 'plateau', 'face', 'corbeille') then raise exception 'Zone inconnue' using errcode = '22023'; end if;
-  select id into id_ from show_demands where show_id = p_show and model_id = p_model and coalesce(lamp_id, '') = coalesce(p_lamp, '') and zone = p_zone;
+  select id into id_ from show_demands where show_id = p_show and model_id = p_model and coalesce(lamp_id, '') = coalesce(p_lamp, '');
   select name into lp from lamps where id = p_lamp;
   if p_qty = 0 then
     if id_ is not null then
@@ -1291,7 +1289,7 @@ begin
   else
     select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
     if id_ is null then
-      insert into show_demands (show_id, model_id, lamp_id, zone, qty, added_by_label) values (p_show, p_model, p_lamp, p_zone, p_qty, lbl) returning id into id_;
+      insert into show_demands (show_id, model_id, lamp_id, qty, added_by_label) values (p_show, p_model, p_lamp, p_qty, lbl) returning id into id_;
     else update show_demands set qty = p_qty where id = id_; end if;
     perform log_event('SPECTACLE', format('« %s » : demande %s × %s%s', nm, p_qty, mn, coalesce(' ' || lp, '')));
   end if;
@@ -1300,26 +1298,60 @@ begin
   return jsonb_build_object('missing', miss);
 end $$;
 
--- v1.54.0 : change la zone d'une demande existante (une demande identique ne peut pas déjà exister dans la zone visée).
-create or replace function set_demand_zone(p_demand uuid, p_zone text) returns void
+-- v1.55.0 : répartition d'une demande par zone (plateau / face / corbeille) et, au choix, par position précise.
+-- Une ligne « zone » (position nulle) = nombre de projecteurs de la zone ; les lignes « position » en sont le détail (leur somme ≤ le nombre de la zone).
+drop function if exists set_demand_zone(uuid, text);
+-- Zone d'une position de la feuille de patch (identique à zoneOfPosition() dans src/zones.ts) ; '' = sans zone.
+create or replace function zone_of_position(p text) returns text language sql immutable as $$
+  select case
+    when lower(trim(coalesce(p, ''))) ~ '^p([0-9]|10)$' or lower(trim(coalesce(p, ''))) ~ '^(allemande|passerelle|mezza)' or lower(trim(coalesce(p, ''))) in ('sol', 'pont coupole') then 'plateau'
+    when lower(trim(coalesce(p, ''))) in ('2e balcon', '3e balcon', 'coupole') then 'face'
+    when lower(trim(coalesce(p, ''))) = 'corbeille' then 'corbeille'
+    else '' end $$;
+create table if not exists show_demand_slots (
+  id        uuid primary key default gen_random_uuid(),
+  show_id   uuid not null references shows(id) on delete cascade,
+  demand_id uuid not null references show_demands(id) on delete cascade,
+  zone      text not null check (zone in ('plateau', 'face', 'corbeille')),
+  position  text,                                         -- null = nombre de la zone entière
+  qty       int  not null check (qty between 1 and 500)
+);
+create unique index if not exists show_demand_slots_uq on show_demand_slots (demand_id, zone, (coalesce(position, '')));
+alter table show_demand_slots enable row level security;
+drop policy if exists show_demand_slots_select on show_demand_slots;
+create policy show_demand_slots_select on show_demand_slots for select using (has_role('technicien'));
+-- Remplace toute la répartition d'une demande. p_slots : [{"zone":"face","position":null,"qty":4},{"zone":"plateau","position":"P5","qty":2}, ...]
+create or replace function set_demand_slots(p_demand uuid, p_slots jsonb) returns void
 language plpgsql security definer set search_path = public as $$
-declare d show_demands; nm text; mn text;
+declare d show_demands; r record; nm text; mn text; tot int; n jsonb;
 begin
   select * into d from show_demands where id = p_demand;
   if d.id is null then raise exception 'Demande introuvable' using errcode = '22023'; end if;
   if not can_act_show(d.show_id) then raise exception 'Droits insuffisants : tu n''es pas assigné à ce spectacle' using errcode = '42501'; end if;
-  p_zone := coalesce(p_zone, '');
-  if p_zone not in ('', 'plateau', 'face', 'corbeille') then raise exception 'Zone inconnue' using errcode = '22023'; end if;
-  if p_zone = d.zone then return; end if;
-  if exists (select 1 from show_demands where show_id = d.show_id and model_id = d.model_id and coalesce(lamp_id, '') = coalesce(d.lamp_id, '') and zone = p_zone and id <> d.id) then
-    raise exception 'Une demande identique existe déjà dans cette zone : modifie plutôt sa quantité.' using errcode = '23505';
-  end if;
-  update show_demands set zone = p_zone where id = d.id;
+  if p_slots is null or jsonb_typeof(p_slots) <> 'array' then raise exception 'Répartition invalide' using errcode = '22023'; end if;
+  -- lignes nettoyées : quantité > 0, position vide = null
+  select coalesce(jsonb_agg(jsonb_build_object('zone', x.zone, 'position', nullif(trim(coalesce(x.position, '')), ''), 'qty', x.qty)), '[]'::jsonb) into n
+    from jsonb_to_recordset(p_slots) as x(zone text, position text, qty int) where x.qty is not null and x.qty > 0;
+  if exists (select 1 from jsonb_to_recordset(n) as x(zone text, position text, qty int) where x.zone is null or x.zone not in ('plateau', 'face', 'corbeille')) then
+    raise exception 'Zone inconnue' using errcode = '22023'; end if;
+  select x.zone, x.position into r from jsonb_to_recordset(n) as x(zone text, position text, qty int) where x.position is not null and zone_of_position(x.position) <> x.zone limit 1;
+  if r.zone is not null then raise exception 'La position « % » n''est pas dans la zone %', r.position, r.zone using errcode = '22023'; end if;
+  if exists (select 1 from jsonb_to_recordset(n) as x(zone text, position text, qty int) group by x.zone, coalesce(x.position, '') having count(*) > 1) then
+    raise exception 'Doublon dans la répartition' using errcode = '22023'; end if;
+  -- les positions d'une zone ne dépassent pas le nombre de la zone ; le total des zones ne dépasse pas la quantité demandée
+  select x.zone, coalesce(sum(x.qty) filter (where x.position is null), 0) as z, coalesce(sum(x.qty) filter (where x.position is not null), 0) as p into r
+    from jsonb_to_recordset(n) as x(zone text, position text, qty int) group by x.zone
+    having coalesce(sum(x.qty) filter (where x.position is not null), 0) > coalesce(sum(x.qty) filter (where x.position is null), 0) limit 1;
+  if r.zone is not null then raise exception 'Zone %: les positions (%) dépassent le nombre de la zone (%)', r.zone, r.p, r.z using errcode = '22023'; end if;
+  select coalesce(sum(x.qty), 0)::int into tot from jsonb_to_recordset(n) as x(zone text, position text, qty int) where x.position is null;
+  if tot > d.qty then raise exception 'La répartition (%) dépasse la quantité demandée (%)', tot, d.qty using errcode = '22023'; end if;
+  delete from show_demand_slots where demand_id = d.id;
+  insert into show_demand_slots (show_id, demand_id, zone, position, qty) select d.show_id, d.id, x.zone, x.position, x.qty from jsonb_to_recordset(n) as x(zone text, position text, qty int);
   select name into nm from shows where id = d.show_id; select name into mn from models where id = d.model_id;
-  perform log_event('SPECTACLE', format('« %s » : demande %s, zone %s', nm, mn, coalesce(nullif(p_zone, ''), 'indifférent')));
+  perform log_event('SPECTACLE', format('« %s » : demande %s, répartition par zone modifiée', nm, mn));
 end $$;
-revoke all on function set_demand_zone(uuid, text) from public;
-grant execute on function set_demand_zone(uuid, text) to authenticated;
+revoke all on function set_demand_slots(uuid, jsonb) from public;
+grant execute on function set_demand_slots(uuid, jsonb) to authenticated;
 
 -- v1.46.0 : plus de projecteurs choisis automatiquement, donc plus de « Changer » ni de « Auto ».
 drop function if exists swap_show_item(uuid, int, int);
@@ -1447,8 +1479,8 @@ grant execute on function add_external(uuid,uuid,text,text,int,date,date,text) t
 grant execute on function delete_external(uuid) to authenticated;
 revoke all on function reallocate_all() from public;
 revoke all on function item_blocked(int,uuid,date,date,boolean) from public;
-revoke all on function set_demand(uuid,text,text,int,text) from public;
-grant execute on function set_demand(uuid,text,text,int,text) to authenticated;
+revoke all on function set_demand(uuid,text,text,int) from public;
+grant execute on function set_demand(uuid,text,text,int) to authenticated;
 
 -- ---------- v1.12 : notifications push du mur ----------
 -- Un abonnement = un appareil (navigateur / appli installée) d'une personne. Aucun accès direct à la table :
@@ -2141,7 +2173,7 @@ begin
     if p_lamp is null or not exists (select 1 from lamps where id = p_lamp) then raise exception 'Lampe requise pour un PAR' using errcode = '22023'; end if;
   else p_lamp := null; end if;
   if l.need_demand_id is not null then perform demand_dec(l.need_demand_id); end if;   -- un ancien besoin de cette ligne est remplacé
-  select * into d from show_demands where show_id = p_show and model_id = p_model and coalesce(lamp_id, '') = coalesce(p_lamp, '') and zone = '';
+  select * into d from show_demands where show_id = p_show and model_id = p_model and coalesce(lamp_id, '') = coalesce(p_lamp, '')   ;
   if not found then insert into show_demands (show_id, model_id, lamp_id, qty, added_by_label) values (p_show, p_model, p_lamp, 1, patch_label()) returning * into d;
   else update show_demands set qty = qty + 1 where id = d.id; end if;
   update patch_lines set need_demand_id = d.id, model_id = p_model, lamp_id = p_lamp, model_text = '', external_id = null, updated_at = now(), updated_by_label = patch_label() where id = l.id;

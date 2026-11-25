@@ -137,12 +137,13 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
-### Zones sur le matériel demandé (v1.54.0)
-- Chaque demande de « Matériel demandé » a une **zone** : Indifférent (par défaut), **Plateau**, **Face** ou **Corbeille**. On la choisit à la création de la ligne ou plus tard (bouton « Zone »).
-- Une ligne = un modèle + une lampe + une zone : pour répartir 12 PAR en 8 au plateau et 4 en face, on fait deux lignes. Les lignes existantes passent en « Indifférent ».
-- Correspondance position → zone (`src/zones.ts`, testée) : **Plateau** = P0 à P10, allemande J/C, passerelle J/C, mezza J/C, sol, pont coupole ; **Face** = 2e balcon, 3e balcon, coupole ; **Corbeille** = corbeille ; « autre » ou vide = sans zone.
-- Pour l'instant la zone est une étiquette (affichée dans les demandes, les alertes et la liste de prépa). Elle servira ensuite à l'assistant de pré-affectation (étape 2), à la feuille de prépa (étape 3) et aux rapports de démontage (étape 4). Le compteur « Affectés » d'un même modèle + lampe réparti sur plusieurs zones se remplit dans l'ordre des lignes.
-- **Supabase : oui** — rejouer `schema.sql` (colonne `show_demands.zone`, nouvel index unique modèle + lampe + zone, `set_demand` avec zone, `set_demand_zone`). Test pglite `test38`.
+### Répartition du matériel demandé par zone et par position (v1.55.0)
+- Sur chaque ligne de « Matériel demandé », le bouton **Répartir** ouvre une fenêtre : combien de projecteurs en **Plateau**, **Face**, **Corbeille**. « Positions ▸ » déplie la zone pour préciser par position (P5 : 4, P6 : 2…). Ce qui n'est pas réparti reste « sans zone précise ». La ligne affiche le résumé : « Plateau 8 (P5 : 4) · Face 4 ».
+- Règles (SQL `set_demand_slots`, mêmes contrôles côté appli dans `src/slots.ts`) : le total des zones ≤ la quantité demandée ; les positions d'une zone ≤ le nombre de la zone ; une position doit appartenir à sa zone.
+- Correspondance position → zone (`src/zones.ts` côté appli, `zone_of_position()` côté base, testées) : **Plateau** = P0 à P10, allemande J/C, passerelle J/C, mezza J/C, sol, pont coupole ; **Face** = 2e balcon, 3e balcon, coupole ; **Corbeille** = corbeille ; « autre » ou vide = sans zone.
+- Pour l'instant la répartition est une information. Elle servira ensuite à l'assistant de pré-affectation, à la feuille de prépa et aux rapports de démontage.
+- Remplace la v1.54.0 (une ligne par zone, jamais utilisée). La colonne `show_demands.zone` (v1.54.0) reste dans la base, inutilisée. La table `show_demand_slots` la remplace.
+- **Supabase : oui** — rejouer `schema.sql` (table `show_demand_slots`, `zone_of_position`, `set_demand_slots` ; retrait de `set_demand_zone` et du paramètre zone de `set_demand`). Test pglite `test38` (rejoué aussi depuis un schéma 1.54.0).
 
 ### Pré-affecter du spectacle précédent (v1.53.0)
 - Bouton « ✦ Pré-affecter du spectacle précédent » (AUTO) dans la carte « Projecteurs affectés », visible même repliée, pour ceux qui peuvent affecter au spectacle. Petite animation d'étincelles (coupée si l'appareil réduit les animations, interrompue par un toucher).
@@ -354,7 +355,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.48.0) | table `show_demand_gels`, fonctions `add_demand_gels` / `delete_demand_gel` | v1.48.0 |
 | `schema.sql` (v1.49.0) | fonctions `patch_clear_all`, `patch_batch` | v1.49.0 |
 | `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
-| `schema.sql` (v1.54.0) | colonne `show_demands.zone`, index unique modèle + lampe + zone, `set_demand` (zone), `set_demand_zone` | v1.54.0 |
+| `schema.sql` (v1.55.0) | table `show_demand_slots`, fonctions `zone_of_position`, `set_demand_slots` (remplace la v1.54.0) | v1.55.0 |
 | `schema.sql` (v1.51.0) | colonnes `faults.keep_until / keep_show / keep_immo`, fonctions `report_fault_keep`, `activate_scheduled_sav`, `item_blocked` / `reallocate_all` / `edit_show` / `resolve_fault` mis à jour | v1.51.0 |
 | `schema.sql` fin de fichier (v1.43.0) | `show_copy_from`, `patch_clear_circuits`, `patch_clear_gels_acc` | v1.43.0 |
 | `schema.sql` fin de fichier (v1.39.0) | positions autorisées (P0, 2e balcon, 3e balcon) + conversion des lignes `balcon` / `3e` | v1.39.0 |

@@ -1,4 +1,3 @@
-import { ZONES } from './zones';
 import type { Data, Show } from './types';
 
 export interface ShowAlert { show: Show; missing: { label: string; n: number }[]; problems: { item: number; why: string }[] }
@@ -10,7 +9,7 @@ export function showAlerts(data: Data, today: string): ShowAlert[] {
     const missing = data.showDemands.filter((x) => x.show_id === show.id && x.missing > 0).map((x) => {
       const m = data.models.find((mm) => mm.id === x.model_id);
       const l = data.lamps.find((ll) => ll.id === x.lamp_id);
-      return { label: `${m?.name ?? '?'}${l ? ' ' + l.name : ''}${x.zone ? ' (' + (ZONES.find(([k]) => k === x.zone)?.[1] ?? x.zone).toLowerCase() + ')' : ''}`, n: x.missing };
+      return { label: `${m?.name ?? '?'}${l ? ' ' + l.name : ''}`, n: x.missing };
     });
     const problems = data.showItems.filter((s) => s.show_id === show.id && s.problem).map((s) => ({ item: s.item_id, why: s.problem as string }));
     if (missing.length || problems.length) out.push({ show, missing, problems });
@@ -36,7 +35,7 @@ export function externalLabel(data: Data, e: Data['showExternals'][number]): str
   const d = data.showDemands.find((x) => x.id === e.demand_id);
   const m = data.models.find((x) => x.id === d?.model_id)?.name ?? '?', l = data.lamps.find((x) => x.id === d?.lamp_id)?.name;
   const plural = e.qty > 1 ? 's' : '';
-  return `${e.qty} × ${m}${l ? ' ' + l : ''}${d?.zone ? ' (' + d.zone + ')' : ''} ${e.kind === 'pret' ? 'prêté' : 'loué'}${plural} ${e.kind === 'pret' ? 'par' : 'chez'} ${e.provider}`;
+  return `${e.qty} × ${m}${l ? ' ' + l : ''} ${e.kind === 'pret' ? 'prêté' : 'loué'}${plural} ${e.kind === 'pret' ? 'par' : 'chez'} ${e.provider}`;
 }
 /** Rappels bleus de l'agenda : « 4 × PAR64 loués chez X · jusqu'au 20/11 ». */
 export function calendarExternals(data: Data): { show_id: string; start: string; end: string; label: string }[] {
