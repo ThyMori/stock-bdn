@@ -41,7 +41,7 @@ export const showView: ViewFactory = ([id]) => {
   let stopScan: (() => void) | null = null;
   let composer: HTMLElement | null = null;
   const rsel = new Set<number>();
-  let demFolded = true, itemsFolded = true, wallFolded = true;   // « Matériel demandé » et « Projecteurs affectés » : repliés au départ (pas mémorisé)
+  let demFolded = true, itemsFolded = true, wallFolded = true, headFolded = true;   // « Matériel demandé » et « Projecteurs affectés » : repliés au départ (pas mémorisé)
   let modelFilter = '';   // modèle affiché dans la liste des projecteurs ('' = tous) : un filtre, pas une sélection
 
   /** Zone de saisie du mur : créée une seule fois pour ne jamais perdre un brouillon quand l'écran se rafraîchit. */
@@ -179,9 +179,9 @@ export const showView: ViewFactory = ([id]) => {
     }
 
     const listTop = root.querySelector('.pick-list')?.scrollTop ?? 0, pageTop = window.scrollY, focusId = (document.activeElement as HTMLElement | null)?.dataset?.v;
-    el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><h1>${esc(show.name)}</h1>
+    el.innerHTML = `<div class="card stack" style="border-left:10px solid ${showColor(show)}"><button class="fold" data-act="head-fold" aria-expanded="${!headFolded}" aria-label="${headFolded ? 'Déplier' : 'Replier'} l'en-tête du spectacle"><span aria-hidden="true">${headFolded ? '▸' : '▾'}</span> <h1>${esc(show.name)}</h1></button>
         <div class="sub">du ${fmtDay(show.start_date)} au ${fmtDay(show.end_date)}${show.start_date <= today && show.end_date >= today ? ' · <span class="tag run">en cours</span>' : show.end_date < today ? ' · terminé' : ''}</div>
-        ${show.note ? `<div>${esc(show.note)}</div>` : ''}
+        ${headFolded ? '' : `${show.note ? `<div>${esc(show.note)}</div>` : ''}
         ${(() => {                                                // interrupteur monté / démonté
           const mounted = showMounted(show, today), running = show.start_date <= today && show.end_date >= today, canMount = can('regisseur_general') && !running;
           return `<div class="mountsw"><button class="switch" role="switch" aria-checked="${mounted}" aria-label="Spectacle monté" data-act="mount" data-v="${mounted ? '0' : '1'}" ${canMount ? '' : 'disabled'}><span class="knob"></span></button>
@@ -191,6 +191,7 @@ export const showView: ViewFactory = ([id]) => {
         <div class="row wrap"><a class="btn patch-btn" href="#/patch/${esc(id)}"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>Patch / Focus</a><button class="btn" data-act="prep" ${mine.length ? '' : 'disabled'}><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6zM14 2v6h6M9 13h8M9 17h8M9 9h3"/></svg>Générer la liste de prépa</button>
           <button class="btn" data-act="teardown"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10M18 15l2 2 3-4"/></svg>Rapport de démontage</button></div>
         ${canEdit ? `<div class="row wrap"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button><button class="btn" data-act="copy-from">Utiliser le matériel d'un autre spectacle</button></div>` : ''}
+        `}
         <div id="serr" class="sub warn" role="alert"></div></div>
       ${alertCard}
       ${wall}
@@ -476,6 +477,7 @@ export const showView: ViewFactory = ([id]) => {
           err(skipped.length ? m : ''); if (!skipped.length) toast(m);
           void sparkle(root.querySelector<HTMLElement>('.ai-btn') ?? el, 700);
         }
+        else if (act === 'head-fold') { headFolded = !headFolded; paint(root); }   // replie / déplie l'en-tête de la fiche
         else if (act === 'items-fold') { itemsFolded = !itemsFolded; rsel.clear(); paint(root); }   // replie / déplie les projecteurs affectés
         else if (act === 'wall-fold') { wallFolded = !wallFolded; paint(root); }   // replie / déplie le mur
         else if (act === 'dem-fold') { demFolded = !demFolded; paint(root); }   // replie / déplie le matériel demandé

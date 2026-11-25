@@ -137,6 +137,9 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### En-tête de la fiche spectacle repliable (v1.57.3)
+L'en-tête (note, interrupteur monté/démonté, boutons Patch, Prépa, Démontage, Modifier…) est **replié au départ** : seuls le nom et les dates restent visibles. Toucher le nom (▸ / ▾) le déplie. Pas mémorisé : il se replie à chaque ouverture.
+
 ### Disponibilité après un SAV et résolution de la dernière panne (v1.57.1)
 - **Jour de clôture :** un SAV ou un prêt **clôturé** libère le projecteur **dès le jour de la clôture** (il bloque jusqu'à la veille). Une fin prévue (non clôturée) reste incluse ; sans fin connue, le projecteur reste bloqué.
 - **Jours passés :** seules les dates **à partir d'aujourd'hui** comptent pour affecter un projecteur à un spectacle (un SAV terminé pendant les premiers jours d'un spectacle en cours ne le bloque plus ; un spectacle entièrement passé n'est plus bloqué par les immobilisations). Appliqué partout : affectation (`item_conflict`), projecteurs « indisponibles » (`item_blocked`, `blockedReason` côté appli), calcul des disponibles (`reallocate_all`). Fonction `immo_last_day()` en base, `immoLastDay()` côté appli.
