@@ -21,18 +21,23 @@ export function openScanFlow(showId: string, onChange: () => void): void {
   const close = () => { stop(); dlg.close(); dlg.remove(); onChange(); };
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(); });   // Échap / retour : on ferme proprement (caméra coupée)
 
-  /** Menu de départ : deux gros choix. */
+  /** Menu de départ : trois gros choix. */
   function menu() {
     stop(); stop = () => {};
     const h = el('h2', '', 'Scanner'); h.tabIndex = -1;
-    const a = el('button', 'btn scan-choice', ''); a.type = 'button'; a.append(el('b', '', 'Affecter des positions'), el('small', '', 'Choisir une position, scanner le lot, valider'));
-    a.addEventListener('click', positions);
-    const pr = el('button', 'btn scan-choice', ''); pr.type = 'button'; pr.append(el('b', '', 'Préparer'), el('small', '', 'Scanner les projecteurs sortis du stock : affectés à la bonne ligne'));
-    pr.addEventListener('click', prepare);
-    const b = el('button', 'btn scan-choice', ''); b.type = 'button'; b.append(el('b', '', 'Patcher'), el('small', '', 'Scanner, taper la grada, DIRECT et DMX'));
-    b.addEventListener('click', patcher);
+    // trois gros boutons colorés avec leur icône : Patcher, Affecter des positions, Préparer (dans cet ordre)
+    const choice = (cls: string, title: string, sub: string, icon: string, go: () => void) => {
+      const c = el('button', `scan-choice fancy ${cls}`); c.type = 'button';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('class', 'ico'); svg.setAttribute('aria-hidden', 'true');
+      svg.innerHTML = icon;                                       // dessin fixe écrit ici, jamais du texte venant d'un utilisateur
+      const t = el('span', 'grow'); t.append(el('b', '', title), el('small', '', sub));
+      c.append(svg, t); c.addEventListener('click', go); return c;
+    };
+    const b = choice('c-patch', 'Patcher', 'Scanner, taper la grada, DIRECT et DMX', '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>', patcher);
+    const a = choice('c-pos', 'Affecter des positions', 'Choisir une position, scanner le lot, valider', '<path d="M12 21s-6-5.4-6-10a6 6 0 0112 0c0 4.6-6 10-6 10z"/><circle cx="12" cy="11" r="2.2"/>', positions);
+    const pr = choice('c-prep', 'Préparer', 'Scanner les projecteurs sortis du stock : affectés à la bonne ligne', '<path d="M3 8l9-5 9 5v9l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v9"/>', prepare);
     const q = el('button', 'btn', 'Quitter'); q.type = 'button'; q.addEventListener('click', close);
-    dlg.replaceChildren(h, pr, a, b, q); h.focus();
+    dlg.replaceChildren(h, b, a, pr, q); h.focus();
   }
 
   /** Affecter des positions : position choisie, scan des projecteurs, validation. */

@@ -137,6 +137,9 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Menu du Scanner (v1.60.1)
+Trois gros boutons colorés avec icône, dans cet ordre : **Patcher** (bleu), **Affecter des positions** (vert), **Préparer** (ambre). Animation lente, coupée si l'appareil réduit les animations.
+
 ### Rapport de démontage : zones et provenance (v1.60.0)
 Aucun changement de base : pas d'action Supabase. Fichier `src/teardown.ts`, testé dans `tests/teardown.test.ts`.
 - Chaque ligne « À garder en place », « À déplacer » et « À monter » indique maintenant la **zone** du projecteur dans le prochain spectacle (celle retenue à l'affectation, sinon déduite de sa position sur la feuille de patch).
