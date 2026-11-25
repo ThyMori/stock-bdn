@@ -1,3 +1,4 @@
+import { friendlyError } from './netError';
 import { get, set, del } from 'idb-keyval';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
@@ -157,7 +158,7 @@ export async function sync(): Promise<void> {
     }
     if (!blocked) await pull();
   } catch (e) {
-    state.error = (e as Error).message || 'Synchronisation impossible';
+    state.error = friendlyError((e as Error).message || 'Synchronisation impossible');
   } finally {
     state.syncing = false; emit();
     if (again) { again = false; void sync(); }
@@ -185,7 +186,7 @@ export async function immoCall(fn: 'add_immo' | 'edit_immo' | 'delete_immo', par
 export async function rpcCall(fn: string, params: Record<string, unknown>): Promise<{ error: string | null; data: unknown }> {
   if (!navigator.onLine) return { error: 'Cette action demande une connexion.', data: null };
   const { data, error } = await supabase.rpc(fn, params);
-  if (error) return { error: error.message, data: null };
+  if (error) return { error: friendlyError(error.message, true), data: null };
   await pull(); emit();
   return { error: null, data };
 }

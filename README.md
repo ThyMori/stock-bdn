@@ -137,6 +137,9 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Messages d'erreur réseau lisibles (v1.61.1)
+« TypeError: Failed to fetch » devient « Réseau trop faible ou coupé : synchro impossible pour le moment. Touche « À jour » pour réessayer. » (synchro) ou « …l'action n'a pas été envoyée. Réessaie quand la connexion est meilleure. » (action directe). Fichier `src/netError.ts`. Les erreurs du serveur (droits, règles) restent affichées telles quelles.
+
 ### Compteur « affectés / demandés » (v1.61.0)
 Quand « Matériel demandé » est replié, un compteur **affectés / demandés** s'affiche à côté du titre (le « manque » reste signalé en rouge). Tout couvert = **✓ n / n en vert**, un peu plus gros, avec une courte pulsation. Sont comptés pour chaque demande : les projecteurs affectés utilisables (même modèle, même lampe pour un PAR), plus les prêts / locations et les substitutions, sans dépasser la quantité demandée.
 
