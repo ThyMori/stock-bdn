@@ -118,6 +118,7 @@ function paint(root: HTMLElement) {
     ${pushCard()}
     ${canInstall() ? '<div class="card stack"><h2>Installer l\'appli</h2><div class="sub">Un accès en un geste depuis ton écran d\'accueil, en plein écran, comme une vraie appli.</div><button class="btn" data-act="install">Installer l\'application</button></div>' : ''}
     <div class="list">
+      ${can('regisseur_general') ? '<a class="item" href="#/batch"><div class="grow"><div class="t">Modification par lot</div><div class="s">Scanner un lot : pastille, lampe, état</div></div>›</a>' : ''}
       ${can('regisseur_general') ? '<a class="item" href="#/labels"><div class="grow"><div class="t">Étiquettes QR</div><div class="s">Imprimer les stickers des projecteurs</div></div>›</a>' : ''}
       ${can('regisseur_general') ? `
         <a class="item" href="#/admin/items"><div class="grow"><div class="t">Ajouter des projecteurs</div><div class="s">Nouvelles unités dans le parc</div></div>›</a>

@@ -660,3 +660,7 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .tag.full { font-size: .9rem; padding: 2px 8px; box-shadow: 0 0 0 2px var(--green); animation: full-pulse 1s ease-out 1; }
 @keyframes full-pulse { from { box-shadow: 0 0 0 0 var(--green); } to { box-shadow: 0 0 0 2px var(--green); } }
 @media (prefers-reduced-motion: reduce) { .tag.full { animation: none; } }
+/* modification par lot : case à cocher + libellé sur une ligne, case de taille normale */
+.batch-row { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.batch-row input[type="checkbox"] { width: 26px; height: 26px; flex: none; margin: 0; }
+.f[hidden], .sub[hidden] { display: none !important; }   /* l'attribut hidden doit toujours cacher un champ */

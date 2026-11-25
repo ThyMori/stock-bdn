@@ -137,6 +137,12 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Modification par lot (v1.62.0)
+Menu **Plus → Modification par lot** (régisseurs généraux et admins ; invisible pour les autres rôles). Aucun changement de base : pas d'action Supabase. Fichiers `src/batchEdit.ts` (logique, `tests/batch-edit.test.ts`) et `src/views/batch.ts`.
+1. On coche ce qu'on modifie (plusieurs réglages possibles dans la même session) : **pastille bleue** (ajouter / retirer), **lampe** (PAR seulement), **état** : disponible, SAV (maintenance sans panne, motif obligatoire, fin prévue facultative) ou prêt (à qui obligatoire, retour prévu et remarque facultatifs). Début d'un SAV ou d'un prêt = toujours aujourd'hui.
+2. On scanne le lot (caméra ou saisie du n°) ; un doublon ou un n° inconnu est refusé.
+3. Confirmation (résumé des réglages, avertissement si des projecteurs sont dans un spectacle en cours ou à venir), puis application projecteur par projecteur avec les fonctions existantes (`set_blue_dot`, `set_lamp`, `apply_status`) : un refus n'arrête pas les autres, les refusés sont listés avec la raison. Un projecteur déjà dans l'état voulu est compté « déjà dans cet état ». Tout est écrit au journal. Demande une connexion ; coupure réseau en cours de route : l'outil s'arrête et dit combien ont été faits.
+
 ### Messages d'erreur réseau lisibles (v1.61.1)
 « TypeError: Failed to fetch » devient « Réseau trop faible ou coupé : synchro impossible pour le moment. Touche « À jour » pour réessayer. » (synchro) ou « …l'action n'a pas été envoyée. Réessaie quand la connexion est meilleure. » (action directe). Fichier `src/netError.ts`. Les erreurs du serveur (droits, règles) restent affichées telles quelles.
 
