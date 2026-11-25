@@ -611,3 +611,18 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .slot-step { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .slot-pm { min-width: 44px; min-height: 44px; padding: 0; font-size: 20px; line-height: 1; }
 .slot-n { width: 52px; }
+
+/* Bouton « Scanner » (v1.56.0) */
+.scan-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 8px; padding: 8px 12px; border: 1px solid #f2a900; border-radius: 10px; color: #fff; text-align: left; cursor: pointer; font: inherit;
+  background: linear-gradient(110deg, #b4234c, #c2410c, #b4234c); background-size: 250% 100%; animation: ai-flow 7s linear infinite; }
+.scan-btn .ico { width: 26px; height: 26px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.scan-btn .scanline { animation: scan-sweep 1.8s ease-in-out infinite alternate; }
+.scan-btn b { display: block; } .scan-btn small { display: block; opacity: .9; } .scan-btn .grow { min-width: 0; }
+.scan-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+@keyframes scan-sweep { from { transform: translateY(-4px); } to { transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .scan-btn, .scan-btn .scanline { animation: none; } }
+.dlg.scanflow { max-height: 92dvh; overflow: auto; width: min(94vw, 460px); }
+.dlg.scanflow .viewport { aspect-ratio: 4 / 3; max-height: 34dvh; width: 100%; }
+.scan-choice { display: block; width: 100%; text-align: left; min-height: 64px; padding: 12px; } .scan-choice b { display: block; font-size: 1.05em; } .scan-choice small { display: block; opacity: .8; }
+.scan-lot { min-height: 44px; }
+.dlg.scanflow input, .dlg.scanflow select { font-size: 16px; min-height: 44px; }

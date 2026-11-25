@@ -21,6 +21,7 @@ import { fmtDay } from './agenda';
 import { cashBeep } from '../ui/beep';
 import { showMounted } from '../position';
 import { ZONES } from '../zones';
+import { openScanFlow } from '../ui/scanFlow';
 import { slotsOf, slotsText, validateSlots } from '../slots';
 import { openSlots } from '../ui/slotsDialog';
 import { defaultPrevious, preAssignPlan, previousShows } from '../preAssign';
@@ -194,6 +195,7 @@ export const showView: ViewFactory = ([id]) => {
       ${alertCard}
       ${wall}
       <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="start">+ Affecter manuellement</button>' : ''}</div>
+        ${canAssign && mode === 'view' ? `<button class="scan-btn" data-act="scanflow" aria-label="Scanner : affecter des positions ou patcher"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><path class="scanline" d="M6 12h12"/></svg><span class="grow"><b>Scanner</b><small>Affecter des positions · Patcher</small></span><span class="ai-chip">SCAN</span></button>` : ''}
         ${canAssign && mode === 'view' ? `<button class="ai-btn" data-act="preassign" aria-label="Pré-affecter depuis le spectacle précédent"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg><span class="grow"><b>Pré-affecter du spectacle précédent</b><small>Propose les projecteurs déjà montés</small></span><span class="ai-chip">AUTO</span></button>` : ''}
         ${itemsFolded ? '' : `${picker}
         <div class="mlist">${assigned || '<div class="empty">Aucun projecteur assigné</div>'}</div>`}</div>
@@ -357,6 +359,7 @@ export const showView: ViewFactory = ([id]) => {
           if (!f) return;
           await sendDemand(x.model_id, x.lamp_id ?? '', Number(f.qty));
         }
+        else if (act === 'scanflow') { openScanFlow(id, () => paint(root)); }   // scan : affecter des positions / patcher
         else if (act === 'dem-slots') {   // répartition de la demande par zone / par position
           const x = view().showDemands.find((r) => r.id === v); if (!x) return;
           const m = view().models.find((r) => r.id === x.model_id), l = view().lamps.find((r) => r.id === x.lamp_id)?.name;

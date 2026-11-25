@@ -137,6 +137,13 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 ### Mur repliable sur la fiche d'un spectacle (v1.45.10)
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
+### Bouton « Scanner » : affecter des positions (v1.56.0)
+- Carte « Projecteurs affectés » (visible même repliée, pour ceux qui peuvent affecter) : gros bouton **Scanner** au-dessus de « Pré-affecter ». Il ouvre un menu : **Affecter des positions** ou **Patcher** (Patcher arrive en 1.57.0, grisé pour l'instant).
+- **Affecter des positions** : choisir la position, scanner les projecteurs un par un (caméra en haut, badges du lot dessous, saisie d'un n° en dessous), puis valider : tous reçoivent la position sur la feuille de patch (même fonction `patch_batch` que le lot de la feuille de patch). On peut enchaîner une autre position sans quitter.
+- Un projecteur scanné qui n'est pas encore affecté au spectacle est repéré dans le message ; à la validation, une confirmation propose de l'affecter (PAR : avec la lampe de sa fiche ; un PAR sans lampe est refusé). `assign_items` garde ses contrôles (projecteur déjà pris par un autre spectacle, SAV…).
+- Logique pure dans `src/scanPositions.ts` (testée), écran dans `src/ui/scanFlow.ts`.
+- **Supabase : non** (utilise `assign_items` et `patch_batch`).
+
 ### Répartition du matériel demandé par zone et par position (v1.55.0)
 - Sur chaque ligne de « Matériel demandé », le bouton **Répartir** ouvre une fenêtre : combien de projecteurs en **Plateau**, **Face**, **Corbeille**. « Positions ▸ » déplie la zone pour préciser par position (P5 : 4, P6 : 2…). Chaque nombre a ses boutons **−** et **+** (1.55.1) pour aller vite. Ce qui n'est pas réparti reste « sans zone précise ». La ligne affiche le résumé : « Plateau 8 (P5 : 4) · Face 4 ».
 - Règles (SQL `set_demand_slots`, mêmes contrôles côté appli dans `src/slots.ts`) : le total des zones ≤ la quantité demandée ; les positions d'une zone ≤ le nombre de la zone ; une position doit appartenir à sa zone.
