@@ -7,8 +7,8 @@ import { startScan } from '../src/ui/torch';
 let on = false; const calls: string[] = [];
 const sc: any = { start: async () => { calls.push('start'); }, hasFlash: async () => true, turnFlashOn: async () => { on = true; calls.push('on'); }, isFlashOn: () => on, toggleFlash: async () => { on = !on; } };
 await startScan(sc, { parentElement: zone } as any);
-assert.deepEqual(calls, ['start', 'on']); assert.equal(kids.length, 1); assert.match(kids[0].textContent, /oui/);   // allumé par défaut + bouton
-kids[0].click(); await new Promise((r) => setTimeout(r)); assert.equal(on, false); assert.match(kids[0].textContent, /non/);   // le bouton coupe
+assert.deepEqual(calls, ['start']); assert.equal(kids.length, 1); assert.match(kids[0].textContent, /non/); assert.equal(on, false);   // éteint par défaut + bouton
+kids[0].click(); await new Promise((r) => setTimeout(r)); assert.equal(on, true); assert.match(kids[0].textContent, /oui/);   // le bouton allume
 await startScan(sc, { parentElement: zone } as any); assert.equal(kids.length, 1);                                             // pas de doublon
 const sc2: any = { ...sc, hasFlash: async () => false }; const k2: any[] = []; await startScan(sc2, { parentElement: { querySelector: () => null, appendChild: (k: any) => k2.push(k) } } as any); assert.equal(k2.length, 0);   // sans flash : rien
 const sc3: any = { ...sc, start: async () => { throw new Error('refus'); } }; await assert.rejects(startScan(sc3, { parentElement: zone } as any));   // l'erreur caméra remonte à l'appelant

@@ -335,7 +335,7 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 
 ## Flash du scanner (v1.66.0)
 
-À chaque ouverture d’un scanner (scan simple, Patcher, positions, Préparer, ajout au spectacle, modification par lot, choix d’un projecteur dans une fenêtre), le flash est allumé s’il existe, avec un bouton « 🔦 Flash » en bas à droite du cadre pour le couper ou le rallumer. Il se rallume à chaque nouveau lancement (rien n’est mémorisé). Sans flash (ordinateur, navigateur qui ne le permet pas), aucun bouton. Code : `src/ui/torch.ts`.
+À chaque ouverture d’un scanner (scan simple, Patcher, positions, Préparer, ajout au spectacle, modification par lot, choix d’un projecteur dans une fenêtre), le flash est ÉTEINT par défaut (v1.66.1) ; un bouton « 🔦 Flash » en bas à droite du cadre l’allume ou le coupe. Il redevient éteint à chaque nouveau lancement (rien n’est mémorisé). Sans flash (ordinateur, navigateur qui ne le permet pas), aucun bouton. Code : `src/ui/torch.ts`.
 
 ## Projecteur du patch = matériel demandé (v1.36.0) — remplacé par la v1.46.0
 - Un projecteur mis dans la feuille de patch (ID du stock, « nouvel ID », remplacement) est **compté dans le matériel demandé** : la demande « modèle + lampe » monte de 1 (créée si absente), ou, si elle avait un manque, le projecteur le comble sans changer la quantité. Il y est épinglé.
