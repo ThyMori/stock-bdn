@@ -108,7 +108,8 @@ export const gameView: ViewFactory = () => ({
     const start = () => { g = newGame(); mode = 'play'; paused = false; acc = 0; hud(); $('#play').textContent = 'Recommencer'; };
     $('#play').addEventListener('click', start);
     // clavier
-    const kd = (e: KeyboardEvent) => { if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key) && mode === 'play') e.preventDefault(); keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === ' ') input.fire = true; };
+    const kd = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('dialog[open]')) { if (history.length > 1) history.back(); else location.hash = '#/more'; return; }   // Échap : quitte le jeu, retour à l'écran précédent (sauf si une fenêtre est ouverte)
+      if (['ArrowLeft', 'ArrowRight', ' '].includes(e.key) && mode === 'play') e.preventDefault(); keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === ' ') input.fire = true; };
     const ku = (e: KeyboardEvent) => { keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key); if (e.key === ' ') input.fire = false; };
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku);
     // doigt / souris sur le terrain : le vaisseau suit
