@@ -53,6 +53,7 @@ export const gameView: ViewFactory = () => ({
       if (g.invulnerable === 0 || Math.floor(g.t * 12) % 2 === 0) { sprite(SHIP, g.ship.x, SHIP_Y, 2, col('--game-ship')); }
       ctx.fillStyle = col('--game-ship'); for (const s of g.shots) ctx.fillRect(s.x - 1, s.y - 4, 2, 8);
       ctx.fillStyle = col('--game-bomb'); for (const b of g.bombs) { ctx.fillRect(b.x - 2, b.y - 4, 4, 8); ctx.fillRect(b.x - 1, b.y + 4, 2, 2); }
+      for (const c of g.shields) { ctx.fillStyle = col('--game-shield'); ctx.globalAlpha = c.hp > 1 ? 1 : 0.5; ctx.fillRect(c.x - 2, c.y - 2, 4, 4); } ctx.globalAlpha = 1;   // boucliers : demi-teinte quand ils sont abîmés
       ctx.fillStyle = col('--game-ship'); ctx.fillRect(0, SHIP_Y + 12, W, 1);   // ligne du plateau
       if (mode !== 'play') {
         ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = col('--game-ship'); ctx.textAlign = 'center';

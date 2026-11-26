@@ -142,6 +142,7 @@ Accès caché : **toucher 5 fois de suite le numéro de version** en bas de « P
 - Des projecteurs (découpes, Fresnel, PAR : dessins originaux) envahissent le plateau ; on tire avec un projecteur de poursuite. 3 vies, vagues de plus en plus rapides. Ordinateur : ← →, espace. Téléphone : glisser le doigt + bouton TIR (maintenu = tir continu).
 - **Classement** : le meilleur score de chaque personne, visible de tous les rôles autorisés. Score envoyé en fin de partie ; hors ligne, il est gardé sur l'appareil et envoyé au retour de la connexion. Scores acceptés tels quels (pas d'anti-triche). L'admin peut supprimer un score (✕).
 - Base : table `game_scores` (lecture réservée via RLS, écriture seulement par `submit_score` et `delete_score`).
+- **Boucliers (v1.64.0)** : 4 boucliers au-dessus du vaisseau, faits de blocs qui résistent à 2 coups (teinte plus claire quand ils sont abîmés). Tirs du joueur et bombes les abîment ; un projecteur ennemi qui les touche les efface. Ils sont rebâtis à chaque nouvelle vague. Aucun changement en base.
 
 ### Modification par lot (v1.62.0)
 Menu **Plus → Modification par lot** (régisseurs généraux et admins ; invisible pour les autres rôles). Aucun changement de base : pas d'action Supabase. Fichiers `src/batchEdit.ts` (logique, `tests/batch-edit.test.ts`) et `src/views/batch.ts`.
