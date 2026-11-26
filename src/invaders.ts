@@ -86,5 +86,5 @@ export function step(g: Game, dt: number, inp: Input, rnd: () => number): void {
   // les ennemis atteignent le vaisseau : fin de partie
   if (g.aliens.some((a) => a.alive && a.y + ALIEN_H / 2 >= SHIP_Y - 6)) { g.over = true; return; }
   // vague terminée : niveau suivant, bonus, un peu plus vite
-  if (!g.aliens.some((a) => a.alive)) { g.level++; g.score += 100; g.aliens = newWave(g.level); g.shields = newShields(); g.dir = 1; g.shots = []; g.bombs = []; g.wave = true; }
+  if (!g.aliens.some((a) => a.alive)) { g.level++; g.score += 100; g.aliens = newWave(g.level); g.dir = 1; g.shots = []; g.bombs = []; g.wave = true; }
 }

@@ -40,6 +40,6 @@ g.bombs.push({ x: c0.x, y: c0.y - 4 }); step(g, 0.05, idle, none); assert.equal(
 g = newGame(); const n0 = g.shields.length; g.shots.push({ x: g.shields[5].x, y: g.shields[5].y + 6 }); step(g, 0.02, idle, none); assert.equal(g.shots.length, 0); assert.equal(g.shields.length, n0);   // le tir du joueur abîme aussi
 g = newGame(); g.aliens.forEach((a) => { a.alive = false; }); g.aliens[0].alive = true; g.aliens[0].x = g.shields[10].x; g.aliens[0].y = g.shields[10].y; step(g, 0.01, idle, none);
 assert.ok(g.shields.length < n0);                                                                  // un ennemi efface ce qu'il touche
-g.aliens[0].alive = false; step(g, 0.01, idle, none); assert.equal(g.level, 2); assert.equal(g.shields.length, 4 * 30);   // boucliers rebâtis à la vague suivante
+g.aliens[0].alive = false; step(g, 0.01, idle, none); assert.equal(g.level, 2); assert.ok(g.shields.length < 4 * 30);   // les boucliers abîmés ne sont PAS rebâtis à la vague suivante
 assert.ok(easing(1) < easing(2) && easing(2) < easing(3) && easing(3) === 1);   // le niveau 1 est plus lent, puis ça monte
 console.log('invaders OK');
