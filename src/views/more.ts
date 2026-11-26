@@ -1,4 +1,5 @@
 import type { ViewFactory } from '../router';
+import { go } from '../router';
 import { can, clearLocal, dismissRejected, loadProfile, rpcCall, state, sync } from '../store';
 import { openForm, confirmBox } from '../ui/dialog';
 import { esc, fmtDateTime } from '../logic';
@@ -35,6 +36,13 @@ export const moreView: ViewFactory = () => ({
   mount(root) {
     void refreshPush(root);
     if (navigator.onLine) void loadNewEmail(root);
+    // accès caché : 5 touchers rapprochés sur le numéro de version ouvrent le jeu (régisseurs et plus)
+    let taps = 0, lastTap = 0;
+    root.addEventListener('click', (e) => {
+      if (!(e.target as HTMLElement).closest('#ver')) return;
+      const now = Date.now(); taps = now - lastTap > 1500 ? 1 : taps + 1; lastTap = now;
+      if (taps >= 5 && can('regisseur')) { taps = 0; go('#/game'); }
+    });
     root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');
       if (!el) return;
@@ -130,7 +138,7 @@ function paint(root: HTMLElement) {
         <a class="item" href="#/admin/refs"><div class="grow"><div class="t">Familles, types, douilles, porte-filtres</div></div>›</a>` : ''}
     </div>
     <button class="btn danger" data-act="logout">Se déconnecter</button>
-    <div class="sub" style="text-align:center">Stock BdN · v${APP_VERSION}</div></div>`;
+    <div class="sub" id="ver" style="text-align:center">Stock BdN · v${APP_VERSION}</div></div>`;
 }
 
 function pushCard(): string {

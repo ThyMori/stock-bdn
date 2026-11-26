@@ -22,6 +22,7 @@ import { moreView } from './views/more';
 import { adminView } from './views/admin';
 import { labelsView } from './views/labels';
 import { batchView } from './views/batch';
+import { gameView } from './views/game';
 import { showConfigMissing, showLogin, showSetPassword } from './views/login';
 import { can } from './store';
 import { playArc, reducedMotion } from './arc';
@@ -45,7 +46,7 @@ const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   mur: { f: murView, tab: 'mur' },
   shows: { f: showsView, tab: 'shows' }, show: { f: showView, tab: 'shows' }, patch: { f: patchView, tab: 'shows' },
   faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, log: { f: logView, tab: 'more', min: 'admin' }, more: { f: moreView, tab: 'more' },
-  labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, batch: { f: batchView, tab: 'more', min: 'regisseur_general' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
+  labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, batch: { f: batchView, tab: 'more', min: 'regisseur_general' }, game: { f: gameView, tab: 'more', min: 'regisseur' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
 
 const ICON = {

@@ -2409,3 +2409,55 @@ grant execute on function patch_clear_gels_acc(uuid) to authenticated;
 grant execute on function patch_clear_all(uuid) to authenticated;
 grant execute on function patch_batch(uuid,jsonb,text,jsonb) to authenticated;
 
+
+-- ============================================================ v1.63.0 : jeu caché (classement des meilleurs scores)
+-- Un seul score par personne : son meilleur. Lecture : régisseur et plus. Écriture uniquement par submit_score / delete_score.
+create table if not exists game_scores (
+  user_id     uuid primary key references auth.users on delete cascade,
+  label       text not null,                                   -- nom affiché au classement
+  score       integer not null check (score >= 0),
+  level       integer not null default 1 check (level >= 1),
+  achieved_at timestamptz not null default now()
+);
+alter table game_scores enable row level security;
+drop policy if exists game_scores_select on game_scores;
+create policy game_scores_select on game_scores for select using (has_role('regisseur'));
+revoke all on game_scores from anon;
+revoke insert, update, delete on game_scores from authenticated;     -- on n'écrit que par les fonctions ci-dessous
+grant select on game_scores to authenticated;
+
+-- Enregistre un score : ne remplace le meilleur que s'il est battu. Renvoie { best, improved, rank }.
+create or replace function submit_score(p_score int, p_level int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare lbl text; prev int; improved boolean := false; rk int;
+begin
+  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if p_score is null or p_score < 0 then raise exception 'Score invalide' using errcode = '22023'; end if;
+  select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
+  select score into prev from game_scores where user_id = auth.uid();
+  if prev is null then
+    insert into game_scores (user_id, label, score, level) values (auth.uid(), lbl, p_score, greatest(1, coalesce(p_level, 1)));
+    improved := true;
+  elsif p_score > prev then
+    update game_scores set score = p_score, level = greatest(1, coalesce(p_level, 1)), label = lbl, achieved_at = now() where user_id = auth.uid();
+    improved := true;
+  else
+    update game_scores set label = lbl where user_id = auth.uid();   -- garde le nom à jour
+  end if;
+  select count(*) + 1 into rk from game_scores where score > (select score from game_scores where user_id = auth.uid());
+  return jsonb_build_object('best', (select score from game_scores where user_id = auth.uid()), 'improved', improved, 'rank', rk);
+end $$;
+revoke all on function submit_score(int, int) from public, anon;
+grant execute on function submit_score(int, int) to authenticated;
+
+-- Supprime le score d'une personne (administrateur seulement).
+create or replace function delete_score(p_user uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare lbl text;
+begin
+  if not has_role('admin') then raise exception 'Seuls les administrateurs peuvent supprimer un score' using errcode = '42501'; end if;
+  delete from game_scores where user_id = p_user returning label into lbl;
+  if found then perform log_event('JEU', format('Score de %s supprimé', lbl)); end if;
+end $$;
+revoke all on function delete_score(uuid) from public, anon;
+grant execute on function delete_score(uuid) to authenticated;
