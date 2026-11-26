@@ -2411,7 +2411,7 @@ grant execute on function patch_batch(uuid,jsonb,text,jsonb) to authenticated;
 
 
 -- ============================================================ v1.63.0 : jeu caché (classement des meilleurs scores)
--- Un seul score par personne : son meilleur. Lecture : régisseur et plus. Écriture uniquement par submit_score / delete_score.
+-- Un seul score par personne : son meilleur. Lecture : tous les rôles (technicien et plus). Écriture uniquement par submit_score / delete_score.
 create table if not exists game_scores (
   user_id     uuid primary key references auth.users on delete cascade,
   label       text not null,                                   -- nom affiché au classement
@@ -2421,7 +2421,7 @@ create table if not exists game_scores (
 );
 alter table game_scores enable row level security;
 drop policy if exists game_scores_select on game_scores;
-create policy game_scores_select on game_scores for select using (has_role('regisseur'));
+create policy game_scores_select on game_scores for select using (has_role('technicien'));
 revoke all on game_scores from anon;
 revoke insert, update, delete on game_scores from authenticated;     -- on n'écrit que par les fonctions ci-dessous
 grant select on game_scores to authenticated;
@@ -2431,7 +2431,7 @@ create or replace function submit_score(p_score int, p_level int) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare lbl text; prev int; improved boolean := false; rk int;
 begin
-  if not has_role('regisseur') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
+  if not has_role('technicien') then raise exception 'Droits insuffisants' using errcode = '42501'; end if;
   if p_score is null or p_score < 0 then raise exception 'Score invalide' using errcode = '22023'; end if;
   select coalesce(nullif(trim(first_name || ' ' || last_name), ''), email) into lbl from profiles where id = auth.uid();
   select score into prev from game_scores where user_id = auth.uid();

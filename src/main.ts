@@ -46,7 +46,7 @@ const ROUTES: Record<string, { f: ViewFactory; tab: string; min?: Role }> = {
   mur: { f: murView, tab: 'mur' },
   shows: { f: showsView, tab: 'shows' }, show: { f: showView, tab: 'shows' }, patch: { f: patchView, tab: 'shows' },
   faults: { f: faultsView, tab: 'faults' }, fault: { f: faultView, tab: 'faults' }, log: { f: logView, tab: 'more', min: 'admin' }, more: { f: moreView, tab: 'more' },
-  labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, batch: { f: batchView, tab: 'more', min: 'regisseur_general' }, game: { f: gameView, tab: 'more', min: 'regisseur' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
+  labels: { f: labelsView, tab: 'more', min: 'regisseur_general' }, batch: { f: batchView, tab: 'more', min: 'regisseur_general' }, game: { f: gameView, tab: 'more', min: 'technicien' }, admin: { f: adminView, tab: 'more', min: 'regisseur_general' }
 };
 
 const ICON = {

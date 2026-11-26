@@ -41,7 +41,7 @@ export const moreView: ViewFactory = () => ({
     root.addEventListener('click', (e) => {
       if (!(e.target as HTMLElement).closest('#ver')) return;
       const now = Date.now(); taps = now - lastTap > 1500 ? 1 : taps + 1; lastTap = now;
-      if (taps >= 5 && can('regisseur')) { taps = 0; go('#/game'); }
+      if (taps >= 5 && can('technicien')) { taps = 0; go('#/game'); }
     });
     root.addEventListener('click', async (e) => {
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act]');

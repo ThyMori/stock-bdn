@@ -138,7 +138,7 @@ Ordre actuel des zones : Mur (replié), **Projecteurs**, **Matériel demandé**,
 Le mur est **replié au départ** : titre « Mur (n) » + seulement le dernier message. Toucher le titre déplie : zone d'écriture + tous les messages. Pas mémorisé (replié à chaque ouverture) ; le brouillon en cours n'est pas perdu en repliant. Aucun changement Supabase.
 
 ### Jeu caché « Invasion » (v1.63.0)
-Accès caché : **toucher 5 fois de suite le numéro de version** en bas de « Plus » (rien de visible dans les menus). Réservé aux **régisseurs, régisseurs généraux et admins** (la base refuse la lecture et l'écriture aux techniciens). Fichiers `src/invaders.ts` (logique, `tests/invaders.test.ts`) et `src/views/game.ts`.
+Accès caché : **toucher 5 fois de suite le numéro de version** en bas de « Plus » (rien de visible dans les menus). Ouvert à **tous les rôles** depuis la v1.67.0 (techniciens compris ; avant : régisseur et plus). Seul l'admin peut supprimer un score. Fichiers `src/invaders.ts` (logique, `tests/invaders.test.ts`) et `src/views/game.ts`.
 - Des projecteurs (découpes, Fresnel, PAR : dessins originaux) envahissent le plateau ; on tire avec un projecteur de poursuite. 3 vies, vagues de plus en plus rapides. Ordinateur : ← →, espace. Téléphone : glisser le doigt + bouton TIR (maintenu = tir continu).
 - **Classement** : le meilleur score de chaque personne, visible de tous les rôles autorisés. Score envoyé en fin de partie ; hors ligne, il est gardé sur l'appareil et envoyé au retour de la connexion. Scores acceptés tels quels (pas d'anti-triche). L'admin peut supprimer un score (✕).
 - Base : table `game_scores` (lecture réservée via RLS, écriture seulement par `submit_score` et `delete_score`).
@@ -432,6 +432,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
 | `schema.sql` (v1.57.1) | fonction `immo_last_day`, règles de disponibilité (`item_conflict`, `item_blocked`, `reallocate_all`), `resolve_fault` referme le SAV | v1.57.1 |
 | `schema.sql` (v1.63.0) | table `game_scores`, fonctions `submit_score` et `delete_score` (jeu caché) | v1.63.0 |
+| `schema.sql` (v1.67.0) | jeu caché ouvert aux techniciens (lecture du classement et `submit_score`) : à rejouer pour que les techniciens puissent y jouer | v1.67.0 |
 | `schema.sql` (v1.58.0) | colonne `show_items.zone`, `assign_items` à 4 paramètres (zone ; l'ancienne version à 3 paramètres est supprimée) | v1.58.0 |
 | `schema.sql` (v1.55.0) | table `show_demand_slots`, fonctions `zone_of_position`, `set_demand_slots` (remplace la v1.54.0) | v1.55.0 |
 | `schema.sql` (v1.51.0) | colonnes `faults.keep_until / keep_show / keep_immo`, fonctions `report_fault_keep`, `activate_scheduled_sav`, `item_blocked` / `reallocate_all` / `edit_show` / `resolve_fault` mis à jour | v1.51.0 |
