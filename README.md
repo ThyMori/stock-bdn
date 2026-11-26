@@ -143,6 +143,7 @@ Accès caché : **toucher 5 fois de suite le numéro de version** en bas de « P
 - **Classement** : le meilleur score de chaque personne, visible de tous les rôles autorisés. Score envoyé en fin de partie ; hors ligne, il est gardé sur l'appareil et envoyé au retour de la connexion. Scores acceptés tels quels (pas d'anti-triche). L'admin peut supprimer un score (✕).
 - Base : table `game_scores` (lecture réservée via RLS, écriture seulement par `submit_score` et `delete_score`).
 - **Boucliers (v1.64.0)** : 4 boucliers au-dessus du vaisseau, faits de blocs qui résistent à 2 coups (teinte plus claire quand ils sont abîmés). Tirs du joueur et bombes les abîment ; un projecteur ennemi qui les touche les efface. Ils ne se régénèrent pas entre les vagues (v1.64.5) : seule une nouvelle partie les rebâtit. Aucun changement en base.
+- **Vitesse (v1.65.0)** : chaque niveau a sa vitesse, fixe pendant tout le niveau (16 px/s au niveau 1, +6 par niveau, plafond au niveau 12) ; plus d’accélération quand il reste peu d’ennemis. Les bombes suivent le même principe (cadence fixe par niveau, croissante).
 
 ### Modification par lot (v1.62.0)
 Menu **Plus → Modification par lot** (régisseurs généraux et admins ; invisible pour les autres rôles). Aucun changement de base : pas d'action Supabase. Fichiers `src/batchEdit.ts` (logique, `tests/batch-edit.test.ts`) et `src/views/batch.ts`.

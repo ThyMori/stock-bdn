@@ -28,8 +28,8 @@ export function newShields(): Cell[] {
   for (let b = 0; b < 4; b++) BUNKER.forEach((row, r) => [...row].forEach((c, k) => { if (c === '#') out.push({ x: 30 + b * 60 + (k - 3.5) * CELL, y: SHIP_Y - 34 + r * CELL, hp: 2 }); }));
   return out;
 }
-/** Débuts plus doux : niveau 1 à 60 % de la vitesse (ennemis et bombes), niveau 2 à 80 %, ensuite plein régime. */
-export const easing = (level: number): number => (level <= 1 ? 0.6 : level === 2 ? 0.8 : 1);
+/** Vitesse des ennemis (px/s) : constante pendant un niveau, plus rapide à chaque niveau (niveau 1 = 16, puis +6 par niveau, plafonné au niveau 12). */
+export const levelSpeed = (level: number): number => 16 + 6 * (Math.min(level, 12) - 1);
 export const newGame = (): Game => ({ ship: { x: W / 2 }, shots: [], bombs: [], aliens: newWave(1), shields: newShields(), dir: 1, lives: 3, score: 0, level: 1, over: false, cooldown: 0, invulnerable: 0, t: 0, wave: false });
 
 const hit = (ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number) => Math.abs(ax - bx) * 2 < aw + bw && Math.abs(ay - by) * 2 < ah + bh;
@@ -48,14 +48,14 @@ export function step(g: Game, dt: number, inp: Input, rnd: () => number): void {
   for (const s of g.shots) s.y -= 260 * dt;
   g.shots = g.shots.filter((s) => s.y > -6);
   // ennemis : ils avancent de côté, descendent au bord, et accélèrent quand il en reste peu
-  const alive = g.aliens.filter((a) => a.alive), total = ROWS * COLS;
+  const alive = g.aliens.filter((a) => a.alive);
   if (alive.length) {
-    const speed = (18 + 5 * Math.min(g.level, 8)) * easing(g.level) * (1 + (1 - alive.length / total) * 2.4);
+    const speed = levelSpeed(g.level);                              // vitesse fixe pendant tout le niveau
     const dx = g.dir * speed * dt;
     const edge = alive.some((a) => a.x + dx < ALIEN_W / 2 || a.x + dx > W - ALIEN_W / 2);
     if (edge) { g.dir = (g.dir * -1) as 1 | -1; for (const a of alive) a.y += 8; } else for (const a of alive) a.x += dx;
     // bombes : l'ennemi le plus bas d'une colonne tirée au hasard lâche un projectile
-    const rate = (0.7 + 0.25 * Math.min(g.level, 8)) * easing(g.level);               // bombes par seconde en moyenne
+    const rate = 0.45 + 0.2 * Math.min(g.level, 10);               // bombes par seconde en moyenne
     if (rnd() < rate * dt) {
       const cols = new Map<number, Alien>();
       for (const a of alive) { const k = Math.round(a.x / 24); const c = cols.get(k); if (!c || a.y > c.y) cols.set(k, a); }

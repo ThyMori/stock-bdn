@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { easing, COLS, ROWS, SHIP_Y, W, newGame, newShields, newWave, step } from '../src/invaders';
+import { levelSpeed, COLS, ROWS, SHIP_Y, W, newGame, newShields, newWave, step } from '../src/invaders';
 
 const idle = { move: 0 as const, target: null, fire: false };
 const none = () => 0.99;                                           // jamais de bombe
@@ -13,8 +13,8 @@ g = newGame(); step(g, 0.1, { ...idle, target: 40 }, none); assert.ok(g.ship.x <
 // tir : un faisceau, délai de rechargement, puis il touche un ennemi (points de sa rangée)
 g = newGame(); step(g, 0.01, { ...idle, fire: true }, none); assert.equal(g.shots.length, 1);
 step(g, 0.01, { ...idle, fire: true }, none); assert.equal(g.shots.length, 1);                 // recharge
-g = newGame(); g.aliens = g.aliens.map((a) => ({ ...a, alive: a.row === 4 && a.x === 20 })); g.ship.x = 20; g.shields = []; g.aliens.push({ x: 200, y: 40, row: 0, alive: true });
-for (let i = 0; i < 120; i++) step(g, 1 / 60, { ...idle, fire: true }, none);
+g = newGame(); g.aliens = g.aliens.map((a) => ({ ...a, alive: a.row === 4 && a.x === 20 })); g.ship.x = 20; g.shields = []; g.dir = 0 as unknown as 1;  /* ennemis immobiles pour viser */ g.aliens.push({ x: 200, y: 40, row: 0, alive: true });
+for (let i = 0; i < 120; i++) { const t = g.aliens.find((a) => a.alive && a.row === 4); if (t) g.ship.x = t.x; step(g, 1 / 60, { ...idle, fire: true }, none); }
 assert.equal(g.score, 10); assert.ok(g.aliens.filter((a) => a.alive).length === 1);
 // bombe sur le vaisseau : vie perdue, puis invulnérabilité ; trois vies = fin
 g = newGame(); g.bombs.push({ x: g.ship.x, y: SHIP_Y - 2 }); step(g, 1 / 60, idle, none); assert.equal(g.lives, 2); assert.ok(g.invulnerable > 1);
@@ -26,10 +26,11 @@ g = newGame(); g.aliens[0].y = SHIP_Y; step(g, 1 / 60, idle, none); assert.equal
 g = newGame(); g.aliens.forEach((a) => { a.alive = false; }); g.aliens[0].alive = true; g.aliens[0].x = 100; g.aliens[0].y = 100; g.ship.x = 100;
 g.shots.push({ x: g.aliens[0].x, y: g.aliens[0].y + 4 }); step(g, 1 / 60, idle, none);   // un faisceau touche le dernier ennemi
 assert.equal(g.level, 2); assert.ok(g.score >= 100); assert.equal(g.aliens.filter((a) => a.alive).length, COLS * ROWS);
-// les ennemis lâchent des bombes quand le hasard le veut, et accélèrent quand il en reste peu
+// les ennemis lâchent des bombes quand le hasard le veut, ; la vitesse ne dépend pas du nombre d'ennemis restants
 g = newGame(); step(g, 1 / 60, idle, () => 0); assert.equal(g.bombs.length, 1);
 const speedOf = (n: number) => { const h = newGame(); h.aliens.forEach((a, i) => { a.alive = i < n; }); const x0 = h.aliens[0].x; step(h, 0.1, idle, none); return h.aliens[0].x - x0; };
-assert.ok(speedOf(3) > speedOf(40));
+assert.ok(Math.abs(speedOf(3) - speedOf(40)) < 1e-9);   // vitesse constante pendant un niveau
+g = newGame(); g.level = 2; g.aliens.forEach((a) => { a.alive = a.x > 0 && a.row === 0; }); const xs = g.aliens.find((a) => a.alive)!.x; step(g, 0.1, idle, none); assert.ok(g.aliens.find((a) => a.alive)!.x - xs > speedOf(40) - 1e-9);   // le niveau 2 va plus vite que le 1
 // la partie terminée ne bouge plus
 g = newGame(); g.over = true; const s0 = g.t; step(g, 1, idle, none); assert.equal(g.t, s0);
 // boucliers : 4 × 30 blocs ; une bombe qui les touche disparaît et abîme un bloc (2 coups pour l'effacer) ; un ennemi qui passe dessus efface
@@ -41,5 +42,5 @@ g = newGame(); const n0 = g.shields.length; g.shots.push({ x: g.shields[5].x, y:
 g = newGame(); g.aliens.forEach((a) => { a.alive = false; }); g.aliens[0].alive = true; g.aliens[0].x = g.shields[10].x; g.aliens[0].y = g.shields[10].y; step(g, 0.01, idle, none);
 assert.ok(g.shields.length < n0);                                                                  // un ennemi efface ce qu'il touche
 g.aliens[0].alive = false; step(g, 0.01, idle, none); assert.equal(g.level, 2); assert.ok(g.shields.length < 4 * 30);   // les boucliers abîmés ne sont PAS rebâtis à la vague suivante
-assert.ok(easing(1) < easing(2) && easing(2) < easing(3) && easing(3) === 1);   // le niveau 1 est plus lent, puis ça monte
+assert.ok(levelSpeed(1) < levelSpeed(2) && levelSpeed(2) < levelSpeed(5) && levelSpeed(12) === levelSpeed(30));   // chaque niveau accélère, plafonné au niveau 12
 console.log('invaders OK');
