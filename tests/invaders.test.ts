@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { COLS, ROWS, SHIP_Y, W, newGame, newShields, newWave, step } from '../src/invaders';
+import { easing, COLS, ROWS, SHIP_Y, W, newGame, newShields, newWave, step } from '../src/invaders';
 
 const idle = { move: 0 as const, target: null, fire: false };
 const none = () => 0.99;                                           // jamais de bombe
@@ -41,4 +41,5 @@ g = newGame(); const n0 = g.shields.length; g.shots.push({ x: g.shields[5].x, y:
 g = newGame(); g.aliens.forEach((a) => { a.alive = false; }); g.aliens[0].alive = true; g.aliens[0].x = g.shields[10].x; g.aliens[0].y = g.shields[10].y; step(g, 0.01, idle, none);
 assert.ok(g.shields.length < n0);                                                                  // un ennemi efface ce qu'il touche
 g.aliens[0].alive = false; step(g, 0.01, idle, none); assert.equal(g.level, 2); assert.equal(g.shields.length, 4 * 30);   // boucliers rebâtis à la vague suivante
+assert.ok(easing(1) < easing(2) && easing(2) < easing(3) && easing(3) === 1);   // le niveau 1 est plus lent, puis ça monte
 console.log('invaders OK');

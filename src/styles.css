@@ -672,4 +672,6 @@ table.patch tr.picked td { background: color-mix(in srgb, var(--ink) 12%, var(--
 .game-board { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .game-board li { display: flex; align-items: baseline; gap: 8px; padding: 6px 8px; border: 1px solid var(--ink); }
 .game-board li.me { background: var(--ink); color: var(--paper); }
+/* Bande tactile sous le terrain : même largeur que lui, grande zone pour le pouce */
+.game-strip { width: 100%; max-width: 420px; height: 110px; margin: 0 auto; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 12px; border: 2px dashed var(--ink); color: var(--muted, inherit); touch-action: none; user-select: none; font-size: 16px; }
 #fire { touch-action: none; user-select: none; }
