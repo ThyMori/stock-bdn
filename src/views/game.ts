@@ -31,7 +31,7 @@ export const gameView: ViewFactory = () => ({
       <canvas id="cv" class="game-canvas" aria-label="Terrain de jeu : des projecteurs envahissent le plateau" role="img"></canvas>
       ${tactile ? '<div class="game-strip" id="strip" role="presentation">Glisse ton doigt ici pour piloter le vaisseau</div>' : ''}
       <div class="row"><button class="btn primary grow" id="play">Jouer</button>${tactile ? '' : '<button class="btn grow" id="fire" aria-label="Tirer">TIR</button>'}</div>
-      <div class="sub">Ordinateur : ← → pour bouger, espace pour tirer. Téléphone : glisse le doigt sur la bande sous le terrain, le tir est automatique.</div>
+      <div class="sub">Ordinateur : ← → pour bouger, espace pour tirer. Téléphone : glisse le doigt sur la bande sous le terrain (le terrain lui-même n'est pas tactile), le tir est automatique.</div>
       <div class="card stack"><h2>Classement</h2><div class="sub">Le meilleur score de chaque personne.</div><ol id="board" class="game-board"></ol><div id="bmsg" class="sub" role="status"></div></div></div>`;
     const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
     const cv = $<HTMLCanvasElement>('#cv'), ctx = cv.getContext('2d')!;
@@ -115,10 +115,11 @@ export const gameView: ViewFactory = () => ({
     window.addEventListener('keydown', kd); window.addEventListener('keyup', ku);
     // doigt / souris sur le terrain : le vaisseau suit
     const tgt = (e: PointerEvent) => { const r = cv.getBoundingClientRect(); input.target = Math.max(0, Math.min(W, (e.clientX - r.left) / r.width * W)); };
-    cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); tgt(e); }); cv.addEventListener('pointermove', (e) => { if (input.target !== null) tgt(e); });
+    if (tactile) cv.style.touchAction = 'auto';   // écran tactile : le terrain ne capte plus le doigt (la page défile), seule la bande pilote
+    else { cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); tgt(e); }); cv.addEventListener('pointermove', (e) => { if (input.target !== null) tgt(e); }); }
     const strip = document.querySelector<HTMLElement>('#strip');   // bande tactile sous le terrain (le doigt ne masque plus le jeu)
     if (strip) { strip.addEventListener('pointerdown', (e) => { strip.setPointerCapture(e.pointerId); tgt(e); }); strip.addEventListener('pointermove', (e) => { if (input.target !== null) tgt(e); }); }
-    const release = () => { input.target = null; }; cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); strip?.addEventListener('pointerup', release); strip?.addEventListener('pointercancel', release);
+    const release = () => { input.target = null; }; if (!tactile) { cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release); } strip?.addEventListener('pointerup', release); strip?.addEventListener('pointercancel', release);
     const fb = document.querySelector<HTMLElement>('#fire');   // absent sur écran tactile
     if (fb) { fb.addEventListener('pointerdown', (e) => { e.preventDefault(); input.fire = true; }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) fb.addEventListener(ev, () => { input.fire = false; }); }
     const vis = () => { paused = document.hidden && mode === 'play'; }; document.addEventListener('visibilitychange', vis);
