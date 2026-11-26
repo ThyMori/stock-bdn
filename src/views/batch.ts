@@ -1,5 +1,6 @@
 // Modification par lot (régisseurs généraux et admins) : on choisit les réglages, on scanne le lot, on applique à tous.
 import QrScanner from 'qr-scanner';
+import { startScan } from '../ui/torch';
 import type { ViewFactory } from '../router';
 import { esc, parseScan, todayStr } from '../logic';
 import { emit, pull, view } from '../store';
@@ -69,7 +70,7 @@ export const batchView: ViewFactory = () => ({
     let last = '', lastAt = 0;
     const scanner = new QrScanner($<HTMLVideoElement>('video'), (r) => { if (r.data === last && Date.now() - lastAt < 2500) return; last = r.data; lastAt = Date.now(); add(r.data); },
       { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
-    scanner.start().catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
+    startScan(scanner, $<HTMLVideoElement>('video')).catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
 
     /** Envoie une opération pour un projecteur ; renvoie le message d'erreur ou null. */
     const send = async (n: number, s: BatchStep): Promise<string | null> => {

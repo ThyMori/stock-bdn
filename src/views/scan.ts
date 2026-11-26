@@ -1,4 +1,5 @@
 import QrScanner from 'qr-scanner';
+import { startScan } from '../ui/torch';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { parseScan, esc } from '../logic';
@@ -28,7 +29,7 @@ export const scanView: ViewFactory = () => ({
       last = r.data; lastAt = Date.now(); open(r.data);
     }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
 
-    scanner.start().then(() => { msg.textContent = 'Place le QR code dans le cadre.'; })
+    startScan(scanner, video).then(() => { msg.textContent = 'Place le QR code dans le cadre.'; })
       .catch((e) => { msg.innerHTML = `Caméra indisponible (${esc(String(e))}). Autorise l'accès dans les réglages du navigateur ou saisis le numéro ci-dessous.`; });
 
     root.querySelector('#manual')!.addEventListener('submit', (e) => {

@@ -1,4 +1,5 @@
 import QrScanner from 'qr-scanner';
+import { startScan } from '../ui/torch';
 import type { ViewFactory } from '../router';
 import { go } from '../router';
 import { can, canActShow, rpcCall, setLamp, state, view } from '../store';
@@ -233,7 +234,7 @@ export const showView: ViewFactory = ([id]) => {
       if (r.data === last && Date.now() - lastAt < 2500) return;
       last = r.data; lastAt = Date.now(); add(r.data);
     }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
-    scanner.start().catch((e) => { msg = `Caméra indisponible (${String(e)}). Saisis les numéros à la main.`; repaintKeepVideo(root); });
+    startScan(scanner, video).catch((e) => { msg = `Caméra indisponible (${String(e)}). Saisis les numéros à la main.`; repaintKeepVideo(root); });
     stopScan = () => { scanner.stop(); scanner.destroy(); };
   }
   /** Met à jour message / lot sans recréer la vidéo (sinon la caméra redémarre à chaque scan). */

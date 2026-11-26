@@ -74,7 +74,7 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
         msg.textContent = 'Démarrage de la caméra…'; vp.hidden = false; btn.textContent = 'Fermer la caméra';
         let last = '', lastAt = 0;
         try {
-          const { default: QrScanner } = await import('qr-scanner');            // chargé seulement quand on scanne
+          const { default: QrScanner } = await import('qr-scanner'); const { startScan } = await import('./torch');            // chargé seulement quand on scanne
           const qs = new QrScanner(video, (r) => {
             if (r.data === last && Date.now() - lastAt < 2500) return;
             last = r.data; lastAt = Date.now();
@@ -90,7 +90,7 @@ export function openForm(title: string, fields: Field[], opts: { submit?: string
             else { navigator.vibrate?.(60); msg.classList.remove('scanerr'); msg.textContent = `Sélectionné : ${sel.selectedOptions[0]?.textContent ?? res.value}. Valide avec le bouton du bas.`; }
           }, { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
           scanner = qs;
-          await qs.start(); msg.textContent = 'Place le QR code du projecteur dans le cadre.';
+          await startScan(qs, video); msg.textContent = 'Place le QR code du projecteur dans le cadre.';
         } catch (e) { stop(); msg.textContent = `Caméra indisponible (${String(e)}). Autorise l'accès dans les réglages du navigateur ou choisis dans la liste.`; }
       });
     });

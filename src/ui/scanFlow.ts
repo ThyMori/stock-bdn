@@ -1,5 +1,6 @@
 // Écran de scan du spectacle : menu « Affecter des positions » / « Patcher », puis le mode choisi.
 import QrScanner from 'qr-scanner';
+import { startScan } from './torch';
 import { POSITION_GROUPS } from '../patch';
 import { rpcCall, view } from '../store';
 import { parseScan } from '../logic';
@@ -93,7 +94,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
     let last = '', lastAt = 0;
     const scanner = new QrScanner(video, (r) => { if (r.data === last && Date.now() - lastAt < 2500) return; last = r.data; lastAt = Date.now(); add(r.data); },
       { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
-    scanner.start().catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
+    startScan(scanner, video).catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
     stop = () => { scanner.stop(); scanner.destroy(); };
     h.focus();
   }
@@ -143,7 +144,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
     let last = '', lastAt = 0;
     const scanner = new QrScanner(video, (r) => { if (r.data === last && Date.now() - lastAt < 2500) return; last = r.data; lastAt = Date.now(); void go(r.data); },
       { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
-    scanner.start().catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
+    startScan(scanner, video).catch((e) => say(`Caméra indisponible (${String(e)}). Saisis les numéros à la main.`, true));
     stop = () => { scanner.stop(); scanner.destroy(); };
     h.focus();
   }
@@ -184,7 +185,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
       let last = '', lastAt = 0;
       const scanner = new QrScanner(video, (r) => { if (r.data === last && Date.now() - lastAt < 2500) return; last = r.data; lastAt = Date.now(); void open(r.data); },
         { returnDetailedScanResult: true, preferredCamera: 'environment', maxScansPerSecond: 8, highlightScanRegion: false });
-      scanner.start().catch((e) => say(`Caméra indisponible (${String(e)}). Saisis le numéro à la main.`, true));
+      startScan(scanner, video).catch((e) => say(`Caméra indisponible (${String(e)}). Saisis le numéro à la main.`, true));
       stop = () => { scanner.stop(); scanner.destroy(); };
       h.focus();
     };
