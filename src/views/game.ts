@@ -25,17 +25,18 @@ interface Row { user_id: string; label: string; score: number; level: number }
 
 export const gameView: ViewFactory = () => ({
   mount(root) {
+    const tactile = window.matchMedia('(pointer: coarse)').matches;   // écran tactile : tir automatique, pas de bouton
     root.innerHTML = `<div class="page stack"><a href="#/more" class="sub">‹ Plus</a><h1>Invasion</h1>
       <div class="game-hud" role="status" aria-live="off"><span id="g-score">Score 0</span><span id="g-lives">♥♥♥</span><span id="g-level">Niv. 1</span></div>
       <canvas id="cv" class="game-canvas" aria-label="Terrain de jeu : des projecteurs envahissent le plateau" role="img"></canvas>
-      <div class="row"><button class="btn primary grow" id="play">Jouer</button><button class="btn grow" id="fire" aria-label="Tirer">TIR</button></div>
-      <div class="sub">Ordinateur : ← → pour bouger, espace pour tirer. Téléphone : glisse le doigt sur le terrain, appuie sur TIR (maintiens pour tirer en continu).</div>
+      <div class="row"><button class="btn primary grow" id="play">Jouer</button>${tactile ? '' : '<button class="btn grow" id="fire" aria-label="Tirer">TIR</button>'}</div>
+      <div class="sub">Ordinateur : ← → pour bouger, espace pour tirer. Téléphone : glisse le doigt sur le terrain, le tir est automatique.</div>
       <div class="card stack"><h2>Classement</h2><div class="sub">Le meilleur score de chaque personne.</div><ol id="board" class="game-board"></ol><div id="bmsg" class="sub" role="status"></div></div></div>`;
     const $ = <T extends HTMLElement>(s: string) => root.querySelector<T>(s)!;
     const cv = $<HTMLCanvasElement>('#cv'), ctx = cv.getContext('2d')!;
     const css = getComputedStyle(cv), col = (n: string) => css.getPropertyValue(n).trim() || '#fff';   // couleurs prises dans les variables CSS
     let g: Game = newGame(), mode: 'ready' | 'play' | 'over' = 'ready', paused = false, raf = 0, last = 0, acc = 0;
-    const input: Input = { move: 0, target: null, fire: false };
+    const input: Input = { move: 0, target: null, fire: tactile };
     const keys = new Set<string>();
     const me = state.session?.user.id ?? '';
 
@@ -114,7 +115,8 @@ export const gameView: ViewFactory = () => ({
     const tgt = (e: PointerEvent) => { const r = cv.getBoundingClientRect(); input.target = Math.max(0, Math.min(W, (e.clientX - r.left) / r.width * W)); };
     cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); tgt(e); }); cv.addEventListener('pointermove', (e) => { if (input.target !== null) tgt(e); });
     const release = () => { input.target = null; }; cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
-    const fb = $('#fire'); fb.addEventListener('pointerdown', (e) => { e.preventDefault(); input.fire = true; }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) fb.addEventListener(ev, () => { input.fire = false; });
+    const fb = document.querySelector<HTMLElement>('#fire');   // absent sur écran tactile
+    if (fb) { fb.addEventListener('pointerdown', (e) => { e.preventDefault(); input.fire = true; }); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) fb.addEventListener(ev, () => { input.fire = false; }); }
     const vis = () => { paused = document.hidden && mode === 'play'; }; document.addEventListener('visibilitychange', vis);
     const online = () => { const p = readPending(); if (p > 0) void submit(p, 1); }; window.addEventListener('online', online);
     window.addEventListener('resize', fit); fit(); hud(); draw(); void loadBoard(); online();
