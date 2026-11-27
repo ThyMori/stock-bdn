@@ -146,3 +146,16 @@ export function listenPushNavigation(): void {
     if (typeof h === 'string' && h.startsWith('#/')) location.hash = h;
   });
 }
+
+/** Prévient les personnes concernées quand un projecteur vient d'être retiré d'un spectacle (panne / SAV). Appelé après chaque synchro :
+ *  n'importe quel appareil connecté peut le faire, la fonction serveur ne notifie chaque retrait qu'une seule fois. Silencieux en cas d'échec. */
+const asked = new Set<string>();
+export async function notifyRemovals(list: { id: string; push_sent_at: string | null; created_at: string }[]): Promise<void> {
+  try {
+    if (!navigator.onLine) return;
+    const fresh = list.filter((r) => !r.push_sent_at && !asked.has(r.id) && Date.now() - new Date(r.created_at).getTime() < 86400000);   // pas de vieux retraits
+    if (!fresh.length) return;
+    for (const r of fresh) asked.add(r.id);                                    // une demande par retrait et par session
+    await callPush({ action: 'removals' });
+  } catch { /* au mieux : le bandeau reste visible de toute façon */ }
+}

@@ -57,6 +57,10 @@ b, strong { font-weight: 700; }
 @keyframes alarm { 0% { background: #e30613; } 100% { background: #a8000a; } }
 @media (prefers-reduced-motion: reduce) { .banner.alarm { animation: none; } }
 .alert-card { background: #e30613; color: #fff; padding: 12px; border: 3px solid var(--ink); font-weight: 700; }
+.alert-card.strong { animation: rm-pulse 1.2s ease-in-out 3; outline: 4px solid var(--ink); }
+@keyframes rm-pulse { 50% { filter: brightness(1.35); } }
+@media (prefers-reduced-motion: reduce) { .alert-card.strong { animation: none; } }
+.alert-card + .alert-card { margin-top: 8px; }
 .alert-card ul { margin: 6px 0 0; padding-left: 18px; font-weight: 500; }
 .dem { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 2px solid var(--ink); }
 .dem .grow { min-width: 140px; }

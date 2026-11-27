@@ -8,6 +8,7 @@ import { fullName, gelCss, showColor, SHOW_COLORS } from '../types';
 import { gelColorOf, splitGelRefs } from '../gels';
 import { POSITION_GROUPS } from '../patch';
 import { isKeeping } from '../keepFault';
+import { removalBanners } from '../removals';
 import { alertText, blockedReason, externalLabel, showAlerts } from '../alerts';
 import { similarNames } from '../patchSuggest';
 import { toast } from '../ui/toast';
@@ -139,6 +140,8 @@ export const showView: ViewFactory = ([id]) => {
     const myAlert = showAlerts(d, '0000-00-00').find((a) => a.show.id === id);
     const alertCard = myAlert && show.end_date >= today ? `<div class="alert-card" role="alert">⚠ ALERTE MATÉRIEL : ${esc(alertText(myAlert))}<br>À réparer, louer ou emprunter.
       <ul>${myAlert.missing.map((m) => `<li>manque ${m.n} × ${esc(m.label)}</li>`).join('')}${myAlert.problems.map((p) => `<li>n° ${p.item} : ${esc(p.why)}</li>`).join('')}</ul></div>` : '';
+    const rmBanners = removalBanners(d, id, todayStr());   // projecteurs retirés / indisponibles sur un spectacle à venir
+    const rmCard = rmBanners.map((b) => `<div class="alert-card${b.strong ? ' strong' : ''}" role="alert">${b.strong ? '⚠ SPECTACLE QUI ÉTAIT COMPLET · ' : '⚠ '}${esc(b.text)}</div>`).join('');
     const missingTotal = demands.reduce((n, r) => n + r.x.missing, 0);
     const demandCard = `<div class="card sec sec-dem"><div class="row wrap"><button class="fold grow" data-act="dem-fold" aria-expanded="${!demFolded}" aria-label="${demFolded ? 'Déplier' : 'Replier'} le matériel demandé"><span aria-hidden="true">${demFolded ? '▸' : '▾'}</span> <h2>Matériel demandé (${demands.reduce((n, r) => n + r.x.qty, 0)})</h2></button><span class="tag auto">objectif</span>${demFolded && demands.length ? (() => {   // replié : affectés / demandés ; en vert avec ✓ quand tout est couvert
       const want = demands.reduce((n, r) => n + r.x.qty, 0), got = demands.reduce((n, r) => n + Math.min(r.x.qty, own(r.x) + extQty(r.x.id) + subQty(r.x.id)), 0), full = got >= want;
@@ -197,7 +200,7 @@ export const showView: ViewFactory = ([id]) => {
         ${canEdit ? `<div class="row wrap"><button class="btn" data-act="edit">Modifier</button><button class="btn" data-act="delete">Supprimer</button><button class="btn" data-act="copy-from">Utiliser le matériel d'un autre spectacle</button></div>` : ''}
         `}
         <div id="serr" class="sub warn" role="alert"></div></div>
-      ${alertCard}
+      ${rmCard}${alertCard}
       ${wall}
       <div class="card sec sec-items"><div class="row wrap"><button class="fold grow" data-act="items-fold" aria-expanded="${!itemsFolded}" aria-label="${itemsFolded ? 'Déplier' : 'Replier'} les projecteurs affectés"><span aria-hidden="true">${itemsFolded ? '▸' : '▾'}</span> <h2>Projecteurs affectés (${mine.length})</h2></button>${itemsFolded && mine.some((x) => x.problem) ? `<span class="tag late">${mine.filter((x) => x.problem).length} indisponible${mine.filter((x) => x.problem).length > 1 ? 's' : ''}</span>` : ''}${canAssign && mode === 'view' && !itemsFolded ? '<button class="btn" data-act="mode" data-v="start">+ Affecter manuellement</button>' : ''}</div>
         ${canAssign && mode === 'view' ? `<button class="scan-btn" data-act="scanflow" aria-label="Scanner : préparer, affecter des positions ou patcher"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><path class="scanline" d="M6 12h12"/></svg><span class="grow"><b>Scanner</b><small>Préparer · Affecter des positions · Patcher</small></span><span class="ai-chip">SCAN</span></button>` : ''}

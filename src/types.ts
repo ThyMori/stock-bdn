@@ -44,6 +44,8 @@ export const GEL_COLORS: [string, string][] = [['Rouge', '#d62828'], ['Orange', 
 export const gelCss = (c: string): string => GEL_COLORS.find(([n]) => n === c)?.[1] ?? '#8d6e63';
 export interface ShowGel { id: string; show_id: string; item_id: number; ref: string; color: string }
 export interface ShowItem { show_id: string; item_id: number; lamp_id: string | null; added_by_label?: string | null; demand_id?: string | null; pinned?: boolean; problem?: string | null; zone?: string }
+/** Projecteur retiré (ou signalé) d'un spectacle à venir parce qu'il est devenu indisponible. `kept` = pas retiré (déjà patché). */
+export interface ShowRemoval { id: string; show_id: string; item_id: number; model_id: string | null; lamp_id: string | null; zone: string; reason: string; kept: boolean; was_complete: boolean; created_at: string; push_sent_at: string | null }
 /** Matériel prêté / loué pour combler un manque (une fiche par prêt ou location). */
 export interface ShowExternal { id: string; show_id: string; demand_id: string; kind: 'pret' | 'location'; provider: string; qty: number; delivery_date: string; return_date: string; note?: string | null }
 /** Demande de matériel d'un spectacle (modèle + lampe pour les PAR + quantité) ; `missing` = projecteurs que l'on n'arrive pas à fournir. */
@@ -81,10 +83,10 @@ export interface AccountRow extends Profile { confirmed: boolean; last_sign_in_a
 
 export interface Data {
   families: Family[]; types: ItemType[]; sockets: Socket[]; filterSizes: FilterSize[];
-  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[]; showDemandSlots: ShowDemandSlot[]; showExternals: ShowExternal[]; showSubstitutions: ShowSubstitution[]; showDemandGels: ShowDemandGel[]; patchLines: PatchLine[];
+  lamps: Lamp[]; models: Model[]; items: Item[]; faults: Fault[]; faultLog: FaultLog[]; immos: Immo[]; shows: Show[]; showItems: ShowItem[]; showRegisseurs: ShowRegisseur[]; showPosts: ShowPost[]; showGels: ShowGel[]; showDemands: ShowDemand[]; showDemandSlots: ShowDemandSlot[]; showExternals: ShowExternal[]; showSubstitutions: ShowSubstitution[]; showDemandGels: ShowDemandGel[]; patchLines: PatchLine[]; showRemovals: ShowRemoval[];
 }
 export const EMPTY_DATA: Data = {
-  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: [], showDemandSlots: [], showExternals: [], showSubstitutions: [], showDemandGels: [], patchLines: []
+  families: [], types: [], sockets: [], filterSizes: [], lamps: [], models: [], items: [], faults: [], faultLog: [], immos: [], shows: [], showItems: [], showRegisseurs: [], showPosts: [], showGels: [], showDemands: [], showDemandSlots: [], showExternals: [], showSubstitutions: [], showDemandGels: [], patchLines: [], showRemovals: []
 };
 
 /** Action faite sur l'appareil, mise en file d'attente tant que le serveur ne l'a pas confirmée. */

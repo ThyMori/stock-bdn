@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildPayload, handle, plainText, type Target } from '../supabase/functions/push-notify/index';
+import { buildPayload, buildRemovalPayload, handle, plainText, type RemovalTarget, type Target } from '../supabase/functions/push-notify/index';
 
 const T = (o: Partial<Target> = {}): Target => ({ user_id: 'U', endpoint: 'https://p/1', p256dh: 'k', auth_key: 'a', mentioned: false, everyone: false, kind: 'show', show_id: 'S1', show_name: 'Pasolini', author_label: 'Marie D', body: 'Bonjour', ...o });
 
@@ -21,7 +21,7 @@ function fake(o: { callerActive?: boolean; author?: string; claimed?: boolean; t
     from: (table: string) => {
       let mode = 'select';
       const chain: Record<string, unknown> = {
-        select: () => chain, eq: () => chain, is: () => chain,
+        select: () => chain, eq: () => chain, is: () => chain, gte: () => chain,
         update: (p: unknown) => { mode = 'update'; calls.push(['update:' + table, p]); return chain; },
         delete: () => { mode = 'delete'; return chain; },
         in: (_c: string, v: unknown) => { calls.push(['delete:' + table, v]); return Promise.resolve({ error: null }); },
@@ -31,7 +31,8 @@ function fake(o: { callerActive?: boolean; author?: string; claimed?: boolean; t
           return { data: null };
         },
         then: (res: (v: unknown) => void) => {
-          if (table === 'show_posts' && mode === 'update') res({ data: o.claimed === false ? [] : [{ id: 'p' }], error: null });
+          if (table === 'show_removals' && mode === 'update') res({ data: o.claimed === false ? [] : [{ id: 'r1' }, { id: 'r2' }], error: null });
+          else if (table === 'show_posts' && mode === 'update') res({ data: o.claimed === false ? [] : [{ id: 'p' }], error: null });
           else if (table === 'push_subscriptions') res({ data: o.subs ?? [], error: null });
           else res({ data: null, error: null });
         }
@@ -119,3 +120,15 @@ const SU = { action: 'signup', first_name: ' Ana ', last_name: 'Lys', email: 'an
 { const r = await ssend(fakeSignup(), SU, { ...env, vapidPrivate: '' }); assert.equal(r.status, 200, 'push non configuré : la demande est quand même enregistrée'); assert.equal(r.sent.length, 0); }
 { const r = await run(fake(), { action: 'post', post_id: POST_ID }, { token: '' }); assert.equal(r.status, 401, 'les autres actions restent protégées'); }
 console.log('inscription : tout OK');
+
+// ---- projecteur retiré d'un spectacle à venir ----
+const RT = (o: Partial<RemovalTarget> = {}): RemovalTarget => ({ user_id: 'U', endpoint: 'https://p/1', p256dh: 'k', auth_key: 'a', show_id: 'S1', show_name: 'Pasolini', item_id: 12, model_name: 'PAR64', reason: 'en panne', kept: false, was_complete: true, ...o });
+assert.deepEqual(buildRemovalPayload(RT(), 'R'), { title: '⚠ Spectacle complet · Pasolini', body: 'N° 12 (PAR64) retiré : en panne. Il manque 1 × PAR64 à affecter.', url: '#/show/S1', tag: 'removal-R' });
+assert.equal(buildRemovalPayload(RT({ was_complete: false }), 'R').title, '⚠ Pasolini');
+assert.match(buildRemovalPayload(RT({ kept: true }), 'R').body, /Déjà patché/);
+{ const f = fake({ targets: [RT()] as unknown as Target[], subs: [] }); const r = await run(f, { action: 'removals' }); assert.equal(r.status, 200); assert.equal(r.body.removals, 2); assert.equal(r.sent.length, 2); assert.equal(r.sent[0].payload.title, '⚠ Spectacle complet · Pasolini');
+  assert.equal(f.calls.filter((c) => c[0] === 'rpc:push_targets_removal').length, 2); }                                   // une cible calculée par retrait
+{ const f = fake({ claimed: false }); const r = await run(f, { action: 'removals' }); assert.equal(r.body.removals, 0); assert.equal(f.calls.filter((c) => c[0] === 'rpc:push_targets_removal').length, 0); }   // déjà notifié : rien
+{ const r = await run(fake(), { action: 'removals' }, { token: '' }); assert.equal(r.status, 401); }
+{ const r = await run(fake({ callerActive: false }), { action: 'removals' }); assert.equal(r.status, 403); }
+console.log('push-notify removals OK');

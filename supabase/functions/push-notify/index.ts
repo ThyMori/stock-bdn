@@ -1,6 +1,7 @@
 // Edge Function « push-notify » : envoie les notifications push (Web Push) du mur.
 //
 //   { action: "post", post_id }   -> prévient les personnes concernées par un message du mur (appelé par l'appli juste après la publication)
+//   { action: "removals" }       -> prévient les personnes concernées des projecteurs retirés d'un spectacle à venir (panne / SAV) ; chaque retrait n'est notifié qu'une fois
 //   { action: "test" }            -> envoie une notification d'essai aux appareils de l'appelant
 //   { action: "signup", first_name, last_name, email, message }
 //                                 -> PUBLIC (sans connexion) : enregistre une demande d'inscription et prévient les administrateurs
@@ -32,6 +33,7 @@ export interface PushSub { endpoint: string; keys: { p256dh: string; auth: strin
 export type Sender = (sub: PushSub, payload: string) => Promise<unknown>;
 
 export interface Target { user_id: string; endpoint: string; p256dh: string; auth_key: string; mentioned: boolean; everyone: boolean; kind: string; show_id: string | null; show_name: string | null; author_label: string | null; body: string }
+export interface RemovalTarget { user_id: string; endpoint: string; p256dh: string; auth_key: string; show_id: string; show_name: string | null; item_id: number; model_name: string | null; reason: string; kept: boolean; was_complete: boolean }
 export interface Payload { title: string; body: string; url: string; tag: string }
 
 /** Texte lisible d'un message : les citations « @[Nom](u:uuid) » deviennent « @Nom », espaces compactés, tronqué. */
@@ -54,6 +56,15 @@ export function buildPayload(t: Target, postId: string): Payload {
     url: t.show_id ? `#/show/${t.show_id}` : '#/mur',
     tag
   };
+}
+
+/** Notification d'un projecteur retiré (ou gardé car déjà patché) d'un spectacle à venir. */
+export function buildRemovalPayload(t: RemovalTarget, removalId: string): Payload {
+  const model = t.model_name || 'projecteur', show = t.show_name || 'Spectacle';
+  const body = t.kept
+    ? `N° ${t.item_id} (${model}) : ${t.reason}. Déjà patché, il reste dans le spectacle : à toi de décider.`
+    : `N° ${t.item_id} (${model}) retiré : ${t.reason}. Il manque 1 × ${model} à affecter.`;
+  return { title: `${t.was_complete ? '⚠ Spectacle complet · ' : '⚠ '}${show}`, body, url: `#/show/${t.show_id}`, tag: 'removal-' + removalId };
 }
 
 /** Demande d'inscription : enregistrement en base, puis notification push à tous les administrateurs actifs (au mieux). */
@@ -150,6 +161,21 @@ export async function handle(req: Request, env: Env, createClient: (url: string,
       payload: buildPayload(t, id)
     })));
     return json(200, { ok: true, devices: (targets ?? []).length, ...r });
+  }
+
+  if (body.action === 'removals') {
+    // réservation atomique de tous les retraits récents pas encore notifiés (n'importe quel utilisateur actif peut déclencher, rien d'autre que l'envoi)
+    const since = new Date(Date.now() - 86400000).toISOString();
+    const { data: claimed } = await admin.from('show_removals').update({ push_sent_at: new Date().toISOString() }).is('push_sent_at', null).gte('created_at', since).select('id');
+    let devices = 0, sent = 0, failed = 0;
+    for (const c of (claimed ?? []) as { id: string }[]) {
+      const { data: targets, error } = await admin.rpc('push_targets_removal', { p_removal: c.id });
+      if (error) return json(500, { error: error.message });
+      devices += (targets ?? []).length;
+      const r = await deliver((targets ?? []).map((t: RemovalTarget) => ({ sub: { endpoint: t.endpoint, keys: { p256dh: t.p256dh, auth: t.auth_key } }, payload: buildRemovalPayload(t, c.id) })));
+      sent += r.sent; failed += r.failed;
+    }
+    return json(200, { ok: true, removals: (claimed ?? []).length, devices, sent, failed });
   }
 
   return json(400, { error: 'Action inconnue' });

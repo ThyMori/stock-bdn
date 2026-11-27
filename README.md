@@ -333,6 +333,23 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
+## Projecteur en panne / SAV sur un spectacle à venir (v1.68.0)
+
+Quand un projecteur pré-affecté à un spectacle **qui n'a pas encore commencé** tombe en panne, part en SAV ou est prêté pendant ses dates :
+
+| Cas | Ce qui se passe |
+|---|---|
+| Projecteur seulement pré-affecté | **Retiré automatiquement** du spectacle. La demande garde sa quantité : le compteur « affectés / demandés » baisse (ex. 2/3). Une ligne est écrite dans le journal. |
+| Projecteur déjà sur une ligne de patch | **Reste** dans le spectacle (étiquette « indisponible ») : alerte seule, à toi de décider. |
+| Spectacle déjà commencé (monté) | Rien de nouveau : le projecteur reste, marqué « indisponible ». |
+| Projecteur qui revient de SAV | Rien d'automatique : on le réaffecte à la main. |
+
+- **Bandeau rouge** sur la fiche du spectacle, tant que le trou n'est pas comblé (plus de projecteurs utilisables que demandés pour le modèle) ; plus fort (« SPECTACLE QUI ÉTAIT COMPLET ») si le spectacle était entièrement affecté juste avant.
+- **Notification push** (une seule fois) : régisseurs généraux, admins, régisseurs assignés au spectacle et son créateur. Elle part dès qu'un appareil connecté se synchronise après le retrait (action `removals` de la fonction `push-notify`) : si personne n'a l'appli ouverte, elle part à la prochaine ouverture ; le bandeau, lui, est toujours là.
+- Base : table `show_removals` (lecture dès technicien, écriture seulement par la base), fonction `push_targets_removal`, étape ajoutée à `reallocate_all`. Au rejeu du schéma, les retraits déjà présents sont marqués « notifiés » (pas de rafale), mais gardent leur bandeau.
+- Les gélatines posées sur un projecteur retiré partent avec lui.
+- Code : `src/removals.ts` (bandeau), `src/push.ts` (`notifyRemovals`).
+
 ## Flash du scanner (v1.66.0)
 
 À chaque ouverture d’un scanner (scan simple, Patcher, positions, Préparer, ajout au spectacle, modification par lot, choix d’un projecteur dans une fenêtre), le flash est ÉTEINT par défaut (v1.66.1) ; un bouton « 🔦 Flash » en bas à droite du cadre l’allume ou le coupe. Il redevient éteint à chaque nouveau lancement (rien n’est mémorisé). Sans flash (ordinateur, navigateur qui ne le permet pas), aucun bouton. Code : `src/ui/torch.ts`.
@@ -432,6 +449,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
 | `schema.sql` (v1.57.1) | fonction `immo_last_day`, règles de disponibilité (`item_conflict`, `item_blocked`, `reallocate_all`), `resolve_fault` referme le SAV | v1.57.1 |
 | `schema.sql` (v1.63.0) | table `game_scores`, fonctions `submit_score` et `delete_score` (jeu caché) | v1.63.0 |
+| `schema.sql` (v1.68.0) + fonction `push-notify` à redéployer | retrait automatique d'un projecteur en panne / SAV d'un spectacle à venir : table `show_removals`, `push_targets_removal`, `reallocate_all` ; l'action `removals` de la fonction envoie la notification | v1.68.0 |
 | `schema.sql` (v1.67.0) | jeu caché ouvert aux techniciens (lecture du classement et `submit_score`) : à rejouer pour que les techniciens puissent y jouer | v1.67.0 |
 | `schema.sql` (v1.58.0) | colonne `show_items.zone`, `assign_items` à 4 paramètres (zone ; l'ancienne version à 3 paramètres est supprimée) | v1.58.0 |
 | `schema.sql` (v1.55.0) | table `show_demand_slots`, fonctions `zone_of_position`, `set_demand_slots` (remplace la v1.54.0) | v1.55.0 |

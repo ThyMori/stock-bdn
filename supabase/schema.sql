@@ -1208,6 +1208,31 @@ begin
   return null;
 end $$;
 
+
+-- ---------- v1.68.0 : projecteur devenu indisponible sur un spectacle PAS ENCORE COMMENCÉ ----------
+-- Panne ou SAV / prêt pendant les dates d'un spectacle à venir : le projecteur est RETIRÉ du spectacle (la demande repasse en « manque »),
+-- sauf s'il est déjà sur une ligne de patch (alors il reste, et on alerte seulement). Une ligne ici = une alerte à afficher et à notifier.
+-- Les spectacles en cours (déjà commencés) ne sont jamais touchés : le projecteur reste, marqué « indisponible ».
+create table if not exists show_removals (
+  id           uuid primary key default gen_random_uuid(),
+  show_id      uuid not null references shows(id) on delete cascade,
+  item_id      integer not null,                       -- pas de clé étrangère : on garde la trace même si le projecteur disparaît
+  model_id     text,
+  lamp_id      text,
+  zone         text not null default '',
+  reason       text not null default '',               -- « en panne », « SAV … », « prêt … »
+  kept         boolean not null default false,         -- true = pas retiré (déjà patché) : alerte seule
+  was_complete boolean not null default false,         -- le spectacle était entièrement affecté avant ce retrait
+  created_at   timestamptz not null default now(),
+  push_sent_at timestamptz,                            -- notifié une seule fois
+  unique (show_id, item_id)
+);
+alter table show_removals enable row level security;
+drop policy if exists show_removals_select on show_removals;
+create policy show_removals_select on show_removals for select using (has_role('technicien'));
+revoke insert, update, delete on show_removals from authenticated, anon;
+grant select on show_removals to authenticated;
+
 -- v1.46.0 : « matériel demandé » = objectifs de quantité (plus aucun projecteur n'est choisi automatiquement).
 -- Recalcule, pour tous les spectacles en cours ou à venir : (1) les projecteurs affectés devenus indisponibles ;
 -- (2) le manque de chaque demande, en partageant le stock entre les spectacles qui se chevauchent, jour par jour.
@@ -1218,7 +1243,29 @@ end $$;
 drop function if exists reallocate_show(uuid);
 create or replace function reallocate_all() returns void
 language plpgsql security definer set search_path = public as $$
+declare r record; full_before boolean; why text;
 begin
+  -- v1.68.0 : spectacles PAS ENCORE COMMENCÉS : un projecteur en panne / SAV / prêt est retiré (sauf s'il est déjà patché : alerte seule)
+  for r in select si.show_id, si.item_id, si.lamp_id, si.zone, sh.name, i.model_id,
+                  item_blocked(si.item_id, si.show_id, sh.start_date, sh.end_date, true) as why,
+                  exists (select 1 from patch_lines pl where pl.show_id = si.show_id and pl.item_id = si.item_id) as patched
+             from show_items si join shows sh on sh.id = si.show_id join items i on i.id = si.item_id
+            where sh.start_date > (now() at time zone 'Europe/Paris')::date loop
+    why := r.why;
+    if why is null or why like 'déjà dans%' then continue; end if;   -- disponible, ou conflit de dates avec un autre spectacle (autre règle)
+    select exists (select 1 from show_demands d where d.show_id = r.show_id) and not exists (select 1 from show_demands d where d.show_id = r.show_id and d.missing > 0) into full_before;
+    if r.patched then
+      insert into show_removals (show_id, item_id, model_id, lamp_id, zone, reason, kept, was_complete)
+        values (r.show_id, r.item_id, r.model_id, r.lamp_id, r.zone, why, true, full_before) on conflict (show_id, item_id) do nothing;   -- une seule alerte tant qu'elle existe
+    else
+      insert into show_removals (show_id, item_id, model_id, lamp_id, zone, reason, kept, was_complete)
+        values (r.show_id, r.item_id, r.model_id, r.lamp_id, r.zone, why, false, full_before)
+        on conflict (show_id, item_id) do update set model_id = excluded.model_id, lamp_id = excluded.lamp_id, zone = excluded.zone, reason = excluded.reason,
+              kept = false, was_complete = excluded.was_complete, created_at = now(), push_sent_at = null;
+      delete from show_items where show_id = r.show_id and item_id = r.item_id;   -- les gélatines de ce projecteur partent avec (cascade) ; la demande, elle, garde sa quantité
+      perform log_event('SPECTACLE', format('« %s » : projecteur %s retiré du spectacle (%s)%s', r.name, r.item_id, why, case when full_before then ', le spectacle était complet' else '' end));
+    end if;
+  end loop;
   update show_items si set problem = item_blocked(si.item_id, si.show_id, s.start_date, s.end_date, true)
     from shows s where s.id = si.show_id and s.end_date >= current_date;
   with up as (select id, start_date, end_date from shows where end_date >= current_date),
@@ -2214,6 +2261,33 @@ grant execute on function patch_need_set(uuid, uuid, text, text) to authenticate
 -- affectés à la main (aucun n'est retiré) ; les demandes restent, comme objectifs de quantité. Rejouable sans effet la 2e fois.
 update show_items set demand_id = null, pinned = false where demand_id is not null;
 select reallocate_all();
+-- v1.68.0 : les retraits créés par ce rejeu du schéma ne déclenchent pas de notification (ils restent visibles dans le bandeau)
+update show_removals set push_sent_at = now() where push_sent_at is null;
+
+-- Qui prévenir pour un projecteur retiré / indisponible : régisseurs généraux et admins actifs, régisseurs assignés au spectacle, créateur du spectacle.
+create or replace function push_targets_removal(p_removal uuid)
+returns table(user_id uuid, endpoint text, p256dh text, auth_key text, show_id uuid, show_name text, item_id int, model_name text, reason text, kept boolean, was_complete boolean)
+language sql stable security definer set search_path = public as $$
+  with r as (select * from show_removals where id = p_removal),
+  src as (
+    select pr.id as uid from profiles pr where pr.active and pr.role in ('regisseur_general', 'admin')
+    union select sr.user_id from show_regisseurs sr, r where sr.show_id = r.show_id
+    union select sh.created_by from shows sh, r where sh.id = r.show_id and sh.created_by is not null
+  )
+  select s.user_id, s.endpoint, s.p256dh, s.auth_key, r.show_id, sh.name, r.item_id, m.name, r.reason, r.kept, r.was_complete
+    from r join src on true
+    join profiles pr on pr.id = src.uid and pr.active
+    join push_subscriptions s on s.user_id = pr.id
+    left join shows sh on sh.id = r.show_id
+    left join models m on m.id = r.model_id;
+$$;
+revoke all on function push_targets_removal(uuid) from public, anon, authenticated;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'service_role') then
+    grant execute on function push_targets_removal(uuid) to service_role;
+  end if;
+end $$;
+
 
 -- v1.39.0 : positions renommées (balcon -> 2e balcon, 3e -> 3e balcon), rejouable sans effet une fois fait
 update patch_lines set position = '2e balcon' where position = 'balcon';
