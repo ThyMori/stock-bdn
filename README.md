@@ -339,7 +339,7 @@ La petite croix d'une gélatine affichait « Could not find the function public.
 
 ## Lampe d'un PAR changée pendant un spectacle monté (v1.68.3)
 
-Quand on change la lampe d'un PAR (fiche du projecteur), elle change aussi dans les spectacles **en cours** où il est affecté avec une lampe imposée, donc sur leur feuille de patch. Spectacles à venir et terminés : inchangés. Une affectation sans lampe imposée suit déjà la lampe montée. Fonction SQL `set_lamp` (à rejouer).
+Quand on change la lampe d'un PAR (fiche du projecteur), elle change aussi dans les spectacles **en cours** où il est affecté avec une lampe imposée, donc sur leur feuille de patch. Spectacles à venir et terminés : inchangés. Une affectation sans lampe imposée suit déjà la lampe montée. Fonction SQL `set_lamp` (à rejouer). **v1.68.6 : rattrapage** — au rejeu du schéma, les changements de lampe faits avant cette règle sont aussi répercutés sur les spectacles en cours.
 
 ## Correctif feuille de patch (v1.68.2)
 

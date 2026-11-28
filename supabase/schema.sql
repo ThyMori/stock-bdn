@@ -2267,6 +2267,11 @@ update show_items set demand_id = null, pinned = false where demand_id is not nu
 select reallocate_all();
 -- v1.68.0 : les retraits créés par ce rejeu du schéma ne déclenchent pas de notification (ils restent visibles dans le bandeau)
 update show_removals set push_sent_at = now() where push_sent_at is null;
+-- v1.68.5 : rattrapage — spectacles EN COURS : la lampe affichée sur la feuille de patch est la lampe réellement montée (changements de lampe faits avant la v1.68.3)
+update show_items si set lamp_id = i.lamp_id
+  from items i, shows sh
+ where i.id = si.item_id and sh.id = si.show_id and si.lamp_id is not null and i.lamp_id is not null and si.lamp_id <> i.lamp_id
+   and sh.start_date <= (now() at time zone 'Europe/Paris')::date and sh.end_date >= (now() at time zone 'Europe/Paris')::date;
 
 -- Qui prévenir pour un projecteur retiré / indisponible : régisseurs généraux et admins actifs, régisseurs assignés au spectacle, créateur du spectacle.
 create or replace function push_targets_removal(p_removal uuid)
