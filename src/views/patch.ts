@@ -1,5 +1,5 @@
 import type { ViewFactory } from '../router';
-import { can, canActShow, reportFaultSav, rpcCall, view } from '../store';
+import { can, canActShow, reportFaultSav, rpcCall, upsertPatchLine, view } from '../store';
 import { supabase } from '../supabase';
 import { esc, fmtDateTime, parseScan } from '../logic';
 import { gelCss } from '../types';
@@ -418,6 +418,7 @@ export const patchView: ViewFactory = ([showId]) => {
       if (error || !data) { setStat(root, error && /failed to fetch|network|load failed/i.test(error.message) ? 'Connexion perdue : réessaie dans un instant' : error?.message ?? 'Enregistrement impossible', true); paintRow(root, key); return; }
       const line = data as PatchLine; const i = lines.findIndex((l) => l.id === line.id);
       if (i >= 0) lines[i] = line; else lines.push(line);
+      upsertPatchLine(line);   // et dans les données de l'appli : la feuille retrouve tout si on la quitte puis qu'on y revient
       setStat(root, 'Enregistré ✓ ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
       if (field === 'curve' || field === 'state') paintRow(root, key);   // DMX actif seulement avec DIRECT ; l'état change la couleur de la ligne et l'indice de note
     });

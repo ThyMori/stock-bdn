@@ -333,6 +333,10 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
+## Correctif feuille de patch (v1.68.2)
+
+Quand on quittait la feuille de patch puis qu'on y revenait, les circuits saisis semblaient avoir disparu (ils étaient bien enregistrés en base, mais la feuille se relisait depuis une copie locale ancienne). Chaque enregistrement met maintenant aussi à jour les données locales (`upsertPatchLine` dans `src/store.ts`).
+
 ## Projecteur en panne / SAV sur un spectacle à venir (v1.68.0)
 
 Quand un projecteur pré-affecté à un spectacle **qui n'a pas encore commencé** tombe en panne, part en SAV ou est prêté pendant ses dates :

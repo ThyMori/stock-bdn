@@ -6,6 +6,7 @@ import { supabase } from './supabase';
 import { applyPending, isTransient, uuid } from './logic';
 import { EMPTY_DATA, ROLE_RANK } from './types';
 import type { Data, Op, Profile, Rejected, Role, Status } from './types';
+import type { PatchLine } from './patch';
 
 interface State {
   data: Data;            // dernier état connu du serveur
@@ -186,6 +187,13 @@ export async function immoCall(fn: 'add_immo' | 'edit_immo' | 'delete_immo', par
 }
 
 /** Appel serveur direct (spectacles, agenda…) : en ligne uniquement ; recharge les données ensuite. */
+/** Range une ligne de patch enregistrée dans les données locales (sans rechargement ni redessin) : sinon, en quittant la feuille puis en y revenant,
+ *  elle se relit depuis une copie ancienne (celle de la dernière synchro) et les saisies récentes semblent perdues. */
+export function upsertPatchLine(line: PatchLine): void {
+  const list = state.data.patchLines, i = list.findIndex((l) => l.id === line.id);
+  state.data = { ...state.data, patchLines: i >= 0 ? list.map((l, k) => (k === i ? { ...line } : l)) : [...list, { ...line }] };
+  void persist();
+}
 export async function rpcCall(fn: string, params: Record<string, unknown>): Promise<{ error: string | null; data: unknown }> {
   if (!navigator.onLine) return { error: 'Cette action demande une connexion.', data: null };
   const { data, error } = await supabase.rpc(fn, params);
