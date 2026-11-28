@@ -194,7 +194,7 @@ L'en-tête (note, interrupteur monté/démonté, boutons Patch, Prépa, Démonta
 - **Supabase : oui** — rejouer `schema.sql` (`immo_last_day`, `item_conflict`, `item_blocked`, `reallocate_all`, `resolve_fault`). Test pglite `test39`.
 
 ### Patcher : interrupteur GRADA / CIRCUIT (v1.69.0)
-- Sous la caméra du mode Patcher, un interrupteur à deux positions : **GRADA** (par défaut) ou **CIRCUIT**. En CIRCUIT, le pavé numérique ne saisit que le circuit du projecteur scanné (DIRECT et DMX sont masqués). Le choix est gardé d'un projecteur à l'autre tant que la fenêtre est ouverte, et revient sur GRADA à la prochaine ouverture. Aucun changement en base.
+- Sous la caméra du mode Patcher, un interrupteur à deux positions : **GRADA** (par défaut) ou **CIRCUIT**. En CIRCUIT, le pavé numérique ne saisit que le circuit du projecteur scanné (DIRECT et DMX sont masqués). Le choix est gardé d'un projecteur à l'autre tant que la fenêtre est ouverte, et revient sur GRADA à la prochaine ouverture. Aucun changement en base. **v1.69.1** : à l'ouverture d'un projecteur scanné, l'appli relit sa ligne de patch sur le serveur (la copie du téléphone peut dater) : le clavier est pré-rempli avec la grada / le circuit / le DMX déjà saisis ; hors ligne, elle garde la copie locale.
 
 ### « Patcher » par scan (v1.57.0)
 - Bouton **Scanner** → **Patcher** : on scanne (ou saisit) un projecteur, puis un **gros pavé numérique** sert à taper la **grada** ; trois champs (GRADA, UNIVERS, ADRESSE) se choisissent d'un toucher, le 1er chiffre tapé remplace la valeur du champ (souligné), ⌫ efface un chiffre, C tout.

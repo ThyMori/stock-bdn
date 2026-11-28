@@ -2,7 +2,9 @@
 import QrScanner from 'qr-scanner';
 import { startScan } from './torch';
 import { POSITION_GROUPS } from '../patch';
-import { rpcCall, view } from '../store';
+import { rpcCall, upsertPatchLine, view } from '../store';
+import { supabase } from '../supabase';
+import type { PatchLine } from '../patch';
 import { parseScan } from '../logic';
 import { classifyScan, isParItem, splitLot } from '../scanPositions';
 import { prepScanTarget, remainingNeeds } from '../prepNeeds';
@@ -186,6 +188,8 @@ export function openScanFlow(showId: string, onChange: () => void): void {
           if (r.error || !(res?.added ?? []).includes(num)) { say(r.error ?? `N° ${num} refusé : ${res?.skipped?.[0]?.reason ?? 'impossible'}.`, true); return; }
           onChange();
         }
+        // valeurs actuelles : on relit la ligne de patch sur le serveur (la copie de ce téléphone peut dater), pour pré-remplir le clavier avec la grada / le circuit déjà saisis
+        try { if (navigator.onLine) { const { data } = await supabase.from('patch_lines').select('*').eq('show_id', showId).eq('item_id', num).maybeSingle(); if (data) upsertPatchLine(data as PatchLine); } } catch { /* hors ligne : on garde la copie locale */ }
         navigator.vibrate?.(40); cashBeep(); editing(num);
       };
       form.addEventListener('submit', (e) => { e.preventDefault(); void open(inp.value); inp.value = ''; });
