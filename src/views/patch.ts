@@ -121,7 +121,7 @@ export const patchView: ViewFactory = ([showId]) => {
   async function structural(root: HTMLElement, fn: string, params: Record<string, unknown>, okMsg: string): Promise<boolean> {
     busy++; setStat(root, 'Enregistrement…');
     await queue.catch(() => {});                       // on attend les saisies en cours
-    const r = await rpcCall(fn, { p_show: showId, ...params });
+    const r = await rpcCall(fn, { p_show: showId, ...params });   // (un paramètre à `undefined` est retiré de l'envoi)
     busy--;
     seed();
     if (r.error) { setStat(root, r.error, true); toast(r.error); resort(); paint(root); return false; }
@@ -253,7 +253,7 @@ export const patchView: ViewFactory = ([showId]) => {
     }
     if (what === 'gel-del' && v) {
       if (r.itemId === null) await structural(root, 'patch_delete_line_gel', { p_line: r.lineId, p_ref: v }, 'Gel retiré');
-      else await structural(root, 'patch_delete_gel', { p_id: v }, 'Gel retiré');
+      else await structural(root, 'patch_delete_gel', { p_show: undefined, p_id: v }, 'Gel retiré');   // cette fonction ne prend que l'identifiant du gel : pas de p_show
       return;
     }
   }

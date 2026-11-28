@@ -333,6 +333,10 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
+## Correctif gélatine de la feuille de patch (v1.68.5)
+
+La petite croix d'une gélatine affichait « Could not find the function public.patch_delete_gel(p_id, p_show) » : l'appli envoyait un paramètre en trop (défaut présent depuis la v1.24). Corrigé côté appli, aucun SQL.
+
 ## Lampe d'un PAR changée pendant un spectacle monté (v1.68.3)
 
 Quand on change la lampe d'un PAR (fiche du projecteur), elle change aussi dans les spectacles **en cours** où il est affecté avec une lampe imposée, donc sur leur feuille de patch. Spectacles à venir et terminés : inchangés. Une affectation sans lampe imposée suit déjà la lampe montée. Fonction SQL `set_lamp` (à rejouer).
