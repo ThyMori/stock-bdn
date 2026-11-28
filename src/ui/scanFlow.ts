@@ -152,6 +152,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
   /** Patcher : scan d'un projecteur, pavé numérique pour la grada, DIRECT + adresse DMX (univers / adresse), puis Suivant. */
   function patcher() {
     stop(); stop = () => {};
+    let mode: 'dimmer' | 'circuit' = 'dimmer';   // ce que l'on saisit : la grada (par défaut) ou le circuit ; gardé d'un projecteur à l'autre
     const scanning = () => {
       stop();
       const h = el('h2', '', 'Patcher'); h.tabIndex = -1;
@@ -162,9 +163,15 @@ export function openScanFlow(showId: string, onChange: () => void): void {
       const q = el('button', 'btn', 'Quitter'); q.type = 'button'; q.addEventListener('click', close);
       const bk = el('button', 'btn', 'Retour au menu'); bk.type = 'button'; bk.addEventListener('click', menu);
       const row = el('div', 'row wrap'); row.append(bk, q);
-      dlg.replaceChildren(h, vp, form, msg, row);
+      // interrupteur à deux positions : GRADA (par défaut) / CIRCUIT
+      const sw = el('div', 'seg two'); sw.setAttribute('role', 'group'); sw.setAttribute('aria-label', 'Ce que tu saisis');
+      const swBtn = (m: typeof mode, label: string) => { const b = el('button', '', label); b.type = 'button'; b.addEventListener('click', () => { mode = m; paintSw(); }); return { m, b }; };
+      const sws = [swBtn('dimmer', 'GRADA'), swBtn('circuit', 'CIRCUIT')];
+      const paintSw = () => { for (const x of sws) { x.b.setAttribute('aria-pressed', String(mode === x.m)); x.b.classList.toggle('on', mode === x.m); } say(mode === 'circuit' ? 'Scanne un projecteur pour saisir son circuit.' : 'Scanne un projecteur pour le patcher.'); };
+      sw.append(...sws.map((x) => x.b));
+      dlg.replaceChildren(h, vp, sw, form, msg, row);
       const say = (t: string, bad = false) => { msg.textContent = t; msg.classList.toggle('warn', bad); if (bad) navigator.vibrate?.([250, 100, 250]); };
-      say('Scanne un projecteur pour le patcher.');
+      paintSw();
       const open = async (text: string) => {
         const n = parseScan(text), v = classifyScan(view(), showId, n, []);
         if (!v.ok) { say(v.msg, true); return; }
@@ -193,21 +200,21 @@ export function openScanFlow(showId: string, onChange: () => void): void {
     const editing = (item: number) => {
       stop(); stop = () => {};   // caméra coupée pendant la saisie
       const d0 = view(), before: Entry = entryOf(d0, showId, item); let cur: Entry = { ...before };
-      let active: 'dimmer' | 'universe' | 'address' = 'dimmer'; let fresh = true;   // fresh : le 1er chiffre tapé remplace la valeur du champ (comme une calculette)
+      let active: 'circuit' | 'dimmer' | 'universe' | 'address' = mode === 'circuit' ? 'circuit' : 'dimmer'; let fresh = true;   // fresh : le 1er chiffre tapé remplace la valeur du champ (comme une calculette)
       const it = d0.items.find((i) => i.id === item), model = d0.models.find((m) => m.id === it?.model_id)?.name ?? '?';
       const lampName = isParItem(d0, item) ? d0.lamps.find((l) => l.id === d0.showItems.find((s) => s.show_id === showId && s.item_id === item)?.lamp_id)?.name : '';
       const pos = d0.patchLines.find((l) => l.show_id === showId && l.item_id === item)?.position;
       const h = el('h2', '', `N° ${item}`); h.tabIndex = -1;
       const info = el('div', 'sub', `${model}${lampName ? ' ' + lampName : ''}${pos ? ' · ' + pos : ''}`);
-      const already = before.dimmer || before.direct ? `Déjà patché : grada ${before.dimmer || '—'}${before.direct ? ' · DIRECT' + (before.universe ? ` ${before.universe}-${before.address}` : '') : ''}. Tu peux modifier.` : 'Pas encore patché.';
+      const already = before.circuit || before.dimmer || before.direct ? `Déjà patché : ${before.circuit ? 'circuit ' + before.circuit + ' · ' : ''}grada ${before.dimmer || '—'}${before.direct ? ' · DIRECT' + (before.universe ? ` ${before.universe}-${before.address}` : '') : ''}. Tu peux modifier.` : 'Pas encore patché.';
       const state = el('div', 'sub', already); state.setAttribute('role', 'status');
       const fields = el('div', 'pe-fields');
       const mk = (k: typeof active, label: string) => { const b = el('button', 'pe-field'); b.type = 'button'; b.append(el('small', '', label), el('b', 'pe-val')); b.addEventListener('click', () => { active = k; fresh = true; paint(); }); return { k, b }; };
-      const fg = mk('dimmer', 'GRADA'), fu = mk('universe', 'UNIVERS'), fa = mk('address', 'ADRESSE');
+      const fc = mk('circuit', 'CIRCUIT'), fg = mk('dimmer', 'GRADA'), fu = mk('universe', 'UNIVERS'), fa = mk('address', 'ADRESSE');
       const pad = el('div', 'pe-pad');
       for (const k of ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back']) {
         const b = el('button', 'btn pe-key', k === 'clear' ? 'C' : k === 'back' ? '⌫' : k); b.type = 'button'; b.setAttribute('aria-label', k === 'clear' ? 'Tout effacer' : k === 'back' ? 'Effacer le dernier chiffre' : `Chiffre ${k}`);
-        b.addEventListener('click', () => { const base = fresh && /^\d$/.test(k) ? '' : cur[active]; fresh = false; cur = { ...cur, [active]: keypad(base, k, active === 'dimmer' ? 6 : 3) }; paint(); }); pad.appendChild(b);
+        b.addEventListener('click', () => { const base = fresh && /^\d$/.test(k) ? '' : cur[active]; fresh = false; cur = { ...cur, [active]: keypad(base, k, active === 'universe' || active === 'address' ? 3 : 6) }; paint(); }); pad.appendChild(b);
       }
       const dir = el('button', 'pe-direct'); dir.type = 'button';
       dir.addEventListener('click', () => { cur = { ...cur, direct: !cur.direct }; active = cur.direct ? 'universe' : 'dimmer'; fresh = true; if (cur.direct && !cur.universe) cur.universe = '1'; paint(); });   // univers 1 proposé
@@ -217,8 +224,8 @@ export function openScanFlow(showId: string, onChange: () => void): void {
       const row = el('div', 'row wrap'); row.append(next, quit);
       const foot = el('div', 'slot-foot stack'); foot.append(err, row);
       function paint() {
-        for (const f of [fg, fu, fa]) { f.b.classList.toggle('on', f.k === active); f.b.classList.toggle('fresh', f.k === active && fresh); f.b.querySelector('.pe-val')!.textContent = cur[f.k] || '—'; f.b.hidden = f.k !== 'dimmer' && !cur.direct; }
-        fields.replaceChildren(fg.b, fu.b, fa.b);
+        for (const f of [fc, fg, fu, fa]) { f.b.classList.toggle('on', f.k === active); f.b.classList.toggle('fresh', f.k === active && fresh); f.b.querySelector('.pe-val')!.textContent = cur[f.k] || '—'; f.b.hidden = mode === 'circuit' ? f.k !== 'circuit' : f.k === 'circuit' || (f.k !== 'dimmer' && !cur.direct); }   // mode circuit : seul le circuit ; mode grada : grada + DMX si DIRECT
+        fields.replaceChildren(fc.b, fg.b, fu.b, fa.b); dir.hidden = mode === 'circuit';
         dir.textContent = cur.direct ? 'DIRECT ✓ (toucher pour retirer)' : 'DIRECT'; dir.classList.toggle('on', cur.direct);
         const ops = entryOps(before, cur); err.textContent = 'error' in ops ? ops.error : '';
       }
@@ -230,7 +237,7 @@ export function openScanFlow(showId: string, onChange: () => void): void {
           const r = await rpcCall('set_patch_field', { p_show: showId, p_item: item, p_line: null, p_field: o.field, p_value: o.value });
           if (r.error) { err.textContent = r.error; next.disabled = false; return; }   // on reste ici : rien n'est perdu
         }
-        if (ops.length) { const dm = cur.direct && cur.universe && cur.address ? ` · DIRECT ${cur.universe}-${cur.address}` : cur.direct ? ' · DIRECT' : ''; toast(`N° ${item} patché${cur.dimmer ? ' · grada ' + cur.dimmer : ''}${dm}`); onChange(); }
+        if (ops.length) { const dm = cur.direct && cur.universe && cur.address ? ` · DIRECT ${cur.universe}-${cur.address}` : cur.direct ? ' · DIRECT' : ''; toast(`N° ${item} patché${cur.circuit ? ' · circuit ' + cur.circuit : ''}${cur.dimmer ? ' · grada ' + cur.dimmer : ''}${dm}`); onChange(); }
         scanning();
       });
       dlg.replaceChildren(h, info, state, fields, pad, dir, foot); paint(); h.focus();

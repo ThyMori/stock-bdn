@@ -6,9 +6,9 @@ import { dmxValue, entryOf, entryOps, keypad } from '../src/patchEntry';
 const data = { ...EMPTY_DATA, patchLines: [
   { id: 'a', show_id: 's', item_id: 1, dimmer: '12', curve: ['lineaire'], dmx: '' },
   { id: 'b', show_id: 's', item_id: 2, dimmer: '7', curve: ['direct'], dmx: '1-45' }] } as unknown as Data;
-assert.deepEqual(entryOf(data, 's', 1), { dimmer: '12', direct: false, universe: '', address: '' });
-assert.deepEqual(entryOf(data, 's', 2), { dimmer: '7', direct: true, universe: '1', address: '45' });
-assert.deepEqual(entryOf(data, 's', 9), { dimmer: '', direct: false, universe: '', address: '' });   // pas de ligne
+assert.deepEqual(entryOf(data, 's', 1), { circuit: '', dimmer: '12', direct: false, universe: '', address: '' });
+assert.deepEqual(entryOf(data, 's', 2), { circuit: '', dimmer: '7', direct: true, universe: '1', address: '45' });
+assert.deepEqual(entryOf(data, 's', 9), { circuit: '', dimmer: '', direct: false, universe: '', address: '' });   // pas de ligne
 
 // pavé
 assert.equal(keypad('', '4'), '4'); assert.equal(keypad('4', '2'), '42'); assert.equal(keypad('42', 'back'), '4'); assert.equal(keypad('42', 'clear'), '');
@@ -27,5 +27,8 @@ const e2 = entryOf(data, 's', 2);
 assert.deepEqual(entryOps(e2, { ...e2, direct: false, universe: '', address: '' }), [{ field: 'curve', value: ['lineaire'] }]);
 assert.deepEqual(entryOps(e2, { ...e2, address: '46' }), [{ field: 'dmx', value: '1-46' }]);
 assert.deepEqual(entryOps(e2, { ...e2 }), []);
+assert.deepEqual(entryOps(e0, { ...e0, circuit: '34' }), [{ field: 'circuit', value: '34' }]);                 // circuit seul
+assert.deepEqual(entryOps({ ...e0, circuit: '34' }, { ...e0, circuit: '' }), [{ field: 'circuit', value: '' }]);   // circuit vidé
+assert.deepEqual(entryOps(e0, { ...e0, dimmer: '15', circuit: '34' }), [{ field: 'dimmer', value: '15' }, { field: 'circuit', value: '34' }]);
 assert.ok('error' in (entryOps(e0, { ...e0, direct: true, universe: '1', address: '' }) as object));
 console.log('patch-entry OK');

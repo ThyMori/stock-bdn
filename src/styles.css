@@ -132,6 +132,8 @@ option.over { color: #888; text-decoration: line-through; }
 .kv dt { color: var(--muted); font-weight: 700; }
 .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 2px solid var(--ink); }
 .seg button { min-height: 56px; border: 0; border-right: 2px solid var(--ink); background: var(--paper); font-weight: 700; cursor: pointer; padding: 6px 4px 4px; }
+.seg.two { grid-template-columns: repeat(2, 1fr); }
+.seg button.on { background: var(--ink); color: var(--paper); }
 .seg button:last-child { border-right: 0; }
 .seg button:disabled { cursor: default; }
 .seg button[aria-pressed="true"].dispo { background: var(--green); color: #000; }
