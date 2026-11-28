@@ -835,6 +835,10 @@ begin
   perform set_config('app.lamp_change', '1', true);
   update items set lamp_id = p_lamp, updated_at = now() where id = p_item;
   perform set_config('app.lamp_change', '', true);
+  -- v1.68.3 : spectacle MONTÉ (en cours) : la lampe de ce projecteur change aussi dans le spectacle, donc sur la feuille de patch (spectacles à venir : inchangés)
+  update show_items si set lamp_id = p_lamp
+    from shows sh where sh.id = si.show_id and si.item_id = p_item and si.lamp_id is not null and si.lamp_id is distinct from p_lamp
+      and sh.start_date <= (now() at time zone 'Europe/Paris')::date and sh.end_date >= (now() at time zone 'Europe/Paris')::date;
   perform log_event('PROJECTEUR', format('#%s : lampe %s → %s', p_item, coalesce(old_name, '—'), lm.name));
 end $$;
 

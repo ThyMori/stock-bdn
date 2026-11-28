@@ -333,6 +333,10 @@ Sur l'écran de connexion, « Demander à s'inscrire » ouvre un formulaire (pr�
 - **Droits** : voir = tout le monde ; pastille et interrupteur = régisseur général et admin (vérifié en base).
 - Non repris : l'auto-répartition (`reallocate_all`) ignore les positions (les demandes n'en ont pas).
 
+## Lampe d'un PAR changée pendant un spectacle monté (v1.68.3)
+
+Quand on change la lampe d'un PAR (fiche du projecteur), elle change aussi dans les spectacles **en cours** où il est affecté avec une lampe imposée, donc sur leur feuille de patch. Spectacles à venir et terminés : inchangés. Une affectation sans lampe imposée suit déjà la lampe montée. Fonction SQL `set_lamp` (à rejouer).
+
 ## Correctif feuille de patch (v1.68.2)
 
 Quand on quittait la feuille de patch puis qu'on y revenait, les circuits saisis semblaient avoir disparu (ils étaient bien enregistrés en base, mais la feuille se relisait depuis une copie locale ancienne). Chaque enregistrement met maintenant aussi à jour les données locales (`upsertPatchLine` dans `src/store.ts`).
@@ -453,6 +457,7 @@ Bouton bleu « Patch / Focus » dans l'en-tête d'une fiche de spectacle (`#/pat
 | `schema.sql` (v1.52.0) | fonction `report_fault_sav` | v1.52.0 |
 | `schema.sql` (v1.57.1) | fonction `immo_last_day`, règles de disponibilité (`item_conflict`, `item_blocked`, `reallocate_all`), `resolve_fault` referme le SAV | v1.57.1 |
 | `schema.sql` (v1.63.0) | table `game_scores`, fonctions `submit_score` et `delete_score` (jeu caché) | v1.63.0 |
+| `schema.sql` (v1.68.3) | `set_lamp` répercute le changement de lampe sur les spectacles en cours (feuille de patch) | v1.68.3 |
 | `schema.sql` (v1.68.0) + fonction `push-notify` à redéployer | retrait automatique d'un projecteur en panne / SAV d'un spectacle à venir : table `show_removals`, `push_targets_removal`, `reallocate_all` ; l'action `removals` de la fonction envoie la notification | v1.68.0 |
 | `schema.sql` (v1.67.0) | jeu caché ouvert aux techniciens (lecture du classement et `submit_score`) : à rejouer pour que les techniciens puissent y jouer | v1.67.0 |
 | `schema.sql` (v1.58.0) | colonne `show_items.zone`, `assign_items` à 4 paramètres (zone ; l'ancienne version à 3 paramètres est supprimée) | v1.58.0 |
